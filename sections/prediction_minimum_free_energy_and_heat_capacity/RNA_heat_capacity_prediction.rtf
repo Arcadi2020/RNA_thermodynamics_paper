@@ -1,0 +1,31 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 #!/bin/bash\
+#PBS -N RNAheat_job\
+#PBS -l select=1:ncpus=20:mem=180gb\
+#PBS -l walltime=48:00:00\
+#PBS -M a.cipponi@unsw.edu.au\
+#PBS -m bea\
+#PBS -j oe\
+\
+# Load ViennaRNA module\
+module load viennarna/2.5.0\
+\
+# Change to job submission directory\
+cd $PBS_O_WORKDIR\
+\
+# Copy input FASTA file to local scratch\
+cp /home/z3514253/Missing_heat_capacity_5000.fasta $TMPDIR\
+cd $TMPDIR\
+\
+# Run RNAheat with specified temperature range and parallel threads\
+RNAheat -i Missing_heat_capacity_5000.fasta --jobs=20 --Tmin=35 --Tmax=45 > RNAheat_5000_output.txt\
+\
+# Copy results back to home directory\
+cp RNAheat_5000_output.txt /home/z3514253\
+}
