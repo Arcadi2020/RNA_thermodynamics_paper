@@ -1,1 +1,1 @@
-
+This section contains R scripts for analyzing how pharmacologic pressures reshape the transcriptome of samples profiled in the iLINCs platform. These analyses are integrated with thermodynamic modeling of RNA secondary structures, enabling quantification of drug-induced changes in folding free energy
