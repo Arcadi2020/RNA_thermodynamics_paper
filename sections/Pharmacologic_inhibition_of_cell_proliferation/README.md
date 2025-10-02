@@ -1,1 +1,1 @@
-
+This section contains R scripts for analyzing how pharmacologic pressures reshape the transcriptome in drug-treated cancer cell lines. These analyses are integrated with thermodynamic modeling of RNA secondary structures, enabling quantification of drug-induced changes in folding free energy
