@@ -1,85 +1,71 @@
 # Script: Figure 1 – RNA secondary-structure stability across the human transcriptome
+#
 # Purpose:
-#   Reproduce all plots and summary statistics reported in Fig. 1 (A–F) and
-#   Supplementary Figs. 1–2 of the manuscript. The analysis quantifies and visualizes
-#   transcript RNA folding stability using length-normalized minimum free energy
-#   (Normalized_MFE = MFE / Transcript_length; units: kcal·mol⁻¹·nt⁻¹), and relates
-#   stability to RNA biotypes, tissue-specific expression, curated pathways, and
-#   evolution. It also exports gene lists for external GSEA.
+#   Reproduce all plots and statistics reported in Fig. 1 (A–E) and Supplementary
+#   Figs. 1–2. The analysis quantifies transcript RNA folding stability using
+#   length-normalized minimum free energy (Normalized_MFE = MFE / Transcript_length;
+#   units: kcal·mol⁻¹·nt⁻¹), compares stability across RNA biotypes and pathways,
+#   identifies tail transcripts for GO GSEA, and relates stability to evolutionary age.
 #
-# High-level workflow:
-#   1) Load the annotated transcript-level table with per-transcript MFE, heat capacity,
-#      lengths, biotypes, and identifiers (Gencode_TX_norm_MFE_HC_table).
-#   2) Fig. 1A: (i) Describe global Normalized_MFE distribution for all transcripts and
-#      for protein-coding mRNAs; (ii) plot Normalized_MFE vs transcript ID.
-#   3) Fig. 1B: Compare Normalized_MFE distributions between protein-coding RNAs, tRNAs,
-#      and rRNAs (violin/density plots + KS/Wilcoxon tests).
-#   4) Suppl. Fig. 1a–b: Identify protein-coding transcripts in the top (least
-#      stable; 95th percentile) and bottom (most stable; 5th percentile) tails of the
-#      Normalized_MFE distribution; export gene lists for GO GSEA; plot top terms.
-#   5) Fig. 1C: Map Human Protein Atlas (HPA) tissue-specific genes onto the transcript
-#      table and compare Normalized_MFE across tissues (box plots with means/95% CI).
-#   6) Fig. 1D: Evaluate Normalized_MFE across curated signaling and DNA repair pathways
-#      (per-pathway mean ± SD; box plots; reference line for cross-pathway mean).
-#   7) **Suppl. Fig. 2:** Validate curated pathway results using MSigDB/GSEA gene sets.
-#        - Import KEGG, Reactome, GO, and Hallmark gene sets (JSON format).
-#        - Parse into R objects, extract gene symbols, and filter transcript table.
-#        - Compute per-pathway mean ± SD of Normalized_MFE.
-#        - Plot results (point/error bar plots + box plots) and compare against global mean.
-#        - Observation: confirms consistency between curated and external gene sets for
-#          key categories (DNA repair, signaling, EMT, stress response).
-#   8) Fig. 1E: Contrast Error-prone vs High-fidelity DNA repair mechanisms (polymerases,
-#      BER vs NHEJ) using Normalized_MFE distributions; test significance (KS/Wilcoxon).
-#   9) Fig. 1F: Phylostratigraphic analysis of Normalized_MFE across evolutionary ages
-#      (Trigos et al. PNAS phylostrata dataset), plotting means ± SD and box plots with
-#      ANOVA, KS tests, and linear trend analysis.
+# What the script does (by section):
+#   • Global transcriptome: loads the annotated table (MFE, heat capacity, lengths,
+#     biotypes, IDs) and visualizes the Normalized_MFE distribution (histograms) for
+#     all transcripts and for protein-coding mRNAs; scatter of Normalized_MFE across
+#     protein-coding transcript IDs.
+#   • Fig. 1A – Biotypes: extracts tRNAs from the GENCODE tRNA GTF via genomic
+#     coordinates (GRCh38 FASTA), computes their MFE with RNAfold (LncFinder::run_RNAfold),
+#     and compares Normalized_MFE among protein-coding RNAs, tRNAs, and rRNAs using
+#     violin/density plots plus KS and Wilcoxon tests.
+#   • Fig. 1B – Representative structures: selects protein-coding transcripts of
+#     similar length at the extremes and midpoint of the Normalized_MFE distribution
+#     (e.g., ~2,530 nt), fetches cDNA sequences via biomaRt, and (externally) visualizes
+#     their secondary structures with the RNAfold web server.
+#   • Suppl. Fig. 1a–b – Tail enrichment: defines 5th (most stable) and 95th (least
+#     stable) percentiles of protein-coding Normalized_MFE, exports gene lists, and
+#     plots top GO Biological Process terms for each tail from GO GSEA outputs.
+#   • Fig. 1C – Curated pathways: loads custom pathway gene sets (source("All_gene_sets_AC.R")),
+#     filters the transcript table by pathway, computes per-pathway Normalized_MFE mean ± SD,
+#     and plots point/error-bar summaries and box plots with a global mean reference line.
+#   • Suppl. Fig. 2 – MSigDB validation: imports KEGG/Reactome/GO/Hallmark JSON gene sets
+#     (MSigDB), extracts symbols (rrapply), repeats the pathway-level Normalized_MFE mean ± SD
+#     summaries and box plots, and compares against the global mean to confirm curated results.
+#   • Fig. 1D – DNA repair/replication modes: contrasts Error-prone vs High-fidelity DNA
+#     polymerases and NHEJ vs BER using Normalized_MFE box plots and KS/Wilcoxon tests.
+#   • Fig. 1E – Phylostratigraphy: joins Trigos et al. (PNAS 2017) phylostrata with the
+#     transcript table, summarizes Normalized_MFE by phylostratum (means ± SD), plots
+#     box plots (subset to early phylostrata), and tests differences (KS, ANOVA) and
+#     linear trend.
 #
-# Required inputs (update paths as needed):
-#   - Transcript metrics (CSV):
-#       path_to/Gencode_TX_norm_MFE_HC_table.csv
-#   - Tissue specificity (TSV from HPA “proteinatlas.tsv.zip”, unzipped to Proteinatlas.txt):
-#       /Volumes/.../Proteinatlas.txt
-#   - Curated pathway gene sets (R script defining character vectors of HGNC symbols):
-#       .../R Scripts/All_gene_sets_AC.R
-#   - GENCODE tRNA annotations (GTF) and GRCh38 genome FASTA for sequence extraction:
-#       gencode.v47.tRNAs.gtf.gz (or v48) and GRCh38.p14.genome.fa.gz
-#   - **MSigDB/GSEA gene sets (JSON):**
-#       Downloaded from http://www.gsea-msigdb.org/gsea/downloads.jsp
-#       (e.g., c2.cp.v7.5.1.json and pathway-specific JSONs in /GSEA_gene_sets/).
-#   - Trigos et al. (PNAS 2017) phylostratigraphy table (CSV).
+# Required inputs (update paths):
+#   - Transcript metrics CSV:     path_to/Gencode_TX_norm_MFE_HC_table.csv
+#   - Curated pathways (R):       path_to/All_gene_sets_AC.R
+#   - GENCODE tRNAs (GTF):        path_to/gencode.v47.tRNAs.gtf.gz (or v48)
+#   - GRCh38 genome FASTA:        path_to/GRCh38.p14.genome.fa.gz
+#   - RNAfold (CLI in PATH) for tRNA MFE via LncFinder::run_RNAfold
+#   - GO GSEA outputs (CSV):      path_to/High_MFE_genes.csv, path_to/Low_MFE_genes.csv
+#   - MSigDB JSON gene sets:      e.g., path_to/c2.cp.v7.5.1.json and pathway-specific JSONs
+#   - Phylostratigraphy CSV:      path_to/PNAS_Genes_phylostratigraphy.csv
 #
-# Outputs:
-#   - Human_protein_coding_TX.pdf                    # Fig. 1A scatter
-#   - MFE_violin_tRNA_mRNA_rRNA_counts.pdf          # Fig. 1B
-#   - GSEA_high_MFE.pdf / GSEA_low_MFE.pdf          # Suppl. Fig. 1
-#   - High_MFE.csv / Low_MFE.csv                    # Suppl. Fig. 1
-#   - MFE_tissues.pdf                                # Fig. 1C
-#   - MFE_curated_signaling_pathways.pdf            # Fig. 1D
-#   - Normalized_MFE_GSEA_signaling_pathways.pdf    # Suppl. Fig. 2
-#   - Boxplot PDFs for selected GSEA categories      # Suppl. Fig. 2
-#   - EP_HF_DNArepair_replication.pdf               # Fig. 1E
-#   - MFE_phylostratigraphy.pdf                     # Fig. 1F
+# Outputs (created or printed; add ggsave() where needed):
+#   - Histograms and scatter of Normalized_MFE (all & protein-coding)
+#   - Biotype comparisons: violin/density + KS/Wilcoxon (Fig. 1A)
+#   - Representative structures (Fig. 1B; structures rendered via RNAfold web server)
+#   - High_MFE.csv / Low_MFE.csv and GO bar plots (Suppl. Fig. 1; GSEA_high_MFE.pdf saved)
+#   - Curated pathway means ± SD and box plots (Fig. 1C)
+#   - MSigDB/KEGG/Reactome/GO/Hallmark validation plots (Suppl. Fig. 2)
+#   - Error-prone vs High-fidelity / NHEJ vs BER box plots + tests (Fig. 1D)
+#   - Phylostratigraphy means ± SD, box plots, KS/ANOVA/trend (Fig. 1E)
 #
 # Statistical notes:
-#   - Distributions compared with KS and Wilcoxon tests.
-#   - Values reported as mean ± SD (kcal·mol⁻¹·nt⁻¹).
-#   - For Suppl. Fig. 2, each pathway’s mean ± SD compared against global mean line.
+#   - Two-sample distribution tests: Kolmogorov–Smirnov and Wilcoxon rank-sum.
+#   - Pathway summaries reported as mean ± SD (kcal·mol⁻¹·nt⁻¹).
+#   - Phylostratigraphy includes KS pairwise tests, one-way ANOVA, and linear trend.
 #
-# Assumptions and conventions:
-#   - Normalized_MFE = MFE / transcript length.
-#   - External pathways use Ensembl gene IDs → HGNC mapping for joins.
-#   - MSigDB JSON parsing requires `rjson` and `rrapply`.
-#
-# Figure mapping:
-#   - Fig. 1A: Scatter/global distributions.
-#   - Fig. 1B: Violin plots (protein-coding vs tRNA vs rRNA).
-#   - Suppl. Fig. 1: Tail gene lists + GSEA plots.
-#   - Fig. 1C: Tissue-specific box plots.
-#   - Fig. 1D: Curated pathway box plots.
-#   - **Suppl. Fig. 2: GSEA/KEGG/Reactome pathway means ± SD and box plots.**
-#   - Fig. 1E: Error-prone vs high-fidelity DNA repair distributions.
-#   - Fig. 1F: Phylostratigraphy vs Normalized_MFE (means ± SD, KS, ANOVA).
-#
+# Conventions:
+#   - Normalized_MFE = MFE / transcript length; more negative → greater folding stability.
+#   - tRNAs are not in the main transcript CSV and are derived from GTF/FASTA coordinates.
+#   - MSigDB parsing uses `rjson` + `rrapply`; sequence retrieval uses biomaRt.
+
 
 
 
@@ -190,7 +176,302 @@ ggplot(Table_ANNOTATED_gene_filtered, aes(x = Normalized_MFE)) +
 
 
 
+
+
+
+
+
+
+
 # Fig.1A ####
+# Analysis MFE tRNAs and ribosomal RNAs vs protein coding RNAs ####
+
+
+library(Biostrings)
+library(tibble)
+library(dplyr)
+library(stringr)
+library(LncFinder)
+library(tidyr)
+library(seqinr)
+library(devtools)
+library(tidyverse)
+library(FastaUtils)
+library(biomaRt)
+library(cbioportalR)
+library(R.utils)
+library(rtracklayer)
+
+
+
+
+Gencode_TX_norm_MFE_HC_table <- read.delim("path_to/Gencode_TX_norm_MFE_HC_table.csv",
+                                           sep = ",", header = T, stringsAsFactors = F)
+Table_ANNOTATED_gene_names <- Gencode_TX_norm_MFE_HC_table
+# This file contains:
+# Protein coding transcripts
+# lncRNAs
+# ribosomal RNAs
+
+
+
+# Select the ribosomal RNAs (rRNAs)
+Gencode_rRNAs <- Table_ANNOTATED_gene_names %>%
+  dplyr::filter(transcript_biotype == "rRNA")
+
+# Select the lncRNAs
+Gencode_lncRNAs <- Table_ANNOTATED_gene_names %>%
+  dplyr::filter(transcript_biotype == "lncRNA")
+
+# Select the protein coding transcripts
+Gencode_Protein_Coding <- Table_ANNOTATED_gene_names %>%
+  dplyr::filter(transcript_biotype == "protein_coding")
+
+# Select the tRNAs from the Gencode transcriptome
+# The Gencode tRNAs are located in a different GTF file, so I need to load them separately
+# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/gencode.v48.tRNAs.gtf.gz
+
+# Load tRNA annotations (filtering unwanted types)
+tRNAs <- readGFF("path_to/gencode.v47.tRNAs.gtf.gz") %>%
+  filter(!transcript_type %in% c("Pseudo_tRNA", "Undet_tRNA", "Sup_tRNA", "SeC_tRNA", "SeC(e)_tRNA"))
+
+# Access the FASTA files
+# The tRNAs GTF entries have transcript_id values like 20658, whereas Gencode_transcripts_FASTA uses canonical Ensembl transcript IDs like ENST00000xxxxx. This mismatch happens because:
+# The predicted tRNAs file (gencode.v48.tRNAs.gtf) does not use ENST IDs; it uses numerical IDs (internal ENSEMBL IDs).
+# The transcript FASTA file (gencode.v47.transcripts.fa) contains only standard ENST transcripts, not the predicted tRNAs.
+
+
+# Use the GTF coordinates to extract tRNAs
+# Download the genome FASTA file for Gencode v47
+# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/GRCh38.p14.genome.fa.gz
+
+# Load the file
+genome_path <- "path_to/GRCh38.p14.genome.fa.gz"
+
+# Read the compressed genome FASTA
+genome <- Biostrings::readDNAStringSet(genome_path)
+
+
+# Clean chromosome names (remove any descriptions after space)
+names(genome) <- sub(" .*", "", names(genome))
+
+# 3. Extract sequences manually (subseq + reverseComplement for negative strand)
+tRNA_sequences <- DNAStringSet(mapply(function(chr, start, end, strand) {
+  seq <- subseq(genome[[chr]], start = start, end = end)
+  if (strand == "-") seq <- reverseComplement(seq)
+  seq
+}, tRNAs$seqid, tRNAs$start, tRNAs$end, tRNAs$strand))
+
+# 4. Assign transcript IDs as names
+names(tRNA_sequences) <- tRNAs$transcript_id
+
+# 5. Save to FASTA with transcript_id as header
+output_path <- "path_to/tRNAs_sequences_v47.fa"
+writeXStringSet(tRNA_sequences, filepath = output_path)
+
+
+library(seqinr)
+library(LncFinder)
+library(dplyr)
+library(tibble)
+library(stringr)
+
+# 1. Read the FASTA file of extracted tRNAs (preserve IDs)
+Human_t_RNAs <- seqinr::read.fasta(
+  file = output_path,
+  seqtype = "DNA",
+  as.string = TRUE,
+  set.attributes = FALSE
+)
+
+# 2. Predict secondary structure and MFE using RNAfold
+Secondary_structure <- run_RNAfold(
+  Human_t_RNAs,
+  RNAfold.path = "RNAfold",        # Ensure RNAfold is in your PATH
+  parallel.cores = 3
+)
+
+# 3. Predict coding potential using LncFinder (with SS features)
+Prediction_on_Secondary_structure_t_RNAs <- lnc_finder(
+  Secondary_structure,
+  SS.features = TRUE,
+  format = "SS",
+  frequencies.file = "human",
+  svm.model = "human",
+  parallel.cores = 3
+)
+
+# 4. Convert prediction results to a data frame
+Prediction_Gencode_tRNAs_df <- as.data.frame(Prediction_on_Secondary_structure_t_RNAs)
+Prediction_Gencode_tRNAs_df <- tibble::rownames_to_column(Prediction_Gencode_tRNAs_df, var = "ID")
+
+# Remove leading 'X' if present in ID
+Prediction_Gencode_tRNAs_df$ID <- sub("^X", "", Prediction_Gencode_tRNAs_df$ID)
+
+
+# 5. Calculate length of each tRNA sequence
+tRNA_length_df <- data.frame(
+  ID = names(tRNA_sequences),
+  Length = width(tRNA_sequences)
+)
+
+# 6. Add transcript_name from GTF
+tRNA_name_df <- tRNAs %>%
+  dplyr::select(transcript_id, transcript_name) %>%
+  dplyr::rename(ID = transcript_id, tRNA_name = transcript_name)
+
+# 7. Merge predictions with length and name
+Prediction_Gencode_tRNAs_df <- Prediction_Gencode_tRNAs_df %>%
+  dplyr::left_join(tRNA_length_df, by = "ID") %>%
+  dplyr::left_join(tRNA_name_df, by = "ID")
+
+# Calculate Normalized_MFE
+Gencode_tRNAs <- Prediction_Gencode_tRNAs_df %>%
+  dplyr::mutate(Normalized_MFE = MFE / Length)
+
+
+
+
+
+
+
+
+
+# tRNAs (from Prediction_Gencode_tRNAs_df)
+tRNA_MFE_labeled <- Gencode_tRNAs %>%
+  dplyr::select(Normalized_MFE) %>%
+  dplyr::mutate(Group = "tRNA")
+
+# rRNAs (from main annotated table)
+rRNA_MFE_labeled <- Gencode_rRNAs %>%
+  dplyr::select(Normalized_MFE) %>%
+  dplyr::mutate(Group = "rRNA")
+
+# Protein-coding RNAs
+ProteinCoding_MFE_labeled <- Table_ANNOTATED_gene_names %>%
+  dplyr::filter(transcript_biotype == "protein_coding") %>%
+  dplyr::select(Normalized_MFE) %>%
+  dplyr::mutate(Group = "Protein_coding")
+
+# lncRNAs
+lncRNA_MFE_labeled <- Table_ANNOTATED_gene_names %>%
+  dplyr::filter(transcript_biotype == "lncRNA") %>%
+  dplyr::select(Normalized_MFE) %>%
+  dplyr::mutate(Group = "lncRNA")
+
+
+
+# Generate the violin plot with the protein-coding, tRNAs and rRNAs
+combined_MFE <- bind_rows(
+  tRNA_MFE_labeled,
+  rRNA_MFE_labeled,
+  ProteinCoding_MFE_labeled
+) %>%
+  mutate(Group = factor(Group, levels = c("Protein_coding", "tRNA", "rRNA")))
+
+# Violin plot
+# Count transcripts per group
+counts <- combined_MFE %>%
+  group_by(Group) %>%
+  summarise(n = n(), .groups = "drop")
+
+# Create new labels with n=
+group_labels <- paste0(levels(combined_MFE$Group), "\n(n=", counts$n[match(levels(combined_MFE$Group), counts$Group)], ")")
+
+# Violin plot with counts
+MFE_violin <- ggplot(combined_MFE, aes(x = Group, y = Normalized_MFE, fill = Group)) +
+  geom_violin(trim = FALSE, colour = "black", linewidth = 0.3, alpha = 0.70) +
+  geom_boxplot(width = 0.15, outlier.shape = NA,
+               fill  = "white", colour = "black", linewidth = 0.3) +
+  scale_fill_manual(values = rep("lightgrey", 3)) +
+  scale_x_discrete(labels = group_labels) +        # <-- Add labels with counts
+  theme_classic() +
+  labs(x = NULL, y = "Normalized MFE (kcal·mol⁻¹·nt⁻¹)") +
+  theme(
+    legend.position = "none",
+    axis.title.y    = element_text(size = 16),
+    axis.text       = element_text(size = 14)
+  )
+
+print(MFE_violin)
+
+
+
+
+
+
+
+# # Extract vectors without NAs
+tRNA_vals    <- na.omit(tRNA_MFE_labeled$Normalized_MFE)
+rRNA_vals    <- na.omit(rRNA_MFE_labeled$Normalized_MFE)
+protein_vals <- na.omit(ProteinCoding_MFE_labeled$Normalized_MFE)
+
+# Means
+cat("Means:\n",
+    "tRNA:", mean(tRNA_vals), "\n",
+    "rRNA:", mean(rRNA_vals), "\n",
+    "Protein-coding:", mean(protein_vals), "\n\n")
+
+# KS tests
+cat("Kolmogorov–Smirnov tests:\n")
+print(ks.test(tRNA_vals, rRNA_vals))
+print(ks.test(tRNA_vals, protein_vals))
+print(ks.test(rRNA_vals, protein_vals))
+
+# Wilcoxon rank-sum tests
+cat("\nWilcoxon rank-sum tests:\n")
+print(wilcox.test(tRNA_vals, rRNA_vals))
+print(wilcox.test(tRNA_vals, protein_vals))
+print(wilcox.test(rRNA_vals, protein_vals))
+
+
+
+
+
+
+# Density plot with median lines (Protein-coding → tRNA → rRNA)
+ggplot(combined_MFE, aes(x = Normalized_MFE, fill = Group, colour = Group)) +
+  geom_density(aes(y = ..scaled..), alpha = 0.5) +  # scaled densities
+  geom_vline(
+    data = combined_MFE %>%
+      group_by(Group) %>%
+      summarise(median = median(Normalized_MFE, na.rm = TRUE), .groups = "drop"),
+    aes(xintercept = median, colour = Group),
+    linetype = "dashed"
+  ) +
+  scale_fill_manual(values = c(
+    "Protein_coding" = "#1f78b4",  # blue
+    "tRNA"           = "#e31a1c",  # red
+    "rRNA"           = "#ff7f00"   # orange
+  )) +
+  scale_colour_manual(values = c(
+    "Protein_coding" = "#1f78b4",
+    "tRNA"           = "#e31a1c",
+    "rRNA"           = "#ff7f00"
+  )) +
+  theme_classic() +
+  labs(x = "Normalized MFE (kcal·mol⁻¹·nt⁻¹)", y = "Scaled density") +
+  theme(
+    axis.title   = element_text(size = 16),
+    axis.text    = element_text(size = 14),
+    legend.title = element_blank(),
+    legend.position = "top"
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Fig.1B ####
 # Plot the normalized MFE distribution of the Human protein-coding transcriptome (Normalized_MFE vs transcript ID).
 Human_protein_coding_TX <- ggplot(Table_ANNOTATED_gene_filtered, aes(x = reorder(ensembl_transcript_id, Normalized_MFE), y = Normalized_MFE)) +
   theme_classic() +
@@ -498,280 +779,18 @@ print(GSEA_low_MFE)
 
 
 
-# Fig.1B ####
-# Analysis MFE tRNAs and ribosomal RNAs vs protein coding RNAs ####
 
 
-library(Biostrings)
-library(tibble)
-library(dplyr)
-library(stringr)
-library(LncFinder)
-library(tidyr)
-library(seqinr)
-library(devtools)
-library(tidyverse)
-library(FastaUtils)
-library(biomaRt)
-library(cbioportalR)
-library(R.utils)
-library(rtracklayer)
 
 
 
 
-Gencode_TX_norm_MFE_HC_table <- read.delim("path_to/Gencode_TX_norm_MFE_HC_table.csv",
-                                           sep = ",", header = T, stringsAsFactors = F)
-Table_ANNOTATED_gene_names <- Gencode_TX_norm_MFE_HC_table
-# This file contains:
-# Protein coding transcripts
-# lncRNAs
-# ribosomal RNAs
 
 
 
-# Select the ribosomal RNAs (rRNAs)
-Gencode_rRNAs <- Table_ANNOTATED_gene_names %>%
-  dplyr::filter(transcript_biotype == "rRNA")
 
-# Select the lncRNAs
-Gencode_lncRNAs <- Table_ANNOTATED_gene_names %>%
-  dplyr::filter(transcript_biotype == "lncRNA")
 
-# Select the protein coding transcripts
-Gencode_Protein_Coding <- Table_ANNOTATED_gene_names %>%
-  dplyr::filter(transcript_biotype == "protein_coding")
 
-# Select the tRNAs from the Gencode transcriptome
-# The Gencode tRNAs are located in a different GTF file, so I need to load them separately
-# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/gencode.v48.tRNAs.gtf.gz
-
-# Load tRNA annotations (filtering unwanted types)
-tRNAs <- readGFF("path_to/gencode.v47.tRNAs.gtf.gz") %>%
-  filter(!transcript_type %in% c("Pseudo_tRNA", "Undet_tRNA", "Sup_tRNA", "SeC_tRNA", "SeC(e)_tRNA"))
-
-# Access the FASTA files
-# The tRNAs GTF entries have transcript_id values like 20658, whereas Gencode_transcripts_FASTA uses canonical Ensembl transcript IDs like ENST00000xxxxx. This mismatch happens because:
-# The predicted tRNAs file (gencode.v48.tRNAs.gtf) does not use ENST IDs; it uses numerical IDs (internal ENSEMBL IDs).
-# The transcript FASTA file (gencode.v47.transcripts.fa) contains only standard ENST transcripts, not the predicted tRNAs.
-
-
-# Use the GTF coordinates to extract tRNAs
-# Download the genome FASTA file for Gencode v47
-# https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/GRCh38.p14.genome.fa.gz
-
-# Load the file
-genome_path <- "path_to/GRCh38.p14.genome.fa.gz"
-
-# Read the compressed genome FASTA
-genome <- Biostrings::readDNAStringSet(genome_path)
-
-
-# Clean chromosome names (remove any descriptions after space)
-names(genome) <- sub(" .*", "", names(genome))
-
-# 3. Extract sequences manually (subseq + reverseComplement for negative strand)
-tRNA_sequences <- DNAStringSet(mapply(function(chr, start, end, strand) {
-  seq <- subseq(genome[[chr]], start = start, end = end)
-  if (strand == "-") seq <- reverseComplement(seq)
-  seq
-}, tRNAs$seqid, tRNAs$start, tRNAs$end, tRNAs$strand))
-
-# 4. Assign transcript IDs as names
-names(tRNA_sequences) <- tRNAs$transcript_id
-
-# 5. Save to FASTA with transcript_id as header
-output_path <- "path_to/tRNAs_sequences_v47.fa"
-writeXStringSet(tRNA_sequences, filepath = output_path)
-
-
-library(seqinr)
-library(LncFinder)
-library(dplyr)
-library(tibble)
-library(stringr)
-
-# 1. Read the FASTA file of extracted tRNAs (preserve IDs)
-Human_t_RNAs <- seqinr::read.fasta(
-  file = output_path,
-  seqtype = "DNA",
-  as.string = TRUE,
-  set.attributes = FALSE
-)
-
-# 2. Predict secondary structure and MFE using RNAfold
-Secondary_structure <- run_RNAfold(
-  Human_t_RNAs,
-  RNAfold.path = "RNAfold",        # Ensure RNAfold is in your PATH
-  parallel.cores = 3
-)
-
-# 3. Predict coding potential using LncFinder (with SS features)
-Prediction_on_Secondary_structure_t_RNAs <- lnc_finder(
-  Secondary_structure,
-  SS.features = TRUE,
-  format = "SS",
-  frequencies.file = "human",
-  svm.model = "human",
-  parallel.cores = 3
-)
-
-# 4. Convert prediction results to a data frame
-Prediction_Gencode_tRNAs_df <- as.data.frame(Prediction_on_Secondary_structure_t_RNAs)
-Prediction_Gencode_tRNAs_df <- tibble::rownames_to_column(Prediction_Gencode_tRNAs_df, var = "ID")
-
-# Remove leading 'X' if present in ID
-Prediction_Gencode_tRNAs_df$ID <- sub("^X", "", Prediction_Gencode_tRNAs_df$ID)
-
-
-# 5. Calculate length of each tRNA sequence
-tRNA_length_df <- data.frame(
-  ID = names(tRNA_sequences),
-  Length = width(tRNA_sequences)
-)
-
-# 6. Add transcript_name from GTF
-tRNA_name_df <- tRNAs %>%
-  dplyr::select(transcript_id, transcript_name) %>%
-  dplyr::rename(ID = transcript_id, tRNA_name = transcript_name)
-
-# 7. Merge predictions with length and name
-Prediction_Gencode_tRNAs_df <- Prediction_Gencode_tRNAs_df %>%
-  dplyr::left_join(tRNA_length_df, by = "ID") %>%
-  dplyr::left_join(tRNA_name_df, by = "ID")
-
-# Calculate Normalized_MFE
-Gencode_tRNAs <- Prediction_Gencode_tRNAs_df %>%
-  dplyr::mutate(Normalized_MFE = MFE / Length)
-
-
-
-
-
-
-
-
-
-# tRNAs (from Prediction_Gencode_tRNAs_df)
-tRNA_MFE_labeled <- Gencode_tRNAs %>%
-  dplyr::select(Normalized_MFE) %>%
-  dplyr::mutate(Group = "tRNA")
-
-# rRNAs (from main annotated table)
-rRNA_MFE_labeled <- Gencode_rRNAs %>%
-  dplyr::select(Normalized_MFE) %>%
-  dplyr::mutate(Group = "rRNA")
-
-# Protein-coding RNAs
-ProteinCoding_MFE_labeled <- Table_ANNOTATED_gene_names %>%
-  dplyr::filter(transcript_biotype == "protein_coding") %>%
-  dplyr::select(Normalized_MFE) %>%
-  dplyr::mutate(Group = "Protein_coding")
-
-# lncRNAs
-lncRNA_MFE_labeled <- Table_ANNOTATED_gene_names %>%
-  dplyr::filter(transcript_biotype == "lncRNA") %>%
-  dplyr::select(Normalized_MFE) %>%
-  dplyr::mutate(Group = "lncRNA")
-
-
-
-# Generate the violin plot with the protein-coding, tRNAs and rRNAs
-combined_MFE <- bind_rows(
-  tRNA_MFE_labeled,
-  rRNA_MFE_labeled,
-  ProteinCoding_MFE_labeled
-) %>%
-  mutate(Group = factor(Group, levels = c("Protein_coding", "tRNA", "rRNA")))
-
-# Violin plot
-# Count transcripts per group
-counts <- combined_MFE %>%
-  group_by(Group) %>%
-  summarise(n = n(), .groups = "drop")
-
-# Create new labels with n=
-group_labels <- paste0(levels(combined_MFE$Group), "\n(n=", counts$n[match(levels(combined_MFE$Group), counts$Group)], ")")
-
-# Violin plot with counts
-MFE_violin <- ggplot(combined_MFE, aes(x = Group, y = Normalized_MFE, fill = Group)) +
-  geom_violin(trim = FALSE, colour = "black", linewidth = 0.3, alpha = 0.70) +
-  geom_boxplot(width = 0.15, outlier.shape = NA,
-               fill  = "white", colour = "black", linewidth = 0.3) +
-  scale_fill_manual(values = rep("lightgrey", 3)) +
-  scale_x_discrete(labels = group_labels) +        # <-- Add labels with counts
-  theme_classic() +
-  labs(x = NULL, y = "Normalized MFE (kcal·mol⁻¹·nt⁻¹)") +
-  theme(
-    legend.position = "none",
-    axis.title.y    = element_text(size = 16),
-    axis.text       = element_text(size = 14)
-  )
-
-print(MFE_violin)
-
-
-
-
-
-
-
-# # Extract vectors without NAs
-tRNA_vals    <- na.omit(tRNA_MFE_labeled$Normalized_MFE)
-rRNA_vals    <- na.omit(rRNA_MFE_labeled$Normalized_MFE)
-protein_vals <- na.omit(ProteinCoding_MFE_labeled$Normalized_MFE)
-
-# Means
-cat("Means:\n",
-    "tRNA:", mean(tRNA_vals), "\n",
-    "rRNA:", mean(rRNA_vals), "\n",
-    "Protein-coding:", mean(protein_vals), "\n\n")
-
-# KS tests
-cat("Kolmogorov–Smirnov tests:\n")
-print(ks.test(tRNA_vals, rRNA_vals))
-print(ks.test(tRNA_vals, protein_vals))
-print(ks.test(rRNA_vals, protein_vals))
-
-# Wilcoxon rank-sum tests
-cat("\nWilcoxon rank-sum tests:\n")
-print(wilcox.test(tRNA_vals, rRNA_vals))
-print(wilcox.test(tRNA_vals, protein_vals))
-print(wilcox.test(rRNA_vals, protein_vals))
-
-
-
-
-
-
-# Density plot with median lines (Protein-coding → tRNA → rRNA)
-ggplot(combined_MFE, aes(x = Normalized_MFE, fill = Group, colour = Group)) +
-  geom_density(aes(y = ..scaled..), alpha = 0.5) +  # scaled densities
-  geom_vline(
-    data = combined_MFE %>%
-      group_by(Group) %>%
-      summarise(median = median(Normalized_MFE, na.rm = TRUE), .groups = "drop"),
-    aes(xintercept = median, colour = Group),
-    linetype = "dashed"
-  ) +
-  scale_fill_manual(values = c(
-    "Protein_coding" = "#1f78b4",  # blue
-    "tRNA"           = "#e31a1c",  # red
-    "rRNA"           = "#ff7f00"   # orange
-  )) +
-  scale_colour_manual(values = c(
-    "Protein_coding" = "#1f78b4",
-    "tRNA"           = "#e31a1c",
-    "rRNA"           = "#ff7f00"
-  )) +
-  theme_classic() +
-  labs(x = "Normalized MFE (kcal·mol⁻¹·nt⁻¹)", y = "Scaled density") +
-  theme(
-    axis.title   = element_text(size = 16),
-    axis.text    = element_text(size = 14),
-    legend.title = element_blank(),
-    legend.position = "top"
-  )
 
 
 
@@ -791,426 +810,6 @@ ggplot(combined_MFE, aes(x = Normalized_MFE, fill = Group, colour = Group)) +
 
 
 # Fig.1C ####
-# Analysis tissue-specific genes
-
-# Load the protein atals data which provide information about the tissue-specific gene expression.
-# Load the tissue specific gene expression data
-# These data have been downloaded from: https://www.proteinatlas.org/about/download
-# The file name is: Data from the Human Protein Atlas in tab-separated format (proteinatlas.tsv.zip)
-Proteinatlas_data <- read.delim("path_to/Proteinatlas.txt") %>%
-  dplyr::rename(ensembl_gene_id = Ensembl)
-
-
-
-
-library(stringr)
-Skeletal_muscle_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "skeletal muscle")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Select the genes which are specific for the retina
-Retina_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "retina")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Heart specific genes
-Heart_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "heart")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Adrenal gland specific genes
-Adrenal_gland_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "adrenal gland")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Parathyroid gland specific genes
-Parathyroid_gland_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "parathyroid gland")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Thyroid gland specific genes
-Thyroid_gland_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "thyroid gland")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Pituitary gland specific genes
-Pituitary_gland_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "pituitary gland")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Lung specific genes
-Lung_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "lung")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Bone marrow specific genes
-Bone_marrow_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "bone marrow")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Lymphoid tissue specific genes
-Lymphoid_tissue_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "lymphoid tissue")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Liver specific genes
-Liver_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "liver")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Gallbladder specific genes
-Gallbladder_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "gallbladder")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Testis specific genes
-Testis_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "testis")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Epididymis specific genes
-Epididymis_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "epididymis")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Prostate specific genes
-Prostate_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "prostate")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Seminal vesicle specific genes
-Seminal_vesicle_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "seminal vesicle")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id") %>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Adipose tissue specific genes
-Adipose_tissue_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "adipose tissue")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Brain specific genes
-Brain_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "brain")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Choroid plexus specific genes
-Choroid_plexus_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "choroid plexus")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Salivary gland specific genes
-Salivary_gland_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "salivary gland")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Esophagus specific genes
-Esophagus_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "esophagus")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Tongue specific genes
-Tongue_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "tongue")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Stomach specific genes
-Stomach_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "stomach")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Intestine specific genes
-Intestinal_tissue_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "intestine")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Pancreas specific genes
-Pancreas_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "pancreas")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Kidney specific genes
-Kidney_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "kidney")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Urinary bladder specific genes
-Urinary_bladder_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "urinary bladder")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Breast specific genes
-Breast_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "breast")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Vagina specific genes
-Vagina_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "vagina")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Cervix specific genes
-Cervix_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "cervix")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Endometrium specific genes
-Endometrium_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "endometrium")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Fallopian tube specific genes
-Fallopian_tube_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "fallopian tube")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Ovary specific genes
-Ovary_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "ovary")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Placenta specific genes
-Placenta_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "placenta")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-# Skin specific genes
-Skin_specific_genes <- Proteinatlas_data %>%
-  dplyr::filter(str_detect(RNA.tissue.specific.nTPM, "skin")) %>%
-  dplyr::select(ensembl_gene_id, RNA.tissue.specific.nTPM) %>%
-  dplyr::left_join(Table_ANNOTATED_gene_names, by = "ensembl_gene_id")%>%
-  dplyr::select(ensembl_transcript_id_version, Normalized_MFE)
-
-
-
-# Generate a box plot with the data of each tissue on the x axis and the Normalized_MFE values on the y axis
-
-library(tidyverse)
-
-# Define the function to add the columns with mean and confidence intervals to each dataframe
-add_mean_ci_columns <- function(df, confidence_level = 0.95) {
-  if ("Normalized_MFE" %in% colnames(df) && !all(is.na(df$Normalized_MFE))) {
-    # Calculate mean
-    df$mean_value <- mean(df$Normalized_MFE, na.rm = TRUE)
-    
-    # Calculate standard error
-    se <- sd(df$Normalized_MFE, na.rm = TRUE) / sqrt(length(df$Normalized_MFE))
-    
-    # Calculate margin of error
-    moe <- qnorm((1 + confidence_level) / 2) * se
-    
-    # Calculate confidence interval
-    df$lower_ci <- df$mean_value - moe
-    df$upper_ci <- df$mean_value + moe
-  } else {
-    df$mean_value <- NA
-    df$lower_ci <- NA
-    df$upper_ci <- NA
-  }
-  return(df)
-}
-
-
-
-# List of tissue-specific gene data frames
-tissue_specific_genes_list <- list(
-  Skeletal_muscle = Skeletal_muscle_specific_genes,
-  Retina = Retina_specific_genes,
-  Heart = Heart_specific_genes,
-  Adrenal_gland = Adrenal_gland_specific_genes,
-  Parathyroid_gland = Parathyroid_gland_specific_genes,
-  Thyroid_gland = Thyroid_gland_specific_genes,
-  Pituitary_gland = Pituitary_gland_specific_genes,
-  Lung = Lung_specific_genes,
-  Bone_marrow = Bone_marrow_specific_genes,
-  Lymphoid_tissue = Lymphoid_tissue_specific_genes,
-  Liver = Liver_specific_genes,
-  Gallbladder = Gallbladder_specific_genes,
-  Testis = Testis_specific_genes,
-  Epididymis = Epididymis_specific_genes,
-  Prostate = Prostate_specific_genes,
-  Seminal_vesicle = Seminal_vesicle_specific_genes,
-  Adipose_tissue = Adipose_tissue_specific_genes,
-  Brain = Brain_specific_genes,
-  Choroid_plexus = Choroid_plexus_specific_genes,
-  Salivary_gland = Salivary_gland_specific_genes,
-  Esophagus = Esophagus_specific_genes,
-  Tongue = Tongue_specific_genes,
-  Stomach = Stomach_specific_genes,
-  Intestinal_tissue = Intestinal_tissue_specific_genes,
-  Pancreas = Pancreas_specific_genes,
-  Kidney = Kidney_specific_genes,
-  Urinary_bladder = Urinary_bladder_specific_genes,
-  Breast = Breast_specific_genes,
-  Vagina = Vagina_specific_genes,
-  Cervix = Cervix_specific_genes,
-  Endometrium = Endometrium_specific_genes,
-  Fallopian_tube = Fallopian_tube_specific_genes,
-  Ovary = Ovary_specific_genes,
-  Placenta = Placenta_specific_genes,
-  Skin = Skin_specific_genes
-)
-
-# Function to add tissue column to each dataframe
-add_tissue_column <- function(tissue_df, tissue_name) {
-  tissue_df$tissue <- tissue_name
-  return(tissue_df)
-}
-
-# Add tissue column and mean column to each dataframe
-for (tissue_name in names(tissue_specific_genes_list)) {
-  tissue_specific_genes_list[[tissue_name]] <- tissue_specific_genes_list[[tissue_name]] %>%
-    add_tissue_column(tissue_name) %>%
-    add_mean_ci_columns()
-}
-
-# Combine all dataframes into one dataframe
-all_tissue_genes <- bind_rows(tissue_specific_genes_list)
-
-
-
-
-
-# Plot the data using a boxplot
-# Calculate the average of all mean_values
-Mean_MFE <- all_tissue_genes %>% dplyr:: summarise(Mean_MFE_all_tissues = mean(mean_value)) 
-
-# Reorder samples based on mean_value
-all_tissue_genes <- all_tissue_genes[order(all_tissue_genes$mean_value), ]
-
-# Create a vector to specify which samples to fill
-fill_vector <- ifelse(all_tissue_genes$tissue %in% c("Skeletal_muscle_specific_genes", 
-                                                     "Liver_specific_genes", 
-                                                     "Kidney_specific_genes",
-                                                     "Pituitary_gland_specific_genes",
-                                                     "Heart_specific_genes",
-                                                     "Adipose_tissue_specific_genes",
-                                                     "Brain_specific_genes"), as.factor(all_tissue_genes$tissue), "Other")
-
-MFE_tissues <- ggplot(all_tissue_genes, aes(x = reorder(tissue, -mean_value), y = Normalized_MFE, 
-                               #fill = fill_vector # To fill the selected samples
-                               )) +
-geom_boxplot() +
-stat_summary(fun=mean, geom="point", shape=19, size=1, color="black") + # Add mean points
-theme_classic() +
-geom_hline(yintercept = Mean_MFE$Mean_MFE_all_tissues, color = "black") +
-labs(x = "", y = "") +
-theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size = 12),
-          axis.text.y = element_blank(),,
-          axis.title.x = element_text(size = 18)) +
-scale_fill_manual(values = c("Skeletal_muscle_specific_genes" = "lightgrey", 
-                                 "Liver_specific_genes" = "lightgrey", 
-                                 "Kidney_specific_genes" = "lightgrey", 
-                                 "Pituitary_gland_specific_genes" = "lightgrey",
-                                 "Heart_specific_genes" = "lightgrey",
-                                 "Adipose_tissue_specific_genes" = "lightgrey",
-                                 "Brain_specific_genes" = "lightgrey",
-                                 "Other" = "white"), guide = FALSE) +
-ggtitle("") +
-coord_flip()
-
-print(MFE_tissues)
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Fig.1D ####
 # Analysis MFE curated signaling pathways
 # More in general, I wonder whether the MFE had any impact on the evolution of the canonical signaling pathways.
 # In other words, do specific signaling pathways have a total high or low MFE which is consistent with the rate of proliferation, during which the specific signaling pathway is active? 
@@ -1938,7 +1537,14 @@ ggplot(combined_df, aes(x = reorder(source, -Normalized_MFE), y = Normalized_MFE
 
 
 
-# Fig.1E ####
+
+
+
+
+
+
+
+# Fig.1D ####
 # Open the curated gene sets
 
 source("path_to/All_gene_sets_AC.R")
@@ -2056,7 +1662,7 @@ print(wilcox_test_EP_HF_pol)
 
 
 
-# Fig.1F ####
+# Fig.1E ####
 # Phylostratigraphic analysis
 # The code here below calculates the Ages Index of the entire Human transcriptome.
 
