@@ -45,6 +45,7 @@
 
 
 
+
 library(readr)
 library(dplyr)
 library(biomaRt)
@@ -54,10 +55,11 @@ library(ggrepel)
 
 
 
-
-Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
+# Open the Table_ANNOTATED_iLINCs
+Table_ANNOTATED_iLINCs <- read.delim("path_to//Table_ANNOTATED_iLINCs.csv",
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
+
 
 
 
@@ -382,7 +384,7 @@ process_tsv_files <- function(directory_path) {
 }
 
 # Specify the directory path where the .tsv files are located
-directory_path <- "path_to/ILINCS_signatures_3.33uM/signatures_retrieved_with_lincs_maayanlab.py_script "
+directory_path <- "path_to//ILINCS_signatures_3.33uM"
 
 # Call the function to process the .tsv files and rename them
 iLINCs_data_frames <- process_tsv_files(directory_path) # This is a list object which contains all the .tsv files with the data frames
@@ -476,7 +478,7 @@ result_list <- lapply(data_frames, function(x) process_data_frame(x))
 
 
 # Save the data_frames list object to a file
-directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
 saveRDS(result_list, file = file.path(directory, "iLINCs_data_unfiltered.rds"))
 
 # Read the file
@@ -548,7 +550,7 @@ names(result_list_2) <- gsub("_24h_3.33uM", "", names(result_list_2))
 
 # Open the original iLINCS file with the metadata of all the signatures, downloaded from https://clue.io/
 # This file contains the original signatures IDs
-Sig_info_iLINCs_metadata <- read.csv("path_to/siginfo_beta_LINCS_metadata.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+Sig_info_iLINCs_metadata <- read.csv("path_to//siginfo_beta_LINCS_metadata.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
 # Filter the signatures obtained with 10 uM at 24h
 Sig_info_iLINCs_metadata <- dplyr::filter(Sig_info_iLINCs_metadata, pert_idose == "3.33 uM") %>%
   dplyr::filter(pert_itime == "24 h")
@@ -579,6 +581,12 @@ result_list_2 <- result_list_2[names(result_list_2) %in% Sig_info_iLINCs_metadat
 
 
 
+# Save the filtered result_list_2 object to a file
+directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+saveRDS(result_list_2, file = file.path(directory, "iLINCs_filtered_samples.rds"))
+
+
+
 
 
 
@@ -587,11 +595,9 @@ result_list_2 <- result_list_2[names(result_list_2) %in% Sig_info_iLINCs_metadat
 
 
 # Load the list object from the specified directory
-directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
 result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
 
-# Test the functions on a few sample
-# result_list_2 <- result_list_2[1:10]
 
 
 
@@ -607,10 +613,6 @@ library(biomaRt)
 library(clusterProfiler)
 library(pathview)
 library(enrichplot)
-
-
-
-
 
 
 
@@ -748,7 +750,7 @@ process_result_list_with_entrez <- function(result_list_2, output_dir, res_gene_
 res_gene_entrez_id <- get_entrez_ids_once(result_list_2)
 
 # Then, process the result list with the pre-fetched Entrez IDs
-output_directory <- "path_to/Results_GSEA"
+output_directory <- "path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA"
 combined_results <- process_result_list_with_entrez(result_list_2, output_directory, res_gene_entrez_id)
 
 # Save combined_kk2 results to a file
@@ -818,7 +820,7 @@ TERM2GENE <- data.frame(
 
 # Rename the values in the 'term' column
 TERM2GENE <- TERM2GENE %>%
-  mutate(term = recode(term,
+  dplyr::mutate(term = dplyr::recode(term,
                        "Proliferation_Science_paper" = "Signt_1",
                        "Meta_PCNA" = "Signt_2",
                        "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019" = "Signt_3"))
@@ -837,7 +839,7 @@ res_gene_entrez_id <- getBM(attributes = c('entrezgene_id',
                             mart = mart)
 res_gene_entrez_id <- dplyr::filter(res_gene_entrez_id, !is.na(entrezgene_id)) %>%
   dplyr::rename(Gene_symbol = external_gene_name) %>%
-  distinct(Gene_symbol, .keep_all = TRUE)
+  dplyr::distinct(Gene_symbol, .keep_all = TRUE)
 
 TERM2GENE_entrez <- dplyr::left_join(TERM2GENE, res_gene_entrez_id, by = "Gene_symbol") %>%
   dplyr::filter(!is.na(entrezgene_id)) %>%
@@ -982,16 +984,12 @@ process_result_list <- function(result_list_2, output_dir, TERM2GENE, res_gene_e
 res_gene_entrez_id <- get_entrez_ids_all(result_list_2)
 
 # Define the output directory and process the result list
-output_directory <- "path_to/Results_GSEA"
+output_directory <- "path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA"
 results <- process_result_list(result_list_2, output_directory, TERM2GENE, res_gene_entrez_id)
 
 # Save combined results to files
 write.csv(results$combined_gsea, file = paste0(output_directory, "/combined_gsea_results.csv"), row.names = FALSE)
 
-# IMPORTANT
-# The data frame combined_gsea contains only the NES values of proliferation signatures with a significant enrichment
-# This means that some samples have no enrichment of any signatures and therefore are absent, or some samples have only one signatures NES value because it is the only one significantly enriched
-# Below, I will select only samples in which all 3 proliferation signatures are significantly enriched
 
 
 
@@ -1002,18 +1000,15 @@ write.csv(results$combined_gsea, file = paste0(output_directory, "/combined_gsea
 
 
 
-
-
-# Load the results of the GSE without re-running the script ####
 
 # Open the combined_kk2 generated using the gseKEGG function of the clusterProfiler package
-GSEA_combined_kk2 <- read.delim("path_to/combined_kk2_results.csv",
+GSEA_combined_kk2 <- read.delim("path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA/combined_kk2_results.csv",
                                 sep = ",", header = T, stringsAsFactors = F)
 
 
 
 # Open the combined_gsea generated using the GSEA function of the clusterProfiler to assess the proliferation signatures
-GSEA_combined_iLINCs <- read.delim("path_to/combined_gsea_results.csv",
+GSEA_combined_iLINCs <- read.delim("path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA/combined_gsea_results.csv",
                                 sep = ",", header = T, stringsAsFactors = F)
 
 
@@ -1030,10 +1025,10 @@ required_ids <- c("hsa04110", "Signt_1", "Signt_2", "Signt_3")
 
 # Get Sample names that have all three IDs
 valid_samples <- iLINCs_complete_GSEA %>%
-  filter(ID %in% required_ids) %>%
-  group_by(Sample) %>%
-  filter(all(required_ids %in% ID)) %>%
-  pull(Sample) %>%
+  dplyr::filter(ID %in% required_ids) %>%
+  dplyr::group_by(Sample) %>%
+  dplyr::filter(all(required_ids %in% ID)) %>%
+  dplyr::pull(Sample) %>%
   unique()
 
 # Filter the original data frame to include only the valid samples
@@ -1109,7 +1104,7 @@ generate_heatmap(GSEA_combined_kk2_filtered)
 # Save the combined kk2 data frame to a file if needed
 # write.csv(GSEA_combined_kk2_filtered, file = "combined_kk2_results.csv", row.names = FALSE)
 Samples_N1 <- unique(GSEA_combined_kk2_filtered$Sample)
-# 61 samples
+
 
 
 
@@ -1182,7 +1177,7 @@ generate_heatmap <- function(kk2_df) {
 generate_heatmap(GSEA_combined_kk2_filtered_cell_cycle_arrest)
 
 Samples_N2 <- unique(GSEA_combined_kk2_filtered_cell_cycle_arrest$Sample)
-# 55 samples
+
 
 
 
@@ -1248,6 +1243,10 @@ print(Heatmap_cell_cycle)
 Samples_N3 <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
 # 30 samples
 
+library(ggplot2)
+# Save the plot
+ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 10, height = 8, path = "path_to/output")
+
 
 
 
@@ -1277,7 +1276,7 @@ result_list_2_filtered <- result_list_2[names(result_list_2) %in% sample_names_t
 
 
 ## Load all the gene sets for the analysis of the cell proliferation ####
-source("path_to/All_gene_sets_AC.R")
+source("path_to//All_gene_sets_AC.R")
 
 
 
@@ -1290,7 +1289,7 @@ source("path_to/All_gene_sets_AC.R")
 
 
 # Open the Table_ANNOTATED_iLINCs
-Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
+Table_ANNOTATED_iLINCs <- read.delim("path_to//Table_ANNOTATED_iLINCs.csv",
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
 
@@ -1298,9 +1297,34 @@ Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ens
 
 
 
-## Load the function which plots the MFE values of the canonical transcripts with a significant z-score and generates box plots with the mean and SD of different proliferation gene sets ####
+# iLINCS 3.33 µM analysis
+# Assumes the following are already in memory:
+# - result_list_2_filtered : named list of per-sample data.frames
+# - Table_ANNOTATED_iLINCs : annotation table with 'ensembl_id', 'gene_symbol', 'Specific_heat', etc.
+# - Gene-set objects: MTOR_positive_regulators, MTOR_negative_regulators, Proliferation_Science_paper,
+#   Meta_PCNA, Proliferation_GO_genes_Magill_Sack_2018, Proliferation_STOP_genes_Magill_Sack_2018,
+#   Reactome_G1_phase, Proliferation_Carey_2021, Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
+#   Homologous_recombination, Fanconi_anemia, High_fidelity_polymerases
 
-# Create an empty data frame to store the results in the global environment
+suppressMessages({
+  library(dplyr)
+  library(ggplot2)
+  library(readr)
+})
+
+# Safe test helpers
+safe_ks <- function(x, y) {
+  x <- x[is.finite(x)]; y <- y[is.finite(y)]
+  if (length(x) < 2 || length(y) < 2) return(list(p.value = NA_real_))
+  ks.test(x, y)
+}
+safe_wilcox <- function(x, y, ...) {
+  x <- x[is.finite(x)]; y <- y[is.finite(y)]
+  if (length(x) < 1 || length(y) < 1) return(list(p.value = NA_real_))
+  suppressWarnings(wilcox.test(x, y, ...))
+}
+
+# Results container
 all_results <- data.frame(
   SampleName = character(0),
   Net_MFE_change = numeric(0),
@@ -1311,6 +1335,10 @@ all_results <- data.frame(
   ks_test_all_UP_vs_DOWN_pValue = numeric(0),
   ks_test_MFE_075_above_pValue = numeric(0),
   ks_test_MFE_025_below_pValue = numeric(0),
+  Mean_Specific_heat_UP = numeric(0),
+  Mean_Specific_heat_DOWN = numeric(0),
+  ks_test_all_UP_vs_DOWN_Specific_heat = numeric(0),
+  wilcox_test_all_UP_vs_DOWN_Specific_heat = numeric(0),
   Proliferation_Science = numeric(0),
   PCNA = numeric(0),
   Essential_cell_cycle_genes = numeric(0),
@@ -1319,265 +1347,216 @@ all_results <- data.frame(
   High_fid_pol = numeric(0)
 )
 
+# ------------------------- Paths -------------------------
+plot_dir <- "path_to//Plots_all_cancer_cell_lines_3.33uM"
+results_csv <- "path_to//Results_analysis_all_cancer_cell_lines_3.33uM/Results_all_cancer_cell_lines_3.33uM.csv"
 
+# Ensure plot directory exists (won't error if it already exists)
+try(dir.create(plot_dir, recursive = TRUE), silent = TRUE)
 
-# Function to analyze the data
+# ------------------------- Main per-sample function -------------------------
 process_result_list <- function(Sample_name) { 
   message("Processing ", Sample_name)
-  df <- result_list_2_filtered[[Sample_name]] # This command allows access to the individual data frames
-  title_plot_1 <- paste0(Sample_name, "_Analysis MFE 24h p_value < 0.05") # Generate a code which automatically assigns the dataset name to the plot
-  title_plot_2 <- paste0("Analysis cell proliferation iLINCS 24h_", Sample_name)
-  Plot_filename_1 <- paste0(Sample_name, "_MFE")
-  Plot_filename_2 <- paste0(Sample_name, "_Gene_sets")
-  message("Save to ", Plot_filename_1, " and ", Plot_filename_2)
+  df <- result_list_2_filtered[[Sample_name]]  # access individual data frame
   
-  # Join the data with Table_ANNOTATED_iLINCs
+  title_plot_1 <- paste0(Sample_name, "_Analysis MFE 24h p_value < 0.05")
+  title_plot_2 <- paste0("Analysis cell proliferation iLINCS 24h_", Sample_name)
+  message("Saving plots under ", plot_dir)
+  
+  # Join with annotation and filter significant z-scores
   Sample_name_TX <- dplyr::right_join(df, Table_ANNOTATED_iLINCs, by = "ensembl_id")
-  # Filter only statistically significant z-scores
   Sample_name_TX_filtered <- dplyr::filter(Sample_name_TX, p_value < 0.05)
   
-  
-  # Generate a scatter plot Log2_FC vs Normalized_MFE
-  plot <- ggplot(Sample_name_TX_filtered, aes(y=Normalized_MFE, x=z_score)) +
-    geom_point(size=1.5, alpha=0.3)+
-    theme_classic() +
-    theme(legend.position="none") +
-    geom_vline(xintercept = 0, linewidth=0.3) +
-    #xlim(-5.5,5.5) +
-    theme(axis.title = element_text(size = 20)) +
-    theme(plot.title = element_text(size = 15)) +
-    labs(y="DGfold / nt (kcal/mol)",x="z_score",title = title_plot_1)
-  
-  # Look at the mean log2_FC
-  MFE_Sample_name_UP <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
-  Mean_MFE_Sample_name_UP <- mean(MFE_Sample_name_UP$Normalized_MFE)
-  
+  # ---------- Means and tests for Normalized_MFE ----------
+  MFE_Sample_name_UP   <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
   MFE_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
-  Mean_MFE_Sample_name_DOWN <- mean(MFE_Sample_name_DOWN$Normalized_MFE)
   
-  TTEST <- t.test(MFE_Sample_name_DOWN$Normalized_MFE, MFE_Sample_name_UP$Normalized_MFE, paired=FALSE)
+  Mean_MFE_Sample_name_UP   <- mean(MFE_Sample_name_UP$Normalized_MFE, na.rm = TRUE)
+  Mean_MFE_Sample_name_DOWN <- mean(MFE_Sample_name_DOWN$Normalized_MFE, na.rm = TRUE)
   
-  # Wilcoxon rank-sum test (Mann-Whitney U equivalent)
-  wilcox_test_all_UP_vs_DOWN <- wilcox.test(
+  TTEST <- tryCatch(
+    t.test(MFE_Sample_name_DOWN$Normalized_MFE, MFE_Sample_name_UP$Normalized_MFE, paired = FALSE),
+    error = function(e) list(p.value = NA_real_)
+  )
+  
+  wilcox_test_all_UP_vs_DOWN <- safe_wilcox(
     MFE_Sample_name_DOWN$Normalized_MFE,
     MFE_Sample_name_UP$Normalized_MFE,
     paired = FALSE,
+    alternative = "two.sided",
     exact = FALSE
   )
   
-  # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-  ks_test_all_UP_vs_DOWN <- ks.test(MFE_Sample_name_DOWN$Normalized_MFE, MFE_Sample_name_UP$Normalized_MFE)
+  ks_test_all_UP_vs_DOWN <- safe_ks(MFE_Sample_name_DOWN$Normalized_MFE, MFE_Sample_name_UP$Normalized_MFE)
   
+  q75_up   <- tryCatch(quantile(MFE_Sample_name_UP$Normalized_MFE,   probs = 0.75, na.rm = TRUE), error = function(e) NA_real_)
+  q75_down <- tryCatch(quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = 0.75, na.rm = TRUE), error = function(e) NA_real_)
+  ks_test_MFE_075_above <- if (is.finite(q75_up) && is.finite(q75_down)) {
+    safe_ks(
+      MFE_Sample_name_UP$Normalized_MFE[  MFE_Sample_name_UP$Normalized_MFE   >= q75_up],
+      MFE_Sample_name_DOWN$Normalized_MFE[MFE_Sample_name_DOWN$Normalized_MFE >= q75_down]
+    )
+  } else list(p.value = NA_real_)
   
+  q25_up   <- tryCatch(quantile(MFE_Sample_name_UP$Normalized_MFE,   probs = 0.25, na.rm = TRUE), error = function(e) NA_real_)
+  q25_down <- tryCatch(quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = 0.25, na.rm = TRUE), error = function(e) NA_real_)
+  ks_test_MFE_025_below <- if (is.finite(q25_up) && is.finite(q25_down)) {
+    safe_ks(
+      MFE_Sample_name_UP$Normalized_MFE[  MFE_Sample_name_UP$Normalized_MFE   <= q25_up],
+      MFE_Sample_name_DOWN$Normalized_MFE[MFE_Sample_name_DOWN$Normalized_MFE <= q25_down]
+    )
+  } else list(p.value = NA_real_)
   
-  quantile_075_MFE_Sample_name_UP <- quantile(MFE_Sample_name_UP$Normalized_MFE, probs = c(0.75), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  quantile_075_MFE_Sample_name_DOWN <- quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = c(0.75), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  # Values above 0.75 quantile
-  ks_test_MFE_075_above <- ks.test(MFE_Sample_name_UP$Normalized_MFE[MFE_Sample_name_UP$Normalized_MFE >= quantile_075_MFE_Sample_name_UP],
-                                   MFE_Sample_name_DOWN$Normalized_MFE[MFE_Sample_name_DOWN$Normalized_MFE >= quantile_075_MFE_Sample_name_DOWN])
-  
-  # Look at the differences between the 0.25 quantile 
-  quantile_025_MFE_Sample_name_UP <- quantile(MFE_Sample_name_UP$Normalized_MFE, probs = c(0.25), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  quantile_025_MFE_Sample_name_DOWN <- quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = c(0.25), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  # Values below 0.25 quantile
-  ks_test_MFE_025_below <- ks.test(MFE_Sample_name_UP$Normalized_MFE[MFE_Sample_name_UP$Normalized_MFE <= quantile_025_MFE_Sample_name_UP],
-                                   MFE_Sample_name_DOWN$Normalized_MFE[MFE_Sample_name_DOWN$Normalized_MFE <= quantile_025_MFE_Sample_name_DOWN])
-  
-  
-  
-  # Calculate the net MFE change using the z-scores filtered for p-value < 0.05
+  # Net MFE change (significant z-scores only)
   Sample_name_TX_net_MFE_change <- Sample_name_TX_filtered %>% 
     dplyr::mutate(Net_MFE_change = (Normalized_MFE * z_score) * (-1))
+  Net_MFE_change <- sum(Sample_name_TX_net_MFE_change$Net_MFE_change, na.rm = TRUE)
   
-  Net_MFE_change = sum(Sample_name_TX_net_MFE_change$Net_MFE_change, na.rm = TRUE)
+  # ---------- Specific_heat block (mirrors 10 µM) ----------
+  Specific_heat_Sample_name_UP   <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
+  Specific_heat_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
   
+  Mean_Specific_heat_Sample_name_UP   <- mean(Specific_heat_Sample_name_UP$Specific_heat, na.rm = TRUE)
+  Mean_Specific_heat_Sample_name_DOWN <- mean(Specific_heat_Sample_name_DOWN$Specific_heat, na.rm = TRUE)
   
+  TTEST_Specific_heat <- tryCatch(
+    t.test(Specific_heat_Sample_name_DOWN$Specific_heat, Specific_heat_Sample_name_UP$Specific_heat, paired = FALSE),
+    error = function(e) list(p.value = NA_real_)
+  )
   
+  wilcox_test_all_UP_vs_DOWN_Specific_heat <- safe_wilcox(
+    Specific_heat_Sample_name_DOWN$Specific_heat,
+    Specific_heat_Sample_name_UP$Specific_heat,
+    paired = FALSE,
+    alternative = "two.sided",
+    exact = FALSE
+  )
   
-  # Show the data with a violin plot
-  MFE_Sample_name <- ggplot(Sample_name_TX_filtered, aes(x = factor(z_score > 0), y = Normalized_MFE)) +
+  ks_test_all_UP_vs_DOWN_Specific_heat_data <- safe_ks(
+    Specific_heat_Sample_name_DOWN$Specific_heat,
+    Specific_heat_Sample_name_UP$Specific_heat
+  )
+  
+  # ---------- Plots ----------
+  # Violin plot (MFE)
+  MFE_Sample_name_plot <- ggplot(Sample_name_TX_filtered, aes(x = factor(z_score > 0), y = Normalized_MFE)) +
     geom_violin(fill = "lightgrey", alpha = 0.7) +
     geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
     theme_classic() +
-    theme(legend.position = "none", axis.title = element_text(size = 20), plot.title = element_text(size = 10),
-          axis.text.x = element_text(size = 16, color = "black")) +
-    theme(axis.title = element_text(size = 20)) +
-    theme(plot.title = element_text(size = 9)) +
+    theme(
+      legend.position = "none",
+      axis.title = element_text(size = 20),
+      plot.title = element_text(size = 10),
+      axis.text.x = element_text(size = 16, color = "black")
+    ) +
     geom_vline(xintercept = 0, linewidth = 0.3) +
     labs(y = "Normalized_MFE", x = NULL, title = title_plot_1) +
     scale_x_discrete(labels = c("z_score < 0", "z_score > 0"))
   
-  # Save the plot with a unique name based on Sample_name
-  Plot_filename_1 <- paste0("path_to/Plot_", Sample_name, "_MFE.pdf")
-  ggsave(filename = Plot_filename_1, plot = MFE_Sample_name, width = 20, height = 15, units = "cm") 
+  plot_fname_1 <- file.path(plot_dir, paste0("Plot_", Sample_name, "_MFE.pdf"))
+  ggsave(filename = plot_fname_1, plot = MFE_Sample_name_plot, width = 20, height = 15, units = "cm")
   
-  
-  
-  
-  # Analysis cell proliferation
-  # IMPORTANT:
-  # Here I calculate the z-scores mean using all the z-scores, not only those with a significant change vs control.
-  
-  # Filter the proliferation gene sets by using a function
-  # Use a function also to determine the mean and standard deviation of each set and the plot all of them together
-  
-  # Generate the function that filters each gene set in the target data frame
-  # This function will be used in the following commands
+  # -------- Gene-set filtering & summaries (z_scores over full set) --------
   filtering <- function(x) {
-    Filtering<-dplyr::filter(Sample_name_TX, gene_symbol %in% x)
-    return(Filtering)
+    dplyr::filter(Sample_name_TX, gene_symbol %in% x)
   }
   
-  
-  # Generate the list containing all the gene sets to be used for the filtering.
-  CURATED_PATHWAYS.input <- list(MTOR_positive_regulators, MTOR_negative_regulators, Proliferation_Science_paper, Meta_PCNA, Proliferation_GO_genes_Magill_Sack_2018, Proliferation_STOP_genes_Magill_Sack_2018, Reactome_G1_phase, Proliferation_Carey_2021, Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, Homologous_recombination, Fanconi_anemia, High_fidelity_polymerases)
-  
-  # This creates the names that will be used to for the final data frames of each file resulting from the filtering of the target data frame with each gene set
-  CURATED_PATHWAYS.output <- c("MTOR_POS", "MTOR_NEG", "Proliferation_Science", "Meta_PCNA", "Proliferation_GO", "Proliferation_STOP", "G1_phase", "Proliferation_Carey", "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "HR", "Fanconi_anemia", "HF_POL")
-  
-  # Assign the names of the gene sets to each entry in the list
+  CURATED_PATHWAYS.input <- list(
+    MTOR_positive_regulators, MTOR_negative_regulators, Proliferation_Science_paper, Meta_PCNA,
+    Proliferation_GO_genes_Magill_Sack_2018, Proliferation_STOP_genes_Magill_Sack_2018,
+    Reactome_G1_phase, Proliferation_Carey_2021, Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
+    Homologous_recombination, Fanconi_anemia, High_fidelity_polymerases
+  )
+  CURATED_PATHWAYS.output <- c(
+    "MTOR_POS","MTOR_NEG","Proliferation_Science","Meta_PCNA",
+    "Proliferation_GO","Proliferation_STOP","G1_phase","Proliferation_Carey",
+    "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019","HR","Fanconi_anemia","HF_POL"
+  )
   names(CURATED_PATHWAYS.input) <- CURATED_PATHWAYS.output
   
-  # Apply the filtering function to create a list of data.frames
-  Curated_test_df <- lapply(CURATED_PATHWAYS.input, function(x) filtering(x))
-  
-  # creating a vector with desired names of filtered data.frames
-  Curated_dfs.output <- c("df_MTOR_POS", "df_MTOR_NEG", "df_Proliferation_Science", "df_Meta_PCNA", "df_Proliferation_GO", "df_Proliferation_STOP", "df_G1_phase", "df_Proliferation_Carey", "df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "df_HR", "df_FA", "df_HF_POL")
-  
-  # loop to assign data.frames to the desired variable name
-  for (i in (seq_along(Curated_dfs.output))) {
-    do.call("<-",list(Curated_dfs.output[i], Curated_test_df[[i]]))
+  Curated_test_df <- lapply(CURATED_PATHWAYS.input, filtering)
+  Curated_dfs.output <- c(
+    "df_MTOR_POS","df_MTOR_NEG","df_Proliferation_Science","df_Meta_PCNA",
+    "df_Proliferation_GO","df_Proliferation_STOP","df_G1_phase","df_Proliferation_Carey",
+    "df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019","df_HR","df_FA","df_HF_POL"
+  )
+  for (i in seq_along(Curated_dfs.output)) {
+    do.call("<-", list(Curated_dfs.output[i], Curated_test_df[[i]]))
   }
   
-  # Now simply type a gene set (for example: 'df_MTOR_POS' to have the full table of the filtered data)
-  # Each gene set is a data frame that can be used to generate the plots.
+  Mean_curated <- function(x) mean(x$z_score, na.rm = TRUE)
+  STDEV_curated <- function(x) sd(x$z_score, na.rm = TRUE)
   
+  Curated_input_dfs <- list(
+    df_MTOR_POS, df_MTOR_NEG, df_Proliferation_Science, df_Meta_PCNA,
+    df_Proliferation_GO, df_Proliferation_STOP, df_G1_phase, df_Proliferation_Carey,
+    df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, df_HR, df_FA, df_HF_POL
+  )
   
+  Curated_mean_test_df  <- lapply(Curated_input_dfs, Mean_curated)
+  Curated_stdev_test_df <- lapply(Curated_input_dfs, STDEV_curated)
   
+  names(Curated_mean_test_df)  <- CURATED_PATHWAYS.output
+  names(Curated_stdev_test_df) <- CURATED_PATHWAYS.output
   
+  # Extract named means into scalars for consistency with your downstream code
+  Mean_MTOR_POS  <- Curated_mean_test_df[["MTOR_POS"]]
+  Mean_MTOR_NEG  <- Curated_mean_test_df[["MTOR_NEG"]]
+  Mean_Proliferation_Science <- Curated_mean_test_df[["Proliferation_Science"]]
+  Mean_Meta_PCNA <- Curated_mean_test_df[["Meta_PCNA"]]
+  Mean_Proliferation_GO <- Curated_mean_test_df[["Proliferation_GO"]]
+  Mean_Proliferation_STOP <- Curated_mean_test_df[["Proliferation_STOP"]]
+  Mean_G1_phase <- Curated_mean_test_df[["G1_phase"]]
+  Mean_Proliferation_Carey <- Curated_mean_test_df[["Proliferation_Carey"]]
+  Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019 <- Curated_mean_test_df[["Essential_cell_cycle_Viner_Breuer_Cell_Division_2019"]]
+  Mean_HR <- Curated_mean_test_df[["HR"]]
+  Mean_FA <- Curated_mean_test_df[["Fanconi_anemia"]]
+  Mean_HF_POL <- Curated_mean_test_df[["HF_POL"]]
   
-  # Generate new functions 'mean' and 'sd' and loop them through the 'Normalized_MFE' columns of each data frame generated by the automatc filtering here above
-  # Generate the function for to calculate the MEAN of the normalized_MFE of each gene set resulting from the filtering here above.
-  Mean_curated <- function(x) {
-    mean_curated<-mean(x$z_score)
-    return(mean_curated)
-  }
+  STDEV_MTOR_POS  <- Curated_stdev_test_df[["MTOR_POS"]]
+  STDEV_MTOR_NEG  <- Curated_stdev_test_df[["MTOR_NEG"]]
+  STDEV_Proliferation_Science <- Curated_stdev_test_df[["Proliferation_Science"]]
+  STDEV_Meta_PCNA <- Curated_stdev_test_df[["Meta_PCNA"]]
+  STDEV_Proliferation_GO <- Curated_stdev_test_df[["Proliferation_GO"]]
+  STDEV_Proliferation_STOP <- Curated_stdev_test_df[["Proliferation_STOP"]]
+  STDEV_G1_phase <- Curated_stdev_test_df[["G1_phase"]]
+  STDEV_Proliferation_Carey <- Curated_stdev_test_df[["Proliferation_Carey"]]
+  STDEV_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019 <- Curated_stdev_test_df[["Essential_cell_cycle_Viner_Breuer_Cell_Division_2019"]]
+  STDEV_HR <- Curated_stdev_test_df[["HR"]]
+  STDEV_FA <- Curated_stdev_test_df[["Fanconi_anemia"]]
+  STDEV_HF_POL <- Curated_stdev_test_df[["HF_POL"]]
   
-  # Create an input of the data frames generated here above that I will use to calculate the mean of a specific column
-  Curated_input_dfs <- list(df_MTOR_POS, df_MTOR_NEG, df_Proliferation_Science, df_Meta_PCNA, df_Proliferation_GO, df_Proliferation_STOP, df_G1_phase, df_Proliferation_Carey, df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, df_HR, df_FA, df_HF_POL)
+  # Box plot across gene sets (z_score)
+  df_names <- c("df_MTOR_POS","df_MTOR_NEG","df_Proliferation_Science","df_Meta_PCNA","df_Proliferation_GO",
+                "df_Proliferation_STOP","df_G1_phase","df_Proliferation_Carey",
+                "df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019","df_HR","df_FA","df_HF_POL")
+  for (nm in df_names) assign(nm, transform(get(nm), Gene_set = nm))
   
-  # Apply the mean function to create a list of data.frames
-  Curated_mean_test_df <- lapply(Curated_input_dfs, function(x) Mean_curated(x))
+  iLINCS_gene_sets <- bind_rows(
+    df_MTOR_POS, df_MTOR_NEG, df_Proliferation_Science, df_Meta_PCNA, df_Proliferation_GO,
+    df_Proliferation_STOP, df_G1_phase, df_Proliferation_Carey,
+    df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, df_HR, df_FA, df_HF_POL
+  )
   
-  # creating a vector with desired names of the files containing the mean of each gene set Normalized MFE
-  Curated_mean_dfs.output <- c("Mean_MTOR_POS", "Mean_MTOR_NEG", "Mean_Proliferation_Science", "Mean_Meta_PCNA", "Mean_Proliferation_GO", "Mean_Proliferation_STOP", "Mean_G1_phase", "Mean_Proliferation_Carey", "Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "Mean_HR", "Mean_FA", "Mean_HF_POL")
-  
-  # loop to assign data.frames to the desired variable name
-  for (i in (seq_along(Curated_mean_dfs.output))) {
-    do.call("<-",list(Curated_mean_dfs.output[i], Curated_mean_test_df[[i]]))
-  }
-  
-  
-  
-  
-  # Generate the function to calculate the STANDRAD DEVIATION of the normalized_MFE of each gene set resulting from the fuiltering here above.
-  STDEV_curated <- function(x) {
-    stdev_curated<-sd(x$z_score)
-    return(stdev_curated)
-  }
-  
-  # Apply the mean function to create a list of data.frames
-  Curated_stdev_test_df <- lapply(Curated_input_dfs, function(x) STDEV_curated(x))
-  
-  # creating a vector with desired names of the files containing the mean of each gene set Normalized MFE
-  Curated_STDEV_dfs.output <- c("STDEV_MTOR_POS", "STDEV_MTOR_NEG", "STDEV_Proliferation_Science", "STDEV_Meta_PCNA", "STDEV_Proliferation_GO", "STDEV_Proliferation_STOP", "STDEV_G1_phase", "STDEV_Proliferation_Carey", "STDEV_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "STDEV_HR", "STDEV_FA", "STDEV_HF_POL")
-  
-  # loop to assign data.frames to the desired variable name
-  for (i in (seq_along(Curated_STDEV_dfs.output))) {
-    do.call("<-",list(Curated_STDEV_dfs.output[i], Curated_stdev_test_df[[i]]))
-  }
-  
-  
-  
-  
-  
-  # Generate the data frame for the plot
-  df_MFE_iLINCS <- data.frame(mean=c(Mean_MTOR_POS, Mean_MTOR_NEG, Mean_Proliferation_Science, Mean_Meta_PCNA, Mean_Proliferation_GO, Mean_Proliferation_STOP, Mean_G1_phase, Mean_Proliferation_Carey, Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, Mean_HR, Mean_FA, Mean_HF_POL),
-                              sd=c(STDEV_MTOR_POS, STDEV_MTOR_NEG, STDEV_Proliferation_Science, STDEV_Meta_PCNA, STDEV_Proliferation_GO, STDEV_Proliferation_STOP, STDEV_G1_phase, STDEV_Proliferation_Carey, STDEV_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, STDEV_HR, STDEV_FA, STDEV_HF_POL),
-                              Category=as.factor(c("MTOR_POS", "MTOR_NEG", "Proliferation_Science", "Meta_PCNA", "Proliferation_GO", "Proliferation_STOP", "G1_phase", "Proliferation_Carey", "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "HR", "FA", "HF_POL")))
-  df_MFE_iLINCS
-  
-  library(ggplot2)
-  ggplot(df_MFE_iLINCS, aes(x=reorder(Category, -mean), y=mean)) +
-    theme_bw() +
-    geom_point(position=position_dodge(width = 1), stat="identity",colour='black') +
-    geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.4) +
-    theme(axis.text.x = element_text(size=12, angle=45,hjust=0.95,vjust=0.98)) +
-    theme(axis.text.y = element_text(size=14)) +
-    theme(axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 10))) +
-    geom_point(colour = "black", size = 3) +
-    geom_hline(yintercept=0, linetype="dashed", color = "black") +
-    labs(x="", y="z-score", title = title_plot_2) +
-    scale_x_discrete(limits = c("Proliferation_Science", "Meta_PCNA", "Proliferation_GO", "Proliferation_STOP", "Proliferation_Carey", "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "G1_phase", "MTOR_POS", "MTOR_NEG", "HR", "FA", "HF_POL")) +
-    theme(plot.title = element_text(color="black", size=14, face="bold"))
-  
-  
-  
-  # Merge all the data frames to generate box plots
-  # Add a column with the specific name of the gene set
-  # IMPORTANT:
-  # SOme of the data frames are empty and have to be removed for the final plot
-  df_MTOR_POS$Gene_set <- "df_MTOR_POS"
-  df_MTOR_NEG$Gene_set <- "df_MTOR_NEG"
-  df_Proliferation_Science$Gene_set <- "df_Proliferation_Science"
-  df_Meta_PCNA$Gene_set <- "df_Meta_PCNA"
-  df_Proliferation_GO$Gene_set <- "df_Proliferation_GO"
-  df_Proliferation_STOP$Gene_set <- "df_Proliferation_STOP"
-  df_G1_phase$Gene_set <- "df_G1_phase"
-  df_Proliferation_Carey$Gene_set <- "df_Proliferation_Carey"
-  df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019$Gene_set <- "df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019"
-  df_HR$Gene_set <- "df_HR"
-  df_FA$Gene_set <- "df_FA"
-  df_HF_POL$Gene_set <- "df_HF_POL"
-  
-  # Join all the gene sets
-  iLINCS_gene_sets <- dplyr::bind_rows(df_MTOR_POS, df_MTOR_NEG) %>%
-    dplyr::bind_rows(df_Proliferation_Science) %>%
-    dplyr::bind_rows(df_Meta_PCNA) %>%
-    dplyr::bind_rows(df_Proliferation_GO) %>%
-    dplyr::bind_rows(df_Proliferation_STOP) %>%
-    dplyr::bind_rows(df_G1_phase) %>%
-    dplyr::bind_rows(df_Proliferation_Carey) %>%
-    dplyr::bind_rows(df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019) %>%
-    dplyr::bind_rows(df_HR) %>%
-    dplyr::bind_rows(df_FA) %>%
-    dplyr::bind_rows(df_HF_POL)
-  
-  
-  # Box plot
   Gene_sets_plot <- ggplot(iLINCS_gene_sets, aes(Gene_set, z_score)) +
-    geom_boxplot(fill="lightgrey") + 
+    geom_boxplot(fill = "lightgrey") + 
     theme_bw() +
-    theme(axis.text.y = element_text(size=14)) +
-    theme(axis.text.x = element_text(size=12, angle=45,hjust=0.95,vjust=0.98)) +
-    labs(x="", y="z-score", title = title_plot_2) +
-    theme(plot.title = element_text(size = 9)) +
-    scale_x_discrete(limits = c("df_Proliferation_Science", "df_Meta_PCNA", "df_Proliferation_GO", "df_Proliferation_STOP", "df_Proliferation_Carey", "df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "df_G1_phase", "df_MTOR_POS", "df_MTOR_NEG", "df_HR", "df_FA", "df_HF_POL"))
+    theme(
+      axis.text.y = element_text(size = 14),
+      axis.text.x = element_text(size = 12, angle = 45, hjust = 0.95, vjust = 0.98),
+      plot.title = element_text(size = 9)
+    ) +
+    labs(x = "", y = "z-score", title = title_plot_2) +
+    scale_x_discrete(limits = c("df_Proliferation_Science","df_Meta_PCNA","df_Proliferation_GO","df_Proliferation_STOP",
+                                "df_Proliferation_Carey","df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019",
+                                "df_G1_phase","df_MTOR_POS","df_MTOR_NEG","df_HR","df_FA","df_HF_POL"))
   
-  # Save the plot as pdf  
-  # Save the plot with a unique name based on Sample_name
-  # Plot_filename_2 <- paste0(Sample_name, "_Gene_sets")
-  # ggsave(Plot_filename_2, Gene_sets_plot, path = "/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Cross_validation_with_iLINCS_data/Analysis_iLINCS_Python_script_Anthony/Results_analysis_RNA_MFE_iLINCS/Plots_all_cell_lines") 
+  plot_fname_2 <- file.path(plot_dir, paste0("Plot_", Sample_name, "_Gene_sets.pdf"))
+  ggsave(filename = plot_fname_2, plot = Gene_sets_plot, width = 20, height = 15, units = "cm")
   
-  
-  # Save the plot with a unique name based on Sample_name
-  Plot_filename_2 <- paste0("path_to/Plot_", Sample_name, "_Gene_sets.pdf")
-  ggsave(filename = Plot_filename_2, plot = Gene_sets_plot, width = 20, height = 15, units = "cm") 
-  
-  
-  # Create a data frame with the results for the current sample
+  # ---------- Collect row for all_results ----------
   sample_results <- data.frame(
-    SampleName = Plot_filename_1,
+    SampleName = plot_fname_1,
     Net_MFE_change = Net_MFE_change,
     MeanMFE_UP = Mean_MFE_Sample_name_UP,
     MeanMFE_DOWN = Mean_MFE_Sample_name_DOWN,
@@ -1586,6 +1565,10 @@ process_result_list <- function(Sample_name) {
     ks_test_all_UP_vs_DOWN_pValue = ks_test_all_UP_vs_DOWN$p.value,
     ks_test_MFE_075_above_pValue = ks_test_MFE_075_above$p.value,
     ks_test_MFE_025_below_pValue = ks_test_MFE_025_below$p.value,
+    Mean_Specific_heat_UP = Mean_Specific_heat_Sample_name_UP,
+    Mean_Specific_heat_DOWN = Mean_Specific_heat_Sample_name_DOWN,
+    ks_test_all_UP_vs_DOWN_Specific_heat = ks_test_all_UP_vs_DOWN_Specific_heat_data$p.value,
+    wilcox_test_all_UP_vs_DOWN_Specific_heat = wilcox_test_all_UP_vs_DOWN_Specific_heat$p.value,
     Proliferation_Science = Mean_Proliferation_Science,
     PCNA = Mean_Meta_PCNA,
     Essential_cell_cycle_genes = Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
@@ -1594,96 +1577,21 @@ process_result_list <- function(Sample_name) {
     High_fid_pol = Mean_HF_POL
   )
   
-  # Append the sample results to the all_results data frame
   all_results <<- rbind(all_results, sample_results)
 }
 
-
-
-
-
-
-
-
-
-## Run the function for each iLINCS data frame ####
-# The function will generate a box plot for each gene set
+# ------------------------- Run across samples -------------------------
 Data_result_list <- lapply(names(result_list_2_filtered), function(x) process_result_list(x))
 
+# ------------------------- Clean SampleName and write CSV -------------------------
+all_results$SampleName <- gsub(
+  "path_to//Plots_all_cancer_cell_lines_3.33uM/Plot_",
+  "",
+  all_results$SampleName,
+  fixed = TRUE
+)
 
-
-
-
-
-
-
-
-
-
-
-
-## Analysis of the thermodynamic footprint in the iLINCS signatures ####
-
-
-# Read the results file
-all_results <- read.csv("path_to/Results_all_cancer_cell_lines_3.33uM.csv",
-                                     header = TRUE, sep = ",", stringsAsFactors = FALSE) %>%
-  dplyr::select(-X)
-
-# Generate the complete table with cell lines and drugs
-all_results_2 <- all_results # all_results is renamed to be able to repeat the commands below without having to re-run the code above
-
-
-# Delete from all_results_2$SampleName "_MFE"
-all_results_2$SampleName <- gsub("_MFE.pdf", "", all_results_2$SampleName)
-
-
-# # Open the original iLINCS file with the metadata of all the signatures, downloaded from https://clue.io/
-# # This file contains the original signatures IDs
-Sig_info_iLINCs_metadata <- read.csv("path_to/siginfo_beta_LINCS_metadata.csv",
-                                     header = TRUE, sep = ",", stringsAsFactors = FALSE)
-# Filter the signatures obtained with 10 uM at 24h
-Sig_info_iLINCs_metadata <- dplyr::filter(Sig_info_iLINCs_metadata, pert_idose == "3.33 uM") %>%
-  dplyr::filter(pert_itime == "24 h") %>%
-  dplyr::rename(SampleName = sig_id) %>%
-  dplyr::rename(Drug = cmap_name, cell_line = cell_iname)
-
-
-
-
-# Replace all"/" with "_" in the SampleName column
-# This is necessary to match the signatures IDs in the all_results_2 data frame
-Sig_info_iLINCs_metadata$SampleName <- gsub("/", "_", Sig_info_iLINCs_metadata$SampleName)
-
-# Add the Drug to the name in the SampleName column to the all_results_2 data frame
-Sig_info_iLINCs_metadata$SampleName <- paste0(Sig_info_iLINCs_metadata$Drug, "_", Sig_info_iLINCs_metadata$SampleName)
-
-# Add the cell_line to the name in the SampleName column to the all_results_2 data frame
-Sig_info_iLINCs_metadata$SampleName <- paste0(Sig_info_iLINCs_metadata$cell_line, "_", Sig_info_iLINCs_metadata$SampleName)
-
-
-# Add the columns with the cell line name and the drug name to the all_results_2 data frame
-all_results_2 <- dplyr::left_join(all_results_2, Sig_info_iLINCs_metadata, by = "SampleName") %>%
-  dplyr::select(SampleName, Net_MFE_change, MeanMFE_UP, MeanMFE_DOWN, TTEST_pValue, ks_test_all_UP_vs_DOWN_pValue, ks_test_MFE_075_above_pValue, ks_test_MFE_025_below_pValue, Proliferation_Science, PCNA, Essential_cell_cycle_genes, Homologous_recombination, Fanconi_anemia, High_fid_pol, Drug, cell_line)
-
-
-# Add the cell line tissue of origin 
-# Open the original iLINCS file cellinfo_beta.csv with the metadata of all the cell lines, downloaded from https://clue.io/
-Cell_info_beta <- read.csv("path_to/cellinfo_beta.csv",
-                           header = TRUE, sep = ",", stringsAsFactors = FALSE) %>%
-  dplyr::select(cell_iname, primary_disease, subtype) %>%
-  dplyr::rename(cell_line = cell_iname)
-
-# Merge the all_results_2 data frame with the Cell_info_beta data frame
-all_results_2 <- dplyr::left_join(all_results_2, Cell_info_beta, by = "cell_line")
-
-# Remove all SampleName that start with "REP"
-# all_results_2 <- dplyr::filter(all_results_2, !grepl("REP.", SampleName))
- 
-
-# Save the all_results_2 data frame as .csv file and add a new column with the Log10_MFE_change
-all_results_2_complete <- dplyr::mutate(all_results_2, Log10_MFE_change = log10(MeanMFE_DOWN/MeanMFE_UP)) %>%
-  dplyr::relocate(Log10_MFE_change, .before = TTEST_pValue)
+readr::write_csv(all_results, results_csv)
 
 
 
@@ -1698,30 +1606,4 @@ all_results_2_complete <- dplyr::mutate(all_results_2, Log10_MFE_change = log10(
 
 
 
-iLINCS_analysis <- dplyr::mutate(all_results_2_complete, Log10_MFE_change = log10(MeanMFE_DOWN/MeanMFE_UP)) %>%
-  dplyr::relocate(MeanMFE_UP, .after = MeanMFE_DOWN) %>%
-  dplyr::relocate(Log10_MFE_change, .after = MeanMFE_UP)
-  #dplyr::filter(ks_test_all_UP_vs_DOWN_pValue < 0.05) # Here, I filter only signatures with a significant change of MFE between the UP- and DOWN-regulated genes
-
-
-# Generate a ggplot2 scatter plot showing the Proliferation_Science change vs the MFE change
-iLINCS_analysis_plot <- ggplot(iLINCS_analysis, aes(x = Proliferation_Science, y = Log10_MFE_change)) +
-  theme_bw() +
-  geom_point(colour = "blue", size = 2) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +  # Add vertical line at x = 0
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Add horizontal line at y = 0
-  labs(x = "Proliferation_Science", y = "Log10_MFE_change", title = "iLINCS cancer cell lines 10uM all drugs") +
-  theme(plot.title = element_text(color = "black", size = 14, face = "bold")) +
-  xlim(-2.5, 2.5) +
-  ylim(-0.05, 0.05) +
-  # label each dot with a name which combines cell_line and Drug separated by "_"
-  geom_text(aes(label = paste(cell_line, Drug, sep = "_")), hjust = 0, vjust = 0, size = 1.5, nudge_x = 0.001, nudge_y = 0.001) +
-  #geom_smooth(method = "lm") +
-  geom_text(
-    x = 1, y = 0.05,
-    label = paste("R = ", round(cor(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change), 2),
-                  "\n", "p-value = ", format(cor.test(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change)$p.value, digits = 4)),
-    size = 5)
-
-print(iLINCS_analysis_plot)
 
