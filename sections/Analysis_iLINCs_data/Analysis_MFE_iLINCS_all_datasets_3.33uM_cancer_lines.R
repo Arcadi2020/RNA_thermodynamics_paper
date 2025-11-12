@@ -1,7 +1,6 @@
-# This script performs the complete analysis of the RNA MFE changes and cell proliferation expression changes observed in the iLINCS datasets.
+# This script performs the analysis of the RNA MFE changes and cell proliferation expression changes observed in the iLINCS datasets.
 
 # Overview: RNA MFE & Proliferation Analysis of iLINCS Tumour Cell-Line Signatures
-# 
 # What this script does (high level)
 # 1) Loads iLINCS L1000 signature .tsv files and joins them with transcript
 #    annotations carrying Normalized_MFE and Specific_heat values.
@@ -46,6 +45,8 @@
 
 
 
+
+
 library(readr)
 library(dplyr)
 library(biomaRt)
@@ -55,14 +56,17 @@ library(ggrepel)
 
 
 
+
+# STEP 1 ####
 # Open the Table_ANNOTATED_iLINCs
-Table_ANNOTATED_iLINCs <- read.delim("path_to//Table_ANNOTATED_iLINCs.csv",
+Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
 
 
 
 
+# STEP 2 ####
 ## Edit the gene IDs of each data frame downloaded from the iLINCS L1000 database ####
 # Several of the gene IDs are old and must the replaced with the current ones
 # This function edits the gene IDs of each data frame downloaded from the iLINCS L1000 database.
@@ -361,6 +365,7 @@ process_gene_iLINCS <- function(iLINCS) {
 
 
 
+# STEP 3 ####
 ## Load all the iLINCS data sets retrieved with the Python script 'lincs_maayanlab.py' ####
 # The .tsv files are contained in multiple subfolders of the specified directory.
 # All .tsv files will be loaded
@@ -384,7 +389,7 @@ process_tsv_files <- function(directory_path) {
 }
 
 # Specify the directory path where the .tsv files are located
-directory_path <- "path_to//ILINCS_signatures_3.33uM"
+directory_path <- "path_to/ILINCS_signatures_3.33uM"
 
 # Call the function to process the .tsv files and rename them
 iLINCs_data_frames <- process_tsv_files(directory_path) # This is a list object which contains all the .tsv files with the data frames
@@ -422,6 +427,7 @@ data_frames <- data_frames[!grepl(pattern, names(data_frames))]
 
 
 
+# STEP 4 ####
 ## Edit the name of each data set ####
 # The script automatically assigns the full path of the location as name of each .tsv file - these names are too long and must be replaced with shorter names.
 # This function changes the name of each data set from being the full location of the downloaded file, to a simpler name which contains only the essential information like the cell line and the drug.
@@ -457,6 +463,7 @@ names(data_frames) <- data_frames_names
 
 
 
+# STEP 5 ####
 ## Run the 'process_data_frame' function which edits the Ensembl gene IDs, of each sample ####
 
 process_data_frame <- function(df) {
@@ -478,7 +485,7 @@ result_list <- lapply(data_frames, function(x) process_data_frame(x))
 
 
 # Save the data_frames list object to a file
-directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
 saveRDS(result_list, file = file.path(directory, "iLINCs_data_unfiltered.rds"))
 
 # Read the file
@@ -515,6 +522,7 @@ length(Cell_lines_iLINCs_10uM_complete)
 
 
 
+# STEP 6 ####
 
 # The iLINCS contain also samples that are pools of different cell lines. These are the samples starting with "XC."
 # In the result_list remove all the objects that start with "XC"
@@ -550,7 +558,7 @@ names(result_list_2) <- gsub("_24h_3.33uM", "", names(result_list_2))
 
 # Open the original iLINCS file with the metadata of all the signatures, downloaded from https://clue.io/
 # This file contains the original signatures IDs
-Sig_info_iLINCs_metadata <- read.csv("path_to//siginfo_beta_LINCS_metadata.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+Sig_info_iLINCs_metadata <- read.csv("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Cross_validation_with_iLINCS_data/Analysis_iLINCS_Python_script_Anthony/siginfo_beta_LINCS_metadata.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
 # Filter the signatures obtained with 10 uM at 24h
 Sig_info_iLINCs_metadata <- dplyr::filter(Sig_info_iLINCs_metadata, pert_idose == "3.33 uM") %>%
   dplyr::filter(pert_itime == "24 h")
@@ -582,7 +590,7 @@ result_list_2 <- result_list_2[names(result_list_2) %in% Sig_info_iLINCs_metadat
 
 
 # Save the filtered result_list_2 object to a file
-directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
 saveRDS(result_list_2, file = file.path(directory, "iLINCs_filtered_samples.rds"))
 
 
@@ -594,25 +602,28 @@ saveRDS(result_list_2, file = file.path(directory, "iLINCs_filtered_samples.rds"
 
 
 
+# STEP 7 Load the saved list object without running the first part of the script ####
 # Load the list object from the specified directory
-directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
 result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
 
+# Test the functions on a few sample
+# result_list_2 <- result_list_2[1:10]
 
 
 
 
 
+# STEP 8 ####
 ## GSEA to identify lines that are not proliferating ####
 
-# IMPORTANT:
-# NO NEED TO RUN THIS CODE AGAIN
-# The output has been saved in a csv file
 
 library(biomaRt)
 library(clusterProfiler)
 library(pathview)
 library(enrichplot)
+
+
 
 
 
@@ -656,13 +667,7 @@ process_and_save_plots_with_entrez <- function(data_frame, z_score_col, plot_tit
     dplyr::group_by(entrezgene_id) %>%
     dplyr::summarise(.z = mean(!!rlang::sym(z_score_col), na.rm = TRUE), .groups = "drop")
   
-  # # Option B (max absolute z): pick the record with largest |z|
-  # collapsed <- all_values_entrez %>%
-  #   dplyr::mutate(.abs = abs(!!rlang::sym(z_score_col))) %>%
-  #   dplyr::arrange(dplyr::desc(.abs)) %>%
-  #   dplyr::distinct(entrezgene_id, .keep_all = TRUE) %>%
-  #   dplyr::transmute(entrezgene_id, .z = !!rlang::sym(z_score_col))
-  
+
   # Keep finite, sort decreasing
   collapsed <- collapsed %>%
     dplyr::filter(is.finite(.z)) %>%
@@ -750,7 +755,7 @@ process_result_list_with_entrez <- function(result_list_2, output_dir, res_gene_
 res_gene_entrez_id <- get_entrez_ids_once(result_list_2)
 
 # Then, process the result list with the pre-fetched Entrez IDs
-output_directory <- "path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA"
+output_directory <- "path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA"
 combined_results <- process_result_list_with_entrez(result_list_2, output_directory, res_gene_entrez_id)
 
 # Save combined_kk2 results to a file
@@ -765,7 +770,7 @@ write.csv(combined_results, file = paste0(output_directory, "/combined_kk2_resul
 
 
 # # GSEA with specific proliferation gene sets (Signt_1, Signt_2 and Signt_3 used also in the GREIN datasets) ####
-# I use clusterProfiler to determine the enrichment of specific proliferation signatures
+# Use clusterProfiler to determine the enrichment of specific proliferation signatures
 # Load the proliferation signatures
 
 
@@ -880,7 +885,7 @@ get_entrez_ids_all <- function(result_list_2) {
 }
 
 # Function to process data and perform GSEA using TERM2GENE
-# --- Map Symbols -> Entrez once ---------------------------------------------
+# Map Symbols -> Entrez once
 get_entrez_ids_all <- function(result_list_2) {
   all_gene_symbols <- unique(unlist(lapply(result_list_2, function(df) df$gene_symbol)))
   
@@ -902,7 +907,7 @@ get_entrez_ids_all <- function(result_list_2) {
     dplyr::distinct(gene_symbol, entrezgene_id)
 }
 
-# --- GSEA per sample using TERM2GENE (must be Entrez IDs) --------------------
+# GSEA per sample using TERM2GENE (must be Entrez IDs)
 process_and_save_results <- function(data_frame, z_score_col, plot_title, output_dir,
                                      TERM2GENE, res_gene_entrez_id) {
   # Make sure output dir exists
@@ -954,7 +959,7 @@ process_and_save_results <- function(data_frame, z_score_col, plot_title, output
   list(gsea_res = gsea_res)
 }
 
-# --- Iterate over samples and combine ----------------------------------------
+# Iterate over samples and combine
 process_result_list <- function(result_list_2, output_dir, TERM2GENE, res_gene_entrez_id) {
   plot_titles <- names(result_list_2)
   results_list <- list()
@@ -984,7 +989,7 @@ process_result_list <- function(result_list_2, output_dir, TERM2GENE, res_gene_e
 res_gene_entrez_id <- get_entrez_ids_all(result_list_2)
 
 # Define the output directory and process the result list
-output_directory <- "path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA"
+output_directory <- "path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA"
 results <- process_result_list(result_list_2, output_directory, TERM2GENE, res_gene_entrez_id)
 
 # Save combined results to files
@@ -1001,14 +1006,17 @@ write.csv(results$combined_gsea, file = paste0(output_directory, "/combined_gsea
 
 
 
+
+# STEP 9 load the results of the GSE without re-running the script ####
+
 # Open the combined_kk2 generated using the gseKEGG function of the clusterProfiler package
-GSEA_combined_kk2 <- read.delim("path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA/combined_kk2_results.csv",
+GSEA_combined_kk2 <- read.delim("path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA/combined_kk2_results.csv",
                                 sep = ",", header = T, stringsAsFactors = F)
 
 
 
 # Open the combined_gsea generated using the GSEA function of the clusterProfiler to assess the proliferation signatures
-GSEA_combined_iLINCs <- read.delim("path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA/combined_gsea_results.csv",
+GSEA_combined_iLINCs <- read.delim("path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_GSEA/combined_gsea_results.csv",
                                 sep = ",", header = T, stringsAsFactors = F)
 
 
@@ -1044,6 +1052,7 @@ iLINCs_complete_GSEA <- iLINCs_complete_GSEA %>%
 
 
 
+# STEP 10 data analysis ####
 # Filter the samples with the down-regulation of cell cycle and generate a heat map with the kk2 results
 library(pheatmap)
 
@@ -1245,7 +1254,7 @@ Samples_N3 <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
 
 library(ggplot2)
 # Save the plot
-ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 10, height = 8, path = "path_to/output")
+ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 10, height = 8, path = "/Users/z3514253/Desktop")
 
 
 
@@ -1266,6 +1275,7 @@ ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 10, height =
 
 
 
+# STEP 11 ####
 ## Filter the list object result_list_2 for the samples with a significant down-regulation of the cell cycle and the absence of active mitogenic signaling, identified with GSEA ####
 # This generates the list of samples with a significant down-regulation of the cell cycle genes
 sample_names_to_retain <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
@@ -1276,7 +1286,7 @@ result_list_2_filtered <- result_list_2[names(result_list_2) %in% sample_names_t
 
 
 ## Load all the gene sets for the analysis of the cell proliferation ####
-source("path_to//All_gene_sets_AC.R")
+source("path_to/All_gene_sets_AC.R")
 
 
 
@@ -1287,9 +1297,10 @@ source("path_to//All_gene_sets_AC.R")
 
 
 
+# STEP 12 ####
 
 # Open the Table_ANNOTATED_iLINCs
-Table_ANNOTATED_iLINCs <- read.delim("path_to//Table_ANNOTATED_iLINCs.csv",
+Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
 
@@ -1300,7 +1311,7 @@ Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ens
 # iLINCS 3.33 µM analysis
 # Assumes the following are already in memory:
 # - result_list_2_filtered : named list of per-sample data.frames
-# - Table_ANNOTATED_iLINCs : annotation table with 'ensembl_id', 'gene_symbol', 'Specific_heat', etc.
+# - Table_ANNOTATED_iLINCs : annotation table with 'ensembl_id', 'gene_symbol', 'Cp_37C', etc.
 # - Gene-set objects: MTOR_positive_regulators, MTOR_negative_regulators, Proliferation_Science_paper,
 #   Meta_PCNA, Proliferation_GO_genes_Magill_Sack_2018, Proliferation_STOP_genes_Magill_Sack_2018,
 #   Reactome_G1_phase, Proliferation_Carey_2021, Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
@@ -1335,10 +1346,10 @@ all_results <- data.frame(
   ks_test_all_UP_vs_DOWN_pValue = numeric(0),
   ks_test_MFE_075_above_pValue = numeric(0),
   ks_test_MFE_025_below_pValue = numeric(0),
-  Mean_Specific_heat_UP = numeric(0),
-  Mean_Specific_heat_DOWN = numeric(0),
-  ks_test_all_UP_vs_DOWN_Specific_heat = numeric(0),
-  wilcox_test_all_UP_vs_DOWN_Specific_heat = numeric(0),
+  Mean_Cp_37C_UP = numeric(0),
+  Mean_Cp_37C_DOWN = numeric(0),
+  ks_test_all_UP_vs_DOWN_Cp_37C = numeric(0),
+  wilcox_test_all_UP_vs_DOWN_Cp_37C = numeric(0),
   Proliferation_Science = numeric(0),
   PCNA = numeric(0),
   Essential_cell_cycle_genes = numeric(0),
@@ -1347,14 +1358,12 @@ all_results <- data.frame(
   High_fid_pol = numeric(0)
 )
 
-# ------------------------- Paths -------------------------
-plot_dir <- "path_to//Plots_all_cancer_cell_lines_3.33uM"
-results_csv <- "path_to//Results_analysis_all_cancer_cell_lines_3.33uM/Results_all_cancer_cell_lines_3.33uM.csv"
+plot_dir <- "path_to/Plots_all_cancer_cell_lines_3.33uM"
+results_csv <- "path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_all_cancer_cell_lines_3.33uM.csv"
 
 # Ensure plot directory exists (won't error if it already exists)
 try(dir.create(plot_dir, recursive = TRUE), silent = TRUE)
 
-# ------------------------- Main per-sample function -------------------------
 process_result_list <- function(Sample_name) { 
   message("Processing ", Sample_name)
   df <- result_list_2_filtered[[Sample_name]]  # access individual data frame
@@ -1367,7 +1376,6 @@ process_result_list <- function(Sample_name) {
   Sample_name_TX <- dplyr::right_join(df, Table_ANNOTATED_iLINCs, by = "ensembl_id")
   Sample_name_TX_filtered <- dplyr::filter(Sample_name_TX, p_value < 0.05)
   
-  # ---------- Means and tests for Normalized_MFE ----------
   MFE_Sample_name_UP   <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
   MFE_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
   
@@ -1412,29 +1420,29 @@ process_result_list <- function(Sample_name) {
     dplyr::mutate(Net_MFE_change = (Normalized_MFE * z_score) * (-1))
   Net_MFE_change <- sum(Sample_name_TX_net_MFE_change$Net_MFE_change, na.rm = TRUE)
   
-  # ---------- Specific_heat block (mirrors 10 µM) ----------
-  Specific_heat_Sample_name_UP   <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
-  Specific_heat_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
+  # ---------- Cp_37C block (mirrors 10 µM) ----------
+  Cp_37C_Sample_name_UP   <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
+  Cp_37C_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
   
-  Mean_Specific_heat_Sample_name_UP   <- mean(Specific_heat_Sample_name_UP$Specific_heat, na.rm = TRUE)
-  Mean_Specific_heat_Sample_name_DOWN <- mean(Specific_heat_Sample_name_DOWN$Specific_heat, na.rm = TRUE)
+  Mean_Cp_37C_Sample_name_UP   <- mean(Cp_37C_Sample_name_UP$Cp_37C, na.rm = TRUE)
+  Mean_Cp_37C_Sample_name_DOWN <- mean(Cp_37C_Sample_name_DOWN$Cp_37C, na.rm = TRUE)
   
-  TTEST_Specific_heat <- tryCatch(
-    t.test(Specific_heat_Sample_name_DOWN$Specific_heat, Specific_heat_Sample_name_UP$Specific_heat, paired = FALSE),
+  TTEST_Cp_37C <- tryCatch(
+    t.test(Cp_37C_Sample_name_DOWN$Cp_37C, Cp_37C_Sample_name_UP$Cp_37C, paired = FALSE),
     error = function(e) list(p.value = NA_real_)
   )
   
-  wilcox_test_all_UP_vs_DOWN_Specific_heat <- safe_wilcox(
-    Specific_heat_Sample_name_DOWN$Specific_heat,
-    Specific_heat_Sample_name_UP$Specific_heat,
+  wilcox_test_all_UP_vs_DOWN_Cp_37C <- safe_wilcox(
+    Cp_37C_Sample_name_DOWN$Cp_37C,
+    Cp_37C_Sample_name_UP$Cp_37C,
     paired = FALSE,
     alternative = "two.sided",
     exact = FALSE
   )
   
-  ks_test_all_UP_vs_DOWN_Specific_heat_data <- safe_ks(
-    Specific_heat_Sample_name_DOWN$Specific_heat,
-    Specific_heat_Sample_name_UP$Specific_heat
+  ks_test_all_UP_vs_DOWN_Cp_37C_data <- safe_ks(
+    Cp_37C_Sample_name_DOWN$Cp_37C,
+    Cp_37C_Sample_name_UP$Cp_37C
   )
   
   # ---------- Plots ----------
@@ -1565,10 +1573,10 @@ process_result_list <- function(Sample_name) {
     ks_test_all_UP_vs_DOWN_pValue = ks_test_all_UP_vs_DOWN$p.value,
     ks_test_MFE_075_above_pValue = ks_test_MFE_075_above$p.value,
     ks_test_MFE_025_below_pValue = ks_test_MFE_025_below$p.value,
-    Mean_Specific_heat_UP = Mean_Specific_heat_Sample_name_UP,
-    Mean_Specific_heat_DOWN = Mean_Specific_heat_Sample_name_DOWN,
-    ks_test_all_UP_vs_DOWN_Specific_heat = ks_test_all_UP_vs_DOWN_Specific_heat_data$p.value,
-    wilcox_test_all_UP_vs_DOWN_Specific_heat = wilcox_test_all_UP_vs_DOWN_Specific_heat$p.value,
+    Mean_Cp_37C_UP = Mean_Cp_37C_Sample_name_UP,
+    Mean_Cp_37C_DOWN = Mean_Cp_37C_Sample_name_DOWN,
+    ks_test_all_UP_vs_DOWN_Cp_37C = ks_test_all_UP_vs_DOWN_Cp_37C_data$p.value,
+    wilcox_test_all_UP_vs_DOWN_Cp_37C = wilcox_test_all_UP_vs_DOWN_Cp_37C$p.value,
     Proliferation_Science = Mean_Proliferation_Science,
     PCNA = Mean_Meta_PCNA,
     Essential_cell_cycle_genes = Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
@@ -1583,9 +1591,8 @@ process_result_list <- function(Sample_name) {
 # ------------------------- Run across samples -------------------------
 Data_result_list <- lapply(names(result_list_2_filtered), function(x) process_result_list(x))
 
-# ------------------------- Clean SampleName and write CSV -------------------------
 all_results$SampleName <- gsub(
-  "path_to//Plots_all_cancer_cell_lines_3.33uM/Plot_",
+  "path_to/Plots_all_cancer_cell_lines_3.33uM/Plot_",
   "",
   all_results$SampleName,
   fixed = TRUE
@@ -1603,6 +1610,257 @@ readr::write_csv(all_results, results_csv)
 
 
 
+
+
+
+
+
+# STEP 14 ####
+
+## Analysis of the thermodynamic footprint in the iLINCS signatures ####
+
+library(ggplot2)
+library(ggrepel)
+
+
+# Read the results file
+all_results <- read.csv("path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_all_cancer_cell_lines_3.33uM.csv",
+                                     header = TRUE, sep = ",", stringsAsFactors = FALSE) 
+
+# Generate the complete table with cell lines and drugs
+all_results_2 <- all_results # all_results is renamed to be able to repeat the commands below without having to re-run the code above
+
+
+# Delete from all_results_2$SampleName "_MFE"
+all_results_2$SampleName <- gsub("_MFE.pdf", "", all_results_2$SampleName)
+
+
+# # Open the original iLINCS file with the metadata of all the signatures, downloaded from https://clue.io/
+# # This file contains the original signatures IDs
+Sig_info_iLINCs_metadata <- read.csv("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Cross_validation_with_iLINCS_data/Analysis_iLINCS_Python_script_Anthony/siginfo_beta_LINCS_metadata.csv",
+                                     header = TRUE, sep = ",", stringsAsFactors = FALSE)
+# Filter the signatures obtained with 10 uM at 24h
+Sig_info_iLINCs_metadata <- dplyr::filter(Sig_info_iLINCs_metadata, pert_idose == "3.33 uM") %>%
+  dplyr::filter(pert_itime == "24 h") %>%
+  dplyr::rename(SampleName = sig_id) %>%
+  dplyr::rename(Drug = cmap_name, cell_line = cell_iname)
+
+
+
+
+# Replace all"/" with "_" in the SampleName column
+# This is necessary to match the signatures IDs in the all_results_2 data frame
+Sig_info_iLINCs_metadata$SampleName <- gsub("/", "_", Sig_info_iLINCs_metadata$SampleName)
+
+# Add the Drug to the name in the SampleName column to the all_results_2 data frame
+Sig_info_iLINCs_metadata$SampleName <- paste0(Sig_info_iLINCs_metadata$Drug, "_", Sig_info_iLINCs_metadata$SampleName)
+
+# Add the cell_line to the name in the SampleName column to the all_results_2 data frame
+Sig_info_iLINCs_metadata$SampleName <- paste0(Sig_info_iLINCs_metadata$cell_line, "_", Sig_info_iLINCs_metadata$SampleName)
+
+
+# Add the columns with the cell line name and the drug name to the all_results_2 data frame
+all_results_2 <- dplyr::left_join(all_results_2, Sig_info_iLINCs_metadata, by ="SampleName") %>%
+  dplyr::select(SampleName, Net_MFE_change, MeanMFE_UP, MeanMFE_DOWN, TTEST_pValue, , wilcox_test_all_UP_vs_DOWN_pValue, ks_test_all_UP_vs_DOWN_pValue, ks_test_MFE_075_above_pValue, ks_test_MFE_025_below_pValue, Mean_Cp_37C_UP, Mean_Cp_37C_DOWN, ks_test_all_UP_vs_DOWN_Cp_37C, wilcox_test_all_UP_vs_DOWN_Cp_37C,
+                Proliferation_Science, PCNA, Essential_cell_cycle_genes, Homologous_recombination, Fanconi_anemia, High_fid_pol, Drug, cell_line)
+
+
+# Add the cell line tissue of origin 
+# Open the original iLINCS file cellinfo_beta.csv with the metadata of all the cell lines, downloaded from https://clue.io/
+Cell_info_beta <- read.csv("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Cross_validation_with_iLINCS_data/Analysis_iLINCS_Python_script_Anthony/cellinfo_beta.csv",
+                           header = TRUE, sep = ",", stringsAsFactors = FALSE) %>%
+  dplyr::select(cell_iname, primary_disease, subtype) %>%
+  dplyr::rename(cell_line = cell_iname)
+
+# Merge the all_results_2 data frame with the Cell_info_beta data frame
+all_results_2 <- dplyr::left_join(all_results_2, Cell_info_beta, by = "cell_line")
+
+# Remove all SampleName that start with "REP"
+# all_results_2 <- dplyr::filter(all_results_2, !grepl("REP.", SampleName))
+ 
+
+# Save the all_results_2 data frame as .csv file and add a new column with the Log10_MFE_change
+all_results_2_complete <- dplyr::mutate(all_results_2, Log10_MFE_change = log10(MeanMFE_DOWN/MeanMFE_UP)) %>%
+  dplyr::relocate(Log10_MFE_change, .before = TTEST_pValue) %>%
+  dplyr::mutate(Log10_Cp_37C_change = log10(Mean_Cp_37C_UP/Mean_Cp_37C_DOWN)) # Add a new column with the Log10_Cp_37C_change
+
+print(nrow(all_results_2_complete))
+# 27 samples
+
+
+write.csv(all_results_2_complete, file = "path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_all_cancer_cell_lines_3.33uM.csv")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Add a new column called 'Log10_MFE_change' containing the log10 of the ratio between the mean MFE of the DOWN-regulated genes and the mean MFE of the UP-regulated genes
+
+all_results_2_complete <- read.csv("path_to/Results_analysis_all_cancer_cell_lines_3.33uM/Results_all_cancer_cell_lines_3.33uM.csv",
+                           header = TRUE, sep = ",", stringsAsFactors = FALSE) 
+
+iLINCS_analysis <- all_results_2_complete
+
+# Generate a ggplot2 scatter plot showing the Proliferation_Science change vs the MFE change
+iLINCS_analysis_plot <- ggplot(iLINCS_analysis, aes(x = Proliferation_Science, y = Log10_MFE_change)) +
+  theme_bw() +
+  geom_point(colour = "blue", size = 2) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +  # Add vertical line at x = 0
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Add horizontal line at y = 0
+  labs(x = "Proliferation_Science", y = "Log10_MFE_change", title = "iLINCS cancer cell lines 10uM all drugs") +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold")) +
+  xlim(-2.5, 2.5) +
+  ylim(-0.05, 0.05) +
+  # label each dot with a name which combines cell_line and Drug separated by "_"
+  geom_text(aes(label = paste(cell_line, Drug, sep = "_")), hjust = 0, vjust = 0, size = 1.5, nudge_x = 0.001, nudge_y = 0.001) +
+  #geom_smooth(method = "lm") +
+  geom_text(
+    x = 1, y = 0.05,
+    label = paste("R = ", round(cor(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change), 2),
+                  "\n", "p-value = ", format(cor.test(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change)$p.value, digits = 4)),
+    size = 5)
+
+print(iLINCS_analysis_plot)
+
+
+
+
+
+
+
+
+
+
+
+
+# Generate volcano plot with all the targetd agents
+# Generate a ggplot2 scatter plot showing the Log10_MFE_change vs ks_test_all_UP_vs_DOWN_pValue
+iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10_MFE_change, y = -log10(ks_test_all_UP_vs_DOWN_pValue))) +
+  theme_classic() +
+  geom_point(aes(color = -log10(ks_test_all_UP_vs_DOWN_pValue) > 1.301, alpha = -log10(ks_test_all_UP_vs_DOWN_pValue) < 1.301), size = 3) +
+  scale_color_manual(values = c("black", "blue")) +
+  scale_alpha_manual(values = c(1, 0.5)) +  # Set alpha values: 1 for >= 1.301 and 0.5 for < 1.301
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +  # Add vertical line at x = 0
+  geom_hline(yintercept = 1.301, linetype = "dashed", color = "black") +  # Add horizontal line at y = 1.301
+  labs(x = "Log10_MFE_change", y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", title = "iLINCS cancer lines 10uM drugs targeting membrane receptors") +
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        legend.position = "none") +
+  xlim(-0.06, 0.06) +
+  geom_text_repel(aes(label = ifelse(-log10(ks_test_all_UP_vs_DOWN_pValue) > 1.301, paste(cell_line, Drug, sep = "_"), "")), 
+                  size = 3, box.padding = 0.5, point.padding = 0.5, nudge_x = 0.004, nudge_y = 0.001, max.overlaps = 15)
+
+print(iLINCS_analysis_plot_membrane_receptors)
+
+# Save the plot
+ggsave("iLINCS_analysis_plot_membrane_receptors.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "/Users/z3514253/Desktop")
+
+
+
+
+
+
+# Generate the horizontal box plot with reduced box width and adjusted x-axis limits
+iLINCS_analysis_boxplot_horizontal <- ggplot(iLINCS_analysis, aes(y = "", x = Log10_MFE_change)) +
+  theme_classic() +
+  geom_boxplot(fill = "lightgrey", color = "black", width = 0.8) +
+  geom_jitter(height = 0.18, color = "black", size = 3, alpha = 0.5) +
+  geom_vline(xintercept = 0, linetype = 1, linewidth = 1, color = "black") +  # Add vertical line at x = 0
+  labs(y = "", x = "Log10_MFE_change", title = "Distribution of Log10_MFE_change") +
+  xlim(-0.05, 0.05) +  # Adjust x-axis limits here
+  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+print(iLINCS_analysis_boxplot_horizontal)
+
+# Save the plot
+ggsave("iLINCS_analysis_boxplot_horizontal.pdf", plot = iLINCS_analysis_boxplot_horizontal, width = 5, height = 3, path = "/Users/z3514253/Desktop")
+
+
+# Null hypothesis (H0) the mean of the distribution is 0.
+# Alternative hypothesis (HA) the mean of the distribution is greater than 0.
+# Perform a One-Sample t-Test:
+  
+test_result <- t.test(iLINCS_analysis$Log10_MFE_change, mu = 0, alternative = "greater")
+print(test_result)
+
+
+
+
+
+
+
+
+
+# Function to plot all cell lines exposed to the same drug
+
+generate_plots_by_drug <- function(data) {
+  # Group data by Drug
+  grouped_data <- data %>% 
+    group_by(Drug)
+  
+  # Iterate over each drug group
+  for(drug_group in unique(data$Drug)) {
+    drug_data <- grouped_data %>% filter(Drug == drug_group)
+    
+    # Generate plot for the current drug group
+    plot <- ggplot(drug_data, aes(x = Proliferation_Science, y = Log10_MFE_change)) +
+      theme_bw() +
+      geom_point(colour = "blue", size = 3) +
+      geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+      geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+      labs(x = "Proliferation_Science", y = "Log10_MFE_change", title = paste("Drug:", drug_group)) +
+      theme(plot.title = element_text(color = "black", size = 14, face = "bold")) +
+      xlim(-2, 2) +
+      ylim(-0.05, 0.05) +
+      geom_text_repel(aes(label = paste(cell_line, Drug, sep = "_")), 
+                      size = 5, 
+                      box.padding = 0.1) # Adjust as needed
+      #geom_smooth(method = "lm")
+      # geom_text(
+      #   x = 1, y = 0.05,
+      #   label = paste("R = ", round(cor(drug_data$Proliferation_Science, drug_data$Log10_MFE_change), 2),
+      #                 "\n", "p-value = ", format(cor.test(drug_data$Proliferation_Science, drug_data$Log10_MFE_change)$p.value, digits = 4)),
+      #   size = 4)
+    
+    # Define the file name and path
+    file_name <- paste0("plot_", gsub("[^a-zA-Z0-9]", "_", drug_group), ".pdf") # The command  paste0("plot_", gsub("[^a-zA-Z0-9]", "_", drug_group), ".pdf")  is used to sanitize the drug group name 
+    # and create a safe filename is essential to ensure that the filenames used to save the plots do not contain characters that might cause issues in the file system.
+    output_dir <- "path_to/Plots_individual_drugs"
+    file_path <- file.path(output_dir, file_name)
+    
+    # Save the plot
+    ggsave(filename = file_path, plot = plot, width = 8, height = 6)
+    
+    print(plot)
+  }
+}
+
+# Usage
+generate_plots_by_drug(iLINCS_analysis)
+
+
+
+
+
+
+
+
+
+# Save the full environment
+save.image(file = "path_to/Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines_environment.RData")
 
 
 

@@ -1,4 +1,3 @@
-
 # Aim
 # Build the figure panels for the manuscript by (i) assembling gene-level log2FC
 # across many drug/cell-line datasets, (ii) running GSEA (KEGG + custom
@@ -44,23 +43,6 @@
 # 7) Fraction plots (high/low MFE as % of total counts):
 #    - Use precomputed fractions per condition; two-proportion Z-tests.
 #    - Bar charts (control vs treated) for GREIN and Science models.
-#
-# 8) Science models comparisons (72h vs EP):
-#    - Combine signature-level log2FC; boxplots with means.
-#    - Paired/unpaired Wilcoxon tests across time points; save PDFs.
-#
-# Outputs
-# - Per-sample KEGG dotplots (PDFs), combined GSEA CSVs, filtered heatmaps,
-#   bubble plot of pathways, violin panels, and bar charts of high/low MFE
-#   fractions; summary CSVs of NES/p.adjust and test p-values.
-#
-# Usage notes
-# - Object names are assumed from the loaded .RData (res_*, MFE_res_*, *_fraction,
-#   *_dexseq_ANNOTATED, etc.). If you rename upstream objects, update selectors.
-# - Ensure Gene Symbol consistency before joins and GSEA; remove duplicates.
-# - Long path strings include escaped spaces; adjust to your filesystem.
-
-
 
 
 library(DESeq2)
@@ -88,23 +70,9 @@ library(biomaRt)
 library(gridExtra)
 
 
-# It is also possible to load the environment of the script Cross_validation_MFE.R
+
+# Load the environment with the GREIN datasets and the Science models of drug resistance
 load("path_to/Cross_validation_MFE_AC_environment.RData")
-
-
-
-# Create a data frame with the gene-level DESeq2 log_FC values of all the cell lines exposed to targeted agents.
-# Take all the log_FC values (not only the transcripts with a significant log_FC)
-
-# Generate the data frame with the gene-level DESeq2 log_FC values of all the cell lines exposed to single targeted agents:
-# "GSE137535_SH454", "GSE143462_KYSE150_omipalisib", "GSE148096_TNBC_erlotinib", "GSE178755_HCC827_erlotinib",
-# "GSE103021_LU65_ARS_1620",
-# "GSE118548_T84_Trametinib", "GSE177054_MDAMB231_Ribociclib",
-# "GSE93124_SW480_crizotinib",
-# "GSE135514_MDAMB468_Das_24h", "GSE135514_MDAMB468_Das_72h",
-# "GSE121105_BT474_trastuzumab", 
-# "GSE105083_MIA_PACA2_CM03_6h", "GSE105083_MIA_PACA2_CM03_24h", "GSE105083_PANC1_CM03_24h", 
-# "X778_nutlin3a_72h", "X778_palbo_72h", "X778_tunic_72h", "SKBR3_LAP_72h", "SKMEL28_VEM_72h", "X778_palbo_EP", "SKBR3_LAP_72h", "SKMEL28_VEM_EP"
 
 
 
@@ -164,25 +132,6 @@ Expression_changes_X778_PALBO <- read.delim(file="path_to/72h_778_palbociclib.tx
   dplyr::filter(!is.na(X778_PALBO_Log_FC))
 
 
-
-Expression_changes_X778_TUNIC <- read.delim(file="path_to/72h_778_tunicamycin.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(X778_TUNIC_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, X778_TUNIC_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(X778_TUNIC_Log_FC = mean(X778_TUNIC_Log_FC)) %>%
-  dplyr::filter(!is.na(X778_TUNIC_Log_FC))
-
-
-Expression_changes_X778_nutlin <- read.delim(file="path_to/72h_778_nutlin3a.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(X778_nutlin_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, X778_nutlin_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(X778_nutlin_Log_FC = mean(X778_nutlin_Log_FC)) %>%
-  dplyr::filter(!is.na(X778_nutlin_Log_FC))
-
-
 Expression_changes_SKBR3_LAP <- read.delim(file="path_to/72h_SKBR3_lapatinib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
   dplyr::rename(Gene_symbol = gene_name) %>%
   dplyr::rename(SKBR3_Log_FC = log2FoldChange) %>%
@@ -206,35 +155,6 @@ Expression_changes_SKMEL28_VEM <- read.delim(file="path_to/72h_SKMEL28_vemurafen
 
 
 
-# Science models early-phase time point (the nutlin3a and the tunicamycin conditions have not been sequenced during the early phase response)
-Expression_changes_X778_PALBO_EP <- read.delim(file="path_to/early.phase_778_palbociclib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(X778_PALBO_EP_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, X778_PALBO_EP_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(X778_PALBO_EP_Log_FC = mean(X778_PALBO_EP_Log_FC)) %>%
-  dplyr::filter(!is.na(X778_PALBO_EP_Log_FC))
-
-
-Expression_changes_SKBR3_LAP_EP <- read.delim(file="path_to/early.phase_SKBR3_lapatinib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(SKBR3_EP_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, SKBR3_EP_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(SKBR3_EP_Log_FC = mean(SKBR3_EP_Log_FC)) %>%
-  dplyr::filter(!is.na(SKBR3_EP_Log_FC))
-
-
-Expression_changes_SKMEL28_VEM_EP <- read.delim(file="path_to/early.phase_SKMEL28_vemurafenib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(SKMEL28_EP_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, SKMEL28_EP_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(SKMEL28_EP_Log_FC = mean(SKMEL28_EP_Log_FC)) %>%
-  dplyr::filter(!is.na(SKMEL28_EP_Log_FC))
-
-
-
 
 
 
@@ -254,13 +174,8 @@ Expression_changes_targeted_agents <- dplyr::full_join(Expression_changes_GSE137
   dplyr::full_join(Expression_changes_GSE105083_PANC1_CM03_24h, by = "Gene_symbol") %>%
   dplyr::full_join(Expression_changes_GSE129221_PC9GR, by = "Gene_symbol") %>%
   dplyr::full_join(Expression_changes_X778_PALBO, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_X778_TUNIC, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_X778_nutlin, by = "Gene_symbol") %>%
   dplyr::full_join(Expression_changes_SKBR3_LAP, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_SKMEL28_VEM, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_X778_PALBO_EP, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_SKBR3_LAP_EP, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_SKMEL28_VEM_EP, by = "Gene_symbol")
+  dplyr::full_join(Expression_changes_SKMEL28_VEM, by = "Gene_symbol")
 
 
 
@@ -270,13 +185,9 @@ Expression_changes_targeted_agents <- dplyr::full_join(Expression_changes_GSE137
 
 
 
-# Fig.2B GSEA cell proliferation and mitogenic signaling ####
+# GSEA cell proliferation and mitogenic signaling ####
 # Supplementary Fig. 4 ####
 
-# Analysis cell proliferation with clusterProfiler GSE KEGG
-# Perform GSEA on the complete Log_FC values of each cell line
-# Also in this case use all the Log_FC values as clusterProfiler requires all of them ranked
-# The input for clusterProfiler must be a vector of entrez gene names
 
 
 library(biomaRt)
@@ -292,6 +203,10 @@ res_gene_entrez_id <- dplyr::filter(res_gene_entrez_id, !is.na(entrezgene_id)) %
   dplyr::rename(Gene_symbol = external_gene_name)
 
 Expression_changes_targeted_agents_genes <- dplyr::left_join(Expression_changes_targeted_agents, res_gene_entrez_id, by = "Gene_symbol")
+
+# Write the file in a csv format
+write.csv(Expression_changes_targeted_agents_genes, file = "path_to/Expression_changes_targeted_agents_genes.csv")
+
 
 
 
@@ -390,8 +305,8 @@ log_fc_cols <- c("GSE93124_SW480_crizotinib_Log_FC", "GSE178755_HCC827_erlotinib
                  "GSE103021_LU65_ARS_1620_Log_FC", "GSE135514_MDAMB468_Das_24h_Log_FC", "GSE135514_MDAMB468_Das_72h_Log_FC",
                  "GSE105083_MIA_PACA2_CM03_6h_Log_FC", "GSE105083_MIA_PACA2_CM03_24h_Log_FC", 
                  "GSE129221_PC9GR_apatinib_Log_FC",
-                 "X778_nutlin_Log_FC", "X778_TUNIC_Log_FC", "X778_PALBO_Log_FC", "SKBR3_Log_FC", "SKMEL28_Log_FC", 
-                 "X778_PALBO_EP_Log_FC", "SKBR3_EP_Log_FC", "SKMEL28_EP_Log_FC")
+                 "X778_PALBO_Log_FC", "SKBR3_Log_FC", "SKMEL28_Log_FC", 
+                 )
 
 plot_titles <- c("GSE93124", "GSE178755", 
                  "GSE137535_SH454", "GSE105083_PANC1_CM03_24h", "GSE118548_tra", "GSE148096", 
@@ -399,37 +314,19 @@ plot_titles <- c("GSE93124", "GSE178755",
                  "GSE103021", "GSE135514_24h", "GSE135514_72h",
                  "GSE105083_MIA_PACA2_6h", "GSE105083_MIA_PACA2_24h",
                  "GSE129221_PC9GR_apatinib",
-                 "X778_nutlin_72h", "X778_TUNIC_72h", "X778_PALBO_72h", "SKBR3_72h", "SKMEL28_72h", 
-                 "X778_PALBO_EP", "SKBR3_EP", "SKMEL28_EP")
+                 "X778_PALBO_72h", "SKBR3_72h", "SKMEL28_72h", 
+                 )
 
 # Define the output directory
-output_dir <- "path_to/GSEA_KEGG_clusterProfiler"
+output_dir <- "path_to"
 
-# Call the function to process and save the plots
-# process_and_save_plots(data_frame, log_fc_cols, plot_titles, output_dir)
-
-# Combine all the saved plots into a single supplementary figure
-# library(gridExtra)
-# library(grid)
-# 
-# # Arrange plots in 3 columns and 6 rows (modify as necessary based on the number of plots)
-# combined_plot <- grid.arrange(
-#   grobs = plot_list,
-#   ncol = 3,
-#   nrow = 6
-# )
-# 
-# # Save the combined plot as a PDF
-# ggsave(
-#   filename = paste0(output_dir, "/Supplementary_Fig_2_combined_plots.pdf"), 
-#   plot = combined_plot, 
-#   width = 25, 
-#   height = 40
-# )
 
 # Call the function to get also the combined kk2 results
 combined_kk2_df <- process_and_save_plots(data_frame, log_fc_cols, plot_titles, output_dir)
 # Totally 22 samples of which 14 are GREIN datasets
+
+# Write the file in a csv format
+write.csv(combined_kk2_df, file = "path_to/combined_kk2_df.csv")
 
 
 
@@ -483,10 +380,8 @@ generate_heatmap <- function(kk2_df) {
 Heatmap_cell_cycle <- generate_heatmap(combined_kk2_df_filtered)
 print(Heatmap_cell_cycle)
 
-# Save the plot
-# pdf("/Users/z3514253/Desktop/Heatmap_cell_cycle.pdf", width = 9, height = 12)
-# generate_heatmap(combined_kk2_df_filtered)
-# dev.off()
+
+write.csv(combined_kk2_df_filtered, file = "combined_kk2_results.csv", row.names = FALSE)
 
 
 
@@ -531,7 +426,6 @@ generate_heatmap <- function(kk2_df) {
 # Generate the heatmap using the combined_kk2_df
 Heatmap_cell_cycle <- generate_heatmap(Seleted_non_proliferating_samples)
 print(Heatmap_cell_cycle)
-
 
 
 
@@ -592,23 +486,6 @@ print(Heatmap_cell_cycle)
 
 
 
-
-
-# Filter the samples with a significant down-regulation of additional proliferation gene sets
-# Load the complete table containing the p values of additional proliferation gene sets of the seleted samples
-
-# Prolif_p_val_gene_sets_seleted_samples <- GREIN_datasets_complete_samples %>%
-#   dplyr::mutate(Samples = recode(Samples, "GSE135514_MDAMB468_Das_24h" = "GSE135514_24h", 
-#                           "GSE135514_MDAMB468_Das_72h" = "GSE135514_72h",
-#                           "GSE103021_LU65_ARS_1620" = "GSE103021",
-#                           "GSE143462_KYSE150_omipalisib" = "GSE143462",
-#                           "GSE177054_MDAMB231_Ribociclib" = "GSE177054",
-#                           "GSE121105_BT474_trastuzumab" = "GSE121105")) %>%
-#   dplyr::filter(Samples %in% c("GSE103021", "GSE121105", "GSE143462",
-#                                "GSE177054", "GSE135514_24h", "GSE135514_72h")) %>%
-#   dplyr::filter(Wilcox_test_Proliferation_Science_adjp < 0.05 & Wilcox_test_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019_adjp < 0.05 & Wilcox_test_Meta_PCNA_adjp < 0.05)
-
-# The samples have a significant down-regulation of the additional proliferation gene sets.
 
 
 
@@ -683,12 +560,7 @@ ggplot(Plot_GREIN_selected_samples_complete, aes(x = Sample, y = Description, fi
 
 
 # GSEA with specific proliferation gene sets ####
-# I use clusterProfiler to determine the enrichment of specific proliferation signatures
-# Load the proliferation signatures
 
-
-# Creating the TERM2GENE data frame
-# Define the gene sets
 proliferation_science_genes <- c(
   "TPX2", "PRC1", "FOXM1", "CDK1", "C20orf24", "MCM2", "H2AFZ", "TOP2A", "PCNA", "UBE2C",
   "MELK", "TRIP13", "NCAPD2", "MCM7", "RNASEH2A", "RAD51AP1", "KIF20A", "CDC45", "MAD2L1", "ESPL1",
@@ -845,21 +717,13 @@ TERM2GENE_entrez <- dplyr::left_join(TERM2GENE, res_gene_entrez_id, by = "Gene_s
                    "GSE143462", "GSE121105",
                    "GSE103021", "GSE135514_24h", "GSE135514_72h",
                    "GSE105083_MIA_PACA2_6h", "GSE105083_MIA_PACA2_24h",
-                   "X778_nutlin_72h", "X778_TUNIC_72h", "X778_PALBO_72h", "SKBR3_72h", "SKMEL28_72h", 
-                   "X778_PALBO_EP", "SKBR3_EP", "SKMEL28_EP")
+                   "X778_PALBO_72h", "SKBR3_72h", "SKMEL28_72h", 
+                   )
   
   # Call the function to get the results
   combined_gsea <- process_and_get_gsea_results(data_frame, log_fc_cols, TERM2GENE)
 
-  # # Replace the names of the proliferation signatures with shorter ones
-  #   combined_gsea <- combined_gsea %>%
-  #   mutate(Description = case_when(
-  #     Description == "Proliferation_Science_paper" ~ "Signt_1",
-  #     Description == "Meta_PCNA" ~ "Signt_2",
-  #     Description == "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019" ~ "Signt_3",
-  #     TRUE ~ Description  # Retain other values as they are
-  #   ))
-  # 
+  write.csv(combined_gsea, "path_to/combined_gsea_results.csv", row.names = FALSE)
 
 
 
@@ -909,6 +773,10 @@ Plot_cell_proliferation <- ggplot(Plot_GREIN_selected_samples_complete_plot, aes
         axis.title.y = element_text(size = 10))  # Increase size of y-axis title
 
 print(Plot_cell_proliferation)
+
+# Save the plot
+ggsave("Plot_cell_proliferation.pdf", plot = Plot_cell_proliferation, width = 8, height = 12, path = "path_to/Desktop")
+
 
 
 
@@ -968,8 +836,6 @@ Plot_MFE_GSE143462 <- ggplot(MFE_res_GSE143462, aes(x = factor(log2FoldChange > 
 
 Plot_MFE_GSE121105 <- ggplot(MFE_res_GSE121105_trastuzumab, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
   geom_violin(fill = "white", size = 1.5) +
-  #geom_jitter(aes(color = above_quantile_075), width = 0.1, size = 1, alpha = 1) +
-  #scale_color_manual(values = c("FALSE" = "black", "TRUE" = "dodgerblue3")) +
   theme_classic() +
   ylim(-0.6, 0) +
   theme(
@@ -992,8 +858,6 @@ Plot_MFE_GSE121105 <- ggplot(MFE_res_GSE121105_trastuzumab, aes(x = factor(log2F
 
 Plot_MFE_GSE103021_ARS_1620_LU65 <- ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
   geom_violin(fill = "white", size = 1.5) +
-  #geom_jitter(aes(color = above_quantile_075), width = 0.1, size = 1, alpha = 1) +
-  #scale_color_manual(values = c("FALSE" = "black", "TRUE" = "dodgerblue3")) +
   theme_classic() +
   ylim(-0.6, 0) +
   theme(
@@ -1018,8 +882,6 @@ Plot_MFE_GSE103021_ARS_1620_LU65 <- ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(
 
 Plot_MFE_GSE135514_24h <- ggplot(MFE_res_GSE135514_Das_24h, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
   geom_violin(fill = "white", size = 1.5) +
-  #geom_jitter(aes(color = above_quantile_075), width = 0.1, size = 1, alpha = 1) +
-  #scale_color_manual(values = c("FALSE" = "black", "TRUE" = "dodgerblue3")) +
   theme_classic() +
   ylim(-0.6, 0) +
   theme(
@@ -1040,8 +902,6 @@ Plot_MFE_GSE135514_24h <- ggplot(MFE_res_GSE135514_Das_24h, aes(x = factor(log2F
 
 Plot_MFE_GSE135514_72h <- ggplot(MFE_res_GSE135514_Das_72h, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
   geom_violin(fill = "white", size = 1.5) +
-  #geom_jitter(aes(color = above_quantile_075), width = 0.1, size = 1, alpha = 1) +
-  #scale_color_manual(values = c("FALSE" = "black", "TRUE" = "dodgerblue3")) +
   theme_classic() +
   ylim(-0.6, 0) +
   theme(
@@ -1094,11 +954,9 @@ combined_plots <- grid.arrange(
   nrow = 1
 )
 
+# Save the combined plot
+ggsave("combined_plots.pdf", plot = combined_plots, width = 20, height = 7, path = "path_to/Desktop")
 
-
-# These plots have been excluded because will be analysed in separately
-# Plot_MFE_GSE105083_MIA_PACA2_6h
-# Plot_MFE_GSE105083_MIA_PACA2_24h
 
 
 # Mean MFE values and KS test p values on the violin plots
@@ -1225,10 +1083,6 @@ print(wilcoxon_results)
 
 # Fig.2D high- and low-MFE transcripts as fraction of total counts ####
 
-# Generate a data frame with the following values:
-# High MFE transcripts in control samples as fraction of total counts
-# High MFE transcripts in drug-treated samples as fraction of total counts
-# Fisher's exact test to compare the proportions of high MFE transcripts counts between the two groups
 
 Data_high_MFE_fraction_total_counts <- data.frame(
 Samples = c("GSE143462",
@@ -1272,14 +1126,7 @@ df_long <- pivot_longer(Data_high_MFE_fraction_total_counts,
 library(ggplot2)
 library(tidyr)
 
-# Assuming your data frame is named Data_high_MFE_fraction_total_counts
-# Here's a sample structure of your data frame:
-# Data_high_MFE_fraction_total_counts <- data.frame(
-#     Samples = c("GSE105083", "GSE118548_tra", "GSE148096", "GSE143462", "GSE118548_JQ1", "GSE121105"),
-#     High_MFE_of_total_control = c(0.1, 0.2, 0.15, 0.2, 0.25, 0.3),
-#     High_MFE_of_total_drug_treated = c(0.05, 0.25, 0.2, 0.3, 0.35, 0.4),
-#     Fisher_result = c("ns", "significant", "ns", "significant", "ns", "significant")
-# )
+
 
 # Define the desired order of samples
 sample_order <- c("GSE103021", "GSE121105", "GSE143462", "GSE135514_24h", "GSE135514_72h")
@@ -1313,6 +1160,8 @@ Plot_high_fraction_tot_counts <- ggplot(df_long, aes(x = Samples, y = Value, fil
 
 print(Plot_high_fraction_tot_counts)
 
+# Save the combined plot
+ggsave("Plot_high_fraction_tot_counts.pdf", plot = Plot_high_fraction_tot_counts, width = 3, height = 4.5, path = "path_to/Desktop")
 
 
 
@@ -1369,14 +1218,6 @@ df_long <- pivot_longer(Data_low_MFE_fraction_total_counts,
 library(ggplot2)
 library(tidyr)
 
-# Assuming your data frame is named Data_low_MFE_fraction_total_counts
-# Here's a sample structure of your data frame:
-# Data_low_MFE_fraction_total_counts <- data.frame(
-#     Samples = c("GSE105083", "GSE118548_tra", "GSE148096", "GSE143462", "GSE118548_JQ1", "GSE121105"),
-#     low_MFE_of_total_drug_treated = c(0.1, 0.2, 0.15, 0.2, 0.25, 0.3),
-#     low_MFE_of_total_drug_treated = c(0.05, 0.25, 0.2, 0.3, 0.35, 0.4),
-#     Fisher_result = c("ns", "significant", "ns", "significant", "ns", "significant")
-# )
 
 # Define the desired order of samples
 sample_order <- c("GSE103021", "GSE121105", "GSE143462", "GSE135514_24h", "GSE135514_72h")
@@ -1410,6 +1251,8 @@ Plot_low_fraction_tot_counts <- ggplot(df_long, aes(x = Samples, y = Value, fill
 
 print(Plot_low_fraction_tot_counts)
 
+# Save the combined plot
+ggsave("Plot_low_fraction_tot_counts.pdf", plot = Plot_low_fraction_tot_counts, width = 3, height = 4.5, path = "path_to/Desktop")
 
 
 
@@ -1426,31 +1269,8 @@ print(Plot_low_fraction_tot_counts)
 
 
 
+# Fig.2F plot mitogenic signaling Science models ####
 
-
-
-
-
-
-
-
-
-
-
-# Fig.2E plot mitogenic signaling Science models ####
-
-# Generate a plot showing the NES values of all the signaling pathways for the selected samples
-# Prepare the data frame for the plot by selecting all the signaling pathways of interest
-
-# IMPORTANT
-# Cell_cycle_arrest_mitogenic_signaling contains aonly samamples with a down-regulation of all proliferation pathways and absence of any mitogenic signaling
-# The samples that are not here have mitogenic signaling and have been excluded
-# These are the samples of the Science models with mitogenic signaling:
-# SKBR3_72h
-# SKMEL28_72h
-# SKMEL28_EP
-# X778_PALBO_EP
-# X778_nutlin_72h are cells treated with the MDM2-TP53 inhibitor Nutlin-3a which is not directly inhibiting mitogenic signaling but rather activating the p53 pathway
 Plot_GREIN_selected_samples_Science_models <- dplyr::select (Cell_cycle_arrest_mitogenic_signaling, ID, Description, NES, p.adjust, Sample)
 
 all_ids <- c("hsa04110", "hsa03030", "hsa04010", "hsa03082", "hsa04625", 
@@ -1546,6 +1366,8 @@ Plot_cell_proliferation_Science_models <- ggplot(Plot_GREIN_selected_samples_com
 
 print(Plot_cell_proliferation_Science_models)
 
+# Save the plot
+ggsave("Plot_cell_proliferation_Science_models.pdf", plot = Plot_cell_proliferation_Science_models, width = 7, height = 12, path = "path_to/Desktop")
 
 
 
@@ -1571,80 +1393,13 @@ print(Plot_cell_proliferation_Science_models)
 
 
 
-# Fig.2F violin plots Science models 72h ####
+# Fig.2G violin plots Science models 72h ####
 
-# Load the data of the Science models generated at 72h:
 source("path_to/All_model_systems_72h_summary.R")
 
-# Load the data of the Science models generated during the early phase response
-source("path_to/All_model_systems_early_phase_summary.R")
 
-
-
-
-# Load required packages
 library(gridExtra)
 library(grid)
-
-
-# Plot_X778_NUTLIN_72h <- ggplot(X778_nutlin_dexseq_ANNOTATED, aes(x = factor(log2fold_treated_untreated > 0), y = Normalized_MFE)) +
-#   geom_violin(fill = "lightgrey", size = 1) +
-#   geom_boxplot(width = 0.1, color = "black", outlier.size = 0, size = 0.3) +
-#   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-#   theme_classic() +
-#   theme(legend.position = "none", axis.title = element_text(size = 20), plot.title = element_text(size = 10),
-#         axis.text.x = element_text(size = 16, color = "black")) +
-#   geom_vline(xintercept = 0, size = 0.3) +
-#   ylim(-0.6, 0) +
-#   labs(y = "Normalized_MFE", x = NULL, title = "778_NUTLIN_72h_Log2_FC_adj.P<0.05") +
-#   scale_x_discrete(labels = c("Log2_FC < 0", "Log2_FC > 0"))
-# print(Plot_X778_NUTLIN_72h)
-# 
-# # Save the combined plot
-# ggsave("Plot_X778_NUTLIN_72h.pdf", plot = Plot_X778_NUTLIN_72h, width = 8, height = 8, path = "/Users/z3514253/Desktop")
-
-
-
-
-
-# Plot_SKBR3_LAP_72h <- ggplot(SKBR3_dexseq_ANNOTATED, aes(x = factor(log2fold_treated_untreated > 0), y = Normalized_MFE)) +
-#   geom_violin(fill = "lightgrey", size = 1) +
-#   geom_boxplot(width = 0.1, color = "black", outlier.size = 0, size = 0.3) +
-#   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-#   theme_classic() +
-#   theme(legend.position = "none", axis.title = element_text(size = 20), plot.title = element_text(size = 10),
-#         axis.text.x = element_text(size = 16, color = "black")) +
-#   geom_vline(xintercept = 0, size = 0.3) +
-#   ylim(-0.6, 0) +
-#   labs(y = "Normalized_MFE", x = NULL, title = "SKBR3_LAP_72h_Log2_FC_adj.P<0.05") +
-#   scale_x_discrete(labels = c("Log2_FC < 0", "Log2_FC > 0"))
-# print(Plot_SKBR3_LAP_72h)
-# 
-# # Save the combined plot
-# ggsave("Plot_SKBR3_LAP_72h", plot = Plot_SKBR3_LAP_72h, width = 8, height = 8, path = "/Users/z3514253/Desktop")
-
-
-
-
-
-
-# Plot_SKMEL28_VEM_72h <- ggplot(SKMEL28_dexseq_ANNOTATED, aes(x = factor(log2fold_treated_untreated > 0), y = Normalized_MFE)) +
-#   geom_violin(fill = "lightgrey", size = 1) +
-#   geom_boxplot(width = 0.1, color = "black", outlier.size = 0, size = 0.3) +
-#   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-#   theme_classic() +
-#   theme(legend.position = "none", axis.title = element_text(size = 20), plot.title = element_text(size = 10),
-#         axis.text.x = element_text(size = 16, color = "black")) +
-#   geom_vline(xintercept = 0, size = 0.3) +
-#   ylim(-0.6, 0) +
-#   labs(y = "Normalized_MFE", x = NULL, title = "SKMEL28_VEM_72h_Log2_FC_adj.P<0.05") +
-#   scale_x_discrete(labels = c("Log2_FC < 0", "Log2_FC > 0"))
-# print(Plot_SKMEL28_VEM_72h)
-# 
-# # Save the combined plot
-# ggsave("Plot_SKMEL28_VEM_72h", plot = Plot_SKMEL28_VEM_72h, width = 8, height = 8, path = "/Users/z3514253/Desktop")
-
-
 
 
 
@@ -1663,34 +1418,16 @@ Plot_X778_PALBO_72h <- ggplot(X778_PALBO_dexseq_ANNOTATED, aes(x = factor(log2fo
 print(Plot_X778_PALBO_72h)
 
 # Save the combined plot
-ggsave("Plot_X778_PALBO72h.pdf", plot = Plot_X778_PALBO_72h, width = 6, height = 8, path = "/Users/z3514253/Desktop")
+ggsave("Plot_X778_PALBO72h.pdf", plot = Plot_X778_PALBO_72h, width = 6, height = 8, path = "path_to/Desktop")
 
 
-
-ks_test_MFE_X778_PALBO_LAP_72h_all_UP_vs_DOWN <- ks.test(X778_PALBO_dexseq_ANNOTATED_DOWN$Normalized_MFE, X778_PALBO_dexseq_ANNOTATED_UP$Normalized_MFE, alternative = "greater")
-print(ks_test_MFE_X778_PALBO_LAP_72h_all_UP_vs_DOWN)
-
-
-
-
-# Generate the data frame
-results <- data.frame(
-  Dataset = c(
-    "X778_PALBO_72h"
-  ),
-  Mean_MFE_UP = c(
-    Mean_X778_PALBO_dexseq_ANNOTATED_UP
-    ),
-  Mean_MFE_DOWN = c(
-    Mean_X778_PALBO_dexseq_ANNOTATED_DOWN
-    ),
-  KS_Test_p_value = c(
-    ks_test_MFE_X778_PALBO_LAP_72h_all_UP_vs_DOWN$p.value
-    )
+# Perform Welch's two-sample t-test (does not assume equal variances)
+t_test_MFE_X778_PALBO_LAP_72h_all_UP_vs_DOWN <- t.test(
+  X778_PALBO_dexseq_ANNOTATED_UP$Normalized_MFE,
+  X778_PALBO_dexseq_ANNOTATED_DOWN$Normalized_MFE,
+  alternative = "greater"
 )
-
-# Display the data frame
-print(results)
+print(t_test_MFE_X778_PALBO_LAP_72h_all_UP_vs_DOWN)
 
 
 
@@ -1732,14 +1469,193 @@ print(wilcoxon_results)
 
 
 
-# Fig.2G high- and low-MFE transcripts as fraction of total counts ####
+# Fig.2H high- and low-MFE transcripts as fraction of total counts ####
 
-# Create data frame with control and drug-treated fractions and Fisher’s test result
+Gencode_TX_norm_MFE_HC_table <- read.delim("path_to/Prediction_transcript_MFE/Gencode_TX_norm_MFE_HC_table.csv",
+                                           sep = ",", header = T, stringsAsFactors = F)
+Table_ANNOTATED <- Gencode_TX_norm_MFE_HC_table
+
+# Load the data with the counts of the entire transcriptome
+X778_PALBO_dexseq_ANNOTATED_whole_transcriptome <- read.delim(file="path_to/72h_778_palbociclib.tx_counts.both_conditions.treated_untreated_dexseq.tab", header = TRUE, sep = "\t", quote = "") %>%
+  dplyr::rename(ensembl_transcript_id_version=featureID) %>%
+  dplyr::inner_join(Table_ANNOTATED, by="ensembl_transcript_id_version") %>%
+  dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length,
+                countData.72h_778_untreated_R1, countData.72h_778_untreated_R2, countData.72h_778_untreated_R3,
+                countData.72h_778_palbociclib_R1, countData.72h_778_palbociclib_R2, countData.72h_778_palbociclib_R3,
+                Normalized_MFE, Cp_37C)
+
+# Convert from wide to long format (one row per transcript x replicate)
+X778_PALBO_dexseq_ANNOTATED_long_data <- X778_PALBO_dexseq_ANNOTATED_whole_transcriptome %>%
+  tidyr::pivot_longer(
+    cols = starts_with("countData.72h"),
+    names_to = "replicate",
+    values_to = "counts"
+  )
+
+# Add a condition column based on the replicate
+X778_PALBO_dexseq_ANNOTATED_long_data <- X778_PALBO_dexseq_ANNOTATED_long_data %>%
+  dplyr::mutate(
+    condition = dplyr::if_else(
+      replicate %in% c(
+        "countData.72h_778_untreated_R1",
+        "countData.72h_778_untreated_R2",
+        "countData.72h_778_untreated_R3"
+      ),
+      "Control", "palbociclib"
+    ),
+    # (optional) set factors for tidy plotting
+    condition = factor(condition, levels = c("Control", "palbociclib"))
+  )
+
+X778_PALBO_dexseq_ANNOTATED_norm_TX_aggregated_data_avg_counts <- X778_PALBO_dexseq_ANNOTATED_long_data %>%
+  dplyr::group_by(ensembl_transcript_id_version, condition, Normalized_MFE) %>%
+  dplyr::summarise(
+    avg_counts = mean(counts, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+
+
+
+
+# --- One-sided two-proportion z-test: palbociclib > Control (High_MFE) ---
+
+# 75th percentile threshold
+mfe_threshold <- quantile(
+  X778_PALBO_dexseq_ANNOTATED_norm_TX_aggregated_data_avg_counts$Normalized_MFE,
+  0.75, na.rm = TRUE
+)
+
+# Label high MFE
+df <- X778_PALBO_dexseq_ANNOTATED_norm_TX_aggregated_data_avg_counts %>%
+  dplyr::mutate(MFE_class = ifelse(Normalized_MFE >= mfe_threshold, "High_MFE", "Other"))
+
+# Aggregate counts per condition x class
+counts_table <- df %>%
+  dplyr::group_by(condition, MFE_class) %>%
+  dplyr::summarise(total_counts = sum(avg_counts, na.rm = TRUE), .groups = "drop")
+
+# Extract totals for z-test
+# p_palbo = High_MFE_palbo / (High_MFE_palbo + Other_palbo)
+# p_ctrl  = High_MFE_ctrl  / (High_MFE_ctrl  + Other_ctrl)
+contingency <- counts_table %>%
+  tidyr::pivot_wider(names_from = MFE_class, values_from = total_counts, values_fill = 0)
+
+get_row <- function(df, cond) df[df$condition == cond, c("High_MFE", "Other")] %>% as.numeric()
+
+palbo_vals <- get_row(contingency, "palbociclib")
+ctrl_vals  <- get_row(contingency, "Control")
+
+x2 <- palbo_vals[1]             # High_MFE counts (palbo)
+n2 <- palbo_vals[1] + palbo_vals[2]  # total counts (palbo)
+x1 <- ctrl_vals[1]              # High_MFE counts (control)
+n1 <- ctrl_vals[1] + ctrl_vals[2]    # total counts (control)
+
+p2 <- x2 / n2
+p1 <- x1 / n1
+
+# Pooled proportion and SE
+p_pool <- (x1 + x2) / (n1 + n2)
+SE <- sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2))
+
+# z for alternative: palbociclib > Control
+z_value <- (p2 - p1) / SE
+p_value_one_sided <- 1 - pnorm(z_value)
+
+cat("High_MFE (>=75th) one-sided two-proportion z-test (palbo > control):\n")
+cat("  z =", z_value, "  p =", p_value_one_sided, "\n")
+
+# Report High_MFE fractions per condition (unchanged)
+Counts_table_778_palbo_75th <- counts_table %>%
+  dplyr::group_by(condition) %>%
+  dplyr::mutate(fraction = total_counts / sum(total_counts)) %>%
+  dplyr::filter(MFE_class == "High_MFE")
+print(Counts_table_778_palbo_75th)
+
+
+
+
+
+
+
+
+
+
+# --- One-sided two-proportion z-test: Control > palbociclib (Low_MFE) ---
+
+# 25th percentile threshold
+mfe_threshold_25 <- quantile(
+  X778_PALBO_dexseq_ANNOTATED_norm_TX_aggregated_data_avg_counts$Normalized_MFE,
+  0.25, na.rm = TRUE
+)
+
+# Label Low_MFE
+df25 <- X778_PALBO_dexseq_ANNOTATED_norm_TX_aggregated_data_avg_counts %>%
+  dplyr::mutate(MFE_class = ifelse(Normalized_MFE <= mfe_threshold_25, "Low_MFE", "Other"))
+
+# Aggregate counts per condition x class
+counts_table_25 <- df25 %>%
+  dplyr::group_by(condition, MFE_class) %>%
+  dplyr::summarise(total_counts = sum(avg_counts, na.rm = TRUE), .groups = "drop")
+
+# Wide contingency: columns Low_MFE, Other
+contingency_25 <- counts_table_25 %>%
+  tidyr::pivot_wider(names_from = MFE_class, values_from = total_counts, values_fill = 0)
+
+# Extract x (successes) and n (totals) per condition
+x_ctrl_25 <- contingency_25$Low_MFE[contingency_25$condition == "Control"]
+n_ctrl_25 <- x_ctrl_25 + contingency_25$Other[contingency_25$condition == "Control"]
+
+x_palb_25 <- contingency_25$Low_MFE[contingency_25$condition == "palbociclib"]
+n_palb_25 <- x_palb_25 + contingency_25$Other[contingency_25$condition == "palbociclib"]
+
+p_ctrl_25 <- x_ctrl_25 / n_ctrl_25
+p_palb_25 <- x_palb_25 / n_palb_25
+
+# Pooled proportion & SE
+p_pool_25 <- (x_ctrl_25 + x_palb_25) / (n_ctrl_25 + n_palb_25)
+SE_25 <- sqrt(p_pool_25 * (1 - p_pool_25) * (1/n_ctrl_25 + 1/n_palb_25))
+
+# z for alternative: Control > palbociclib
+z_value_25 <- (p_ctrl_25 - p_palb_25) / SE_25
+p_value_one_sided_25 <- 1 - pnorm(z_value_25)
+
+cat("Low_MFE (<=25th) one-sided two-proportion z-test (control > palbo): z =",
+    z_value_25, " p =", p_value_one_sided_25, "\n")
+
+# Fractions per condition (unchanged)
+Counts_table_778_palbo_25th <- counts_table_25 %>%
+  dplyr::group_by(condition) %>%
+  dplyr::mutate(fraction = total_counts / sum(total_counts)) %>%
+  dplyr::filter(MFE_class == "Low_MFE")
+print(Counts_table_778_palbo_25th)
+
+
+
+
+
+
+
+
+
+
+# Create data frame with control and drug-treated fractions and p values
+# --- High MFE (>= 75th percentile) ---
+high_ctrl_frac <- Counts_table_778_palbo_75th %>%
+  dplyr::filter(condition == "Control") %>%
+  dplyr::pull(fraction)
+
+high_palbo_frac <- Counts_table_778_palbo_75th %>%
+  dplyr::filter(condition == "palbociclib") %>%
+  dplyr::pull(fraction)
+
 Data_high_MFE_fraction_total_counts <- data.frame(
   Samples = "X778_palbo_72h",
-  High_MFE_of_total_control = X778_PALBO_dexseq_ANNOTATED_control_high_MFE_TX_counts_fraction,
-  High_MFE_of_total_drug_treated = X778_PALBO_dexseq_ANNOTATED_palbociclib_high_MFE_TX_counts_fraction,
-  Fisher_result = X778_PALBO_z_test_counts_75_p_value
+  High_MFE_of_total_control = high_ctrl_frac,
+  High_MFE_of_total_drug_treated = high_palbo_frac,
+  z_value = z_value,
+  p_value_one_sided = p_value_one_sided
 )
 
 print(Data_high_MFE_fraction_total_counts)
@@ -1784,6 +1700,11 @@ Plot_high_fraction_tot_counts <- ggplot(df_long_high_MFE, aes(x = Samples, y = V
 # Display plot
 print(Plot_high_fraction_tot_counts)
 
+# Save to file
+ggsave("Plot_high_fraction_tot_counts.pdf",
+       plot = Plot_high_fraction_tot_counts,
+       width = 2, height = 4.5,
+       path = "path_to/Desktop")
 
 
 
@@ -1793,12 +1714,22 @@ print(Plot_high_fraction_tot_counts)
 
 
 
+
+# --- Low MFE (<= 25th percentile) ---
+low_ctrl_frac <- Counts_table_778_palbo_25th %>%
+  dplyr::filter(condition == "Control") %>%
+  dplyr::pull(fraction)
+
+low_palbo_frac <- Counts_table_778_palbo_25th %>%
+  dplyr::filter(condition == "palbociclib") %>%
+  dplyr::pull(fraction)
 
 Data_low_MFE_fraction_total_counts <- data.frame(
   Samples = "X778_palbo_72h",
-  low_MFE_of_total_control = X778_PALBO_dexseq_ANNOTATED_control_low_MFE_TX_counts_fraction,
-  low_MFE_of_total_drug_treated = X778_PALBO_dexseq_ANNOTATED_palbociclib_low_MFE_TX_counts_fraction,
-  Fisher_result = X778_PALBO_dexseq_ANNOTATED_fisher_result_counts_low$p.value
+  Low_MFE_of_total_control = low_ctrl_frac,
+  Low_MFE_of_total_drug_treated = low_palbo_frac,
+  z_value = z_value_25,
+  p_value_one_sided = p_value_one_sided_25
 )
 
 print(Data_low_MFE_fraction_total_counts)
@@ -1812,27 +1743,30 @@ Data_low_MFE_fraction_total_counts$Samples <- factor(Data_low_MFE_fraction_total
                                                      levels = "X778_palbo_72h")
 
 # Reshape data to long format for plotting
-df_long_low_MFE <- pivot_longer(Data_low_MFE_fraction_total_counts,
-                                cols = starts_with("low_MFE_of_total"),
-                                names_to = "Condition",
-                                values_to = "Value")
+df_long_low_MFE <- pivot_longer(
+  Data_low_MFE_fraction_total_counts,
+  cols = starts_with("Low_MFE_of_total"),
+  names_to = "Condition",
+  values_to = "Value"
+)
 
-# Define fill color and label mapping
-fill_colors <- c("low_MFE_of_total_control" = "#8cc5e3",
-                 "low_MFE_of_total_drug_treated" = "#2066a8")
+# Define fill color and label mapping (match exact strings)
+fill_colors <- c(
+  "Low_MFE_of_total_control" = "#8cc5e3",
+  "Low_MFE_of_total_drug_treated" = "#2066a8"
+)
 
-condition_labels <- c("low_MFE_of_total_control" = "Untreated",
-                      "low_MFE_of_total_drug_treated" = "Drug-treated")
+condition_labels <- c(
+  "Low_MFE_of_total_control" = "Untreated",
+  "Low_MFE_of_total_drug_treated" = "Drug-treated"
+)
 
-# Create bar plot
 Plot_low_fraction_tot_counts <- ggplot(df_long_low_MFE, aes(x = Samples, y = Value, fill = Condition)) +
   geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
-  geom_text(aes(label = round(Value, 3)), 
-            position = position_dodge(width = 0.8), 
+  geom_text(aes(label = round(Value, 3)),
+            position = position_dodge(width = 0.8),
             vjust = 0.4, hjust = -0.3, angle = 90, size = 4) +
-  labs(x = NULL,
-       y = "",
-       fill = NULL) +
+  labs(x = NULL, y = "", fill = NULL) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size = 12),
         axis.title.y = element_text(size = 14),
@@ -1840,324 +1774,20 @@ Plot_low_fraction_tot_counts <- ggplot(df_long_low_MFE, aes(x = Samples, y = Val
   ylim(0, 0.6) +
   scale_fill_manual(values = fill_colors, labels = condition_labels)
 
+
 # Display plot
 print(Plot_low_fraction_tot_counts)
 
+# Save to file
+ggsave("Plot_low_fraction_tot_counts.pdf",
+       plot = Plot_low_fraction_tot_counts,
+       width = 2, height = 4.5,
+       path = "path_to/Desktop")
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Fig.2H Science models proliferation ####
-
-library(gridExtra)
-library(grid)
-
-
-# Combine all the data into a single data frame
-combine_log2FoldChange <- function(data_frames) {
-  # Find the maximum length of all log2FoldChange vectors
-  max_length <- max(sapply(data_frames, function(df) length(df$log2FoldChange)))
-  
-  # Pad each log2FoldChange vector to the maximum length with NA
-  padded_log2FC <- lapply(data_frames, function(df) {
-    len <- length(df$log2FoldChange)
-    c(df$log2FoldChange, rep(NA, max_length - len))
-  })
-  
-  # Combine the padded vectors into a data frame and name the columns
-  combined_df <- as.data.frame(do.call(cbind, padded_log2FC))
-  colnames(combined_df) <- names(data_frames)
-  
-  return(combined_df)
-}
-
-# Generate the data frame
-data_frames_Proliferation_Science_mode_systems <- list(
-  X778_palbo_72h_Signt_1 = df_X778_PALBO_Proliferation_Science,
-  X778_palbo_EP_Signt_1 = df_X778_PALBO_Proliferation_Science_EP,
-  X778_palbo_72h_Signt_2 = df_X778_PALBO_Meta_PCNA,
-  X778_palbo_EP_Signt_2 = df_X778_PALBO_Meta_PCNA_EP,
-  X778_palbo_72h_Signt_3 = df_X778_PALBO_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
-  X778_palbo_EP_Signt_3 = df_X778_PALBO_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019_EP
-  )
-
-# Rename the list elements
-names(data_frames_Proliferation_Science_mode_systems) <- c(
-  "WDLPS_72h_Signt_1", 
-  "WDLPS_EP_Signt_1", 
-  "WDLPS_72h_Signt_2", 
-  "WDLPS_EP_Signt_2", 
-  "WDLPS_72h_Signt_3", 
-  "WDLPS_EP_Signt_3"
-)
-
-
-combined_df_Proliferation_Science_model_systems <- combine_log2FoldChange(data_frames_Proliferation_Science_mode_systems)
-
-
-
-# Calculate the mean for each sample
-means <- colMeans(combined_df_Proliferation_Science_model_systems, na.rm = TRUE)
-
-# Generate the box plot with the extended left margin
-Proliferation_Science_model_systems <- ggplot(stack(combined_df_Proliferation_Science_model_systems), aes(x = ind, y = values)) +
-  geom_boxplot(aes(fill = ifelse(ind %in% c("WDLPS_72h_Signt_1", "WDLPS_72h_Signt_2", "WDLPS_72h_Signt_3"), "lightgrey", "gray45"))) + 
-  stat_summary(fun = mean, geom = "point", shape = 20, size = 2, color = "black") +
-  theme_classic() +
-  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1, vjust = 1)) +
-  theme(axis.text.y = element_text(size = 10)) +
-  xlab("") + ylab("Log2_FC Cell Proliferation") +
-  ylim(-6, 4) +
-  geom_hline(yintercept = 0, linetype = 1, color = "black") +
-  #ggtitle("Proliferation_Science Wilcox p < 0.05 targeted agents") +
-  theme(plot.title = element_text(color = "black", size = 14, face = "bold")) +
-  scale_x_discrete(limits = c("WDLPS_72h_Signt_1", "WDLPS_EP_Signt_1", "WDLPS_72h_Signt_2","WDLPS_EP_Signt_2", "WDLPS_72h_Signt_3", "WDLPS_EP_Signt_3")) +
-  
-  scale_fill_identity() +  # Use identity scale for fill
-  theme(plot.margin = unit(c(0, 0, 0, 1), "cm"))  # Adjust the margin (top, right, bottom, left)
-
-# Print the plot
-print(Proliferation_Science_model_systems)
-
-
-
-
-
-
-
-# Wilcoxon test proliferation gene sets Science models - individual samples
-# IMPORTANT: some of the samples may not have a significant repression of proliferation gene sets, therefore, they may be absent in the final plots
-Wilcox_test_Proliferation_Science_models <- data.frame(
-  Samples = c("WDLPS_palbo_72h_Signt_1", 
-              "WDLPS_palbo_EP_Signt_1", 
-              "WDLPS_palbo_72h_Signt_2", 
-              "WDLPS_palbo_EP_Signt_2", 
-              "WDLPS_palbo_72h_Signt_3", 
-              "WDLPS_palbo_EP_Signt_3"),
-  wilcox_test_Proliferation_Science = c(wilcox_test_Proliferation_Science_X778_PALBO_72h$p.value, 
-                                        wilcox_test_Proliferation_Science_X778_PALBO_EP$p.value), 
-  wilcox_test_Meta_PCNA = c(wilcox_test_Meta_PCNA_X778_PALBO_72h$p.value, 
-                            wilcox_test_Meta_PCNA_X778_PALBO_EP$p.value),
-  wilcox_test_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019 = c(wilcox_test_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019_X778_PALBO_72h$p.value, 
-                                                                       wilcox_test_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019_X778_PALBO_EP$p.value))
-print(Wilcox_test_Proliferation_Science_models)
-
-
-
-
-
-
-# Check whether the difference between the proliferation signatures in aggreate is significant between the 72h and the EP time points
-wilcox_test_results <- list(
-  wilcox_test_Proliferation_Science_Signt_1 = wilcox.test(combined_df_Proliferation_Science_model_systems$WDLPS_72h_Signt_1, combined_df_Proliferation_Science_model_systems$WDLPS_EP_Signt_1),
-  wilcox_test_Proliferation_Science_Signt_2 = wilcox.test(combined_df_Proliferation_Science_model_systems$WDLPS_72h_Signt_2, combined_df_Proliferation_Science_model_systems$WDLPS_EP_Signt_2),
-  wilcox_test_Proliferation_Science_Signt_3 = wilcox.test(combined_df_Proliferation_Science_model_systems$WDLPS_72h_Signt_3, combined_df_Proliferation_Science_model_systems$WDLPS_EP_Signt_3)
-)
-
-# Extract p-values from each Wilcoxon test result
-wilcox_p_values <- sapply(wilcox_test_results, function(test) test$p.value)
-
-# Combine the p-values into a data frame for easier viewing
-p_value_df <- data.frame(
-  Signature = c("Signt_1", "Signt_2", "Signt_3"),
-  P_Value = wilcox_p_values
-)
-
-# Print the p-value results
-print(p_value_df)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Fig.2I Science models 72h vs early phase violin plots ####
-
-# IMPORTANT:
-# Only the palbociclib condition has been profiled during the early phase response with the Nanopore sequencing technology
-# The SKBR3 and the SKMEL28 do not show a significant repression of the proliferative signatures, for this reason they have been not shown
-
-# Plot_X778_PALBO_PALBO_72h <- ggplot(X778_PALBO_dexseq_ANNOTATED, aes(x = factor(log2fold_treated_untreated > 0), y = Normalized_MFE)) +
-#   geom_violin(fill = "lightgrey", size = 0.6) +
-#   geom_boxplot(width = 0.1, color = "black", outlier.size = 0, size = 0.3) +
-#   #eom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-#   theme_classic() +
-#   theme(legend.position = "none", axis.title = element_text(size = 20), plot.title = element_text(size = 10),
-#         axis.text.x = element_text(size = 16, color = "black")) +
-#   geom_vline(xintercept = 0, size = 0.3) +
-#   ylim(-0.6, 0) +
-#   labs(y = "Normalized_MFE", x = NULL, title = "778_PALBO_PALBO_72h_Log2_FC_adj.P<0.05") +
-#   scale_x_discrete(labels = c("Log2_FC < 0", "Log2_FC > 0"))
-# print(Plot_X778_PALBO_PALBO_72h)
-# # Save the combined plot
-# ggsave("Plot_X778_PALBO_PALBO_72h.pdf", plot = Plot_X778_PALBO_PALBO_72h, width = 8, height = 8, path = "/Users/z3514253/Desktop")
-# 
-# 
-# ks_test_MFE_X778_PALBO_LAP_72h_all_UP_vs_DOWN
-
-
-
-
-
-
-
-Plot_X778_PALBO_EP <- ggplot(X778_counts_EP, aes(x = factor(log2fold_treated_untreated > 0), y = Normalized_MFE)) +
-  geom_violin(fill = "lightgrey", size = 0.6) +
-  geom_boxplot(width = 0.1, color = "black", outlier.size = 0, size = 0.3) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  theme(legend.position = "none", axis.title = element_text(size = 20), plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 16, color = "black")) +
-  geom_vline(xintercept = 0, size = 0.3) +
-  ylim(-0.6, 0) +
-  labs(y = "", x = NULL, title = "") +
-  scale_x_discrete(labels = c("Log2_FC < 0", "Log2_FC > 0"))
-print(Plot_X778_PALBO_EP)
-
-# Save the combined plot
-ggsave("Plot_X778_PALBO_EP.pdf", plot = Plot_X778_PALBO_EP, width = 6, height = 8, path = "/Users/z3514253/Desktop")
-
-
-ttest_MFE_X778_PALBO_PALBO_72h_all_UP_EP_vs_DOWN_EP
-ks_test_MFE_X778_PALBO_PALBO_72h_all_UP_EP_vs_DOWN_EP
-
-
-
-
-
-
-
-
-# Combine all plots
-# plots <- list(
-#   Plot_X778_PALBO_PALBO_72h,
-#   Plot_X778_PALBO_EP
-# )
-# 
-# # Add margin to each plot
-# plots_with_margin <- lapply(plots, function(plot) {
-#   plot + 
-#     # geom_violin(fill = "lightgrey", color = "black", size = 0.1) +
-#     #geom_jitter(position = position_jitter(width = 0.1), size = 0.05, color = "black") +
-#     # geom_boxplot(width = 0.1, color = "black", outlier.size = 0) +
-#     #scale_color_manual(values = c("FALSE" = "black", "TRUE" = "black")) +  # Update colors
-#     theme(
-#       plot.margin = unit(c(5, 0.2, 0.2, 0.2), "cm"),
-#       axis.title = element_blank(),  # Remove y-axis text)  # Adjust the margin values as needed
-#       axis.text.x = element_text(size = 14), # Set x-axis text size to 12
-#       plot.title = element_blank() # Remove titles
-#     )
-# })
-# 
-# # Arrange plots in 5 columns and 2 rows with spacing
-# combined_plot <- grid.arrange(
-#   grobs = plots_with_margin,
-#   ncol = 2,
-#   nrow = 1
-# )
-# 
-# # Save the combined plot
-# ggsave("combined_plot.pdf", plot = combined_plot, width = 8, height = 7, path = "/Users/z3514253/Desktop")
-
-
-
-
-
-
-
-# Generate the data frame
-results <- data.frame(
-  Dataset = c(
-    "778_PALBO_72h",
-    "778_PALBO_EP"
-  ),
-  Mean_MFE_UP = c(
-    Mean_X778_PALBO_dexseq_ANNOTATED_UP,
-    mean(X778_PALBO_EP_dexseq_ANNOTATED_UP_EP$Normalized_MFE)
-  ),
-  Mean_MFE_DOWN = c(
-    Mean_X778_PALBO_dexseq_ANNOTATED_DOWN,
-    mean(X778_PALBO_EP_dexseq_ANNOTATED_DOWN_EP$Normalized_MFE)
-  ),
-  KS_Test_p_value = c(
-    ks_test_MFE_X778_PALBO_LAP_72h_all_UP_vs_DOWN$p.value,
-    ks_test_MFE_X778_PALBO_UP_vs_DOWN_EP$p.value
-  )
-)
-
-# Display the data frame
-print(results)
-
-
-
-
-
-# Wilcoxon rank-sum test for X778 PALBO 72h (one-sided: up > down)
-wilcox_test_X778_PALBO_72h <- wilcox.test(
-  X778_PALBO_dexseq_ANNOTATED_UP$Normalized_MFE,
-  X778_PALBO_dexseq_ANNOTATED_DOWN$Normalized_MFE,
-  paired = FALSE,
-  alternative = "greater"
-)
-
-# Wilcoxon rank-sum test for X778 PALBO EP (one-sided: up > down)
-wilcox_test_X778_PALBO_EP <- wilcox.test(
-  X778_PALBO_EP_dexseq_ANNOTATED_UP_EP$Normalized_MFE,
-  X778_PALBO_EP_dexseq_ANNOTATED_DOWN_EP$Normalized_MFE,
-  paired = FALSE,
-  alternative = "greater"
-)
-
-
-
-wilcoxon_results <- data.frame(
-  Dataset = c("778_PALBO_72h", "778_PALBO_EP"),
-  Wilcoxon_p_value = c(
-    wilcox_test_X778_PALBO_72h$p.value,
-    wilcox_test_X778_PALBO_EP$p.value
-  )
-)
-
-# Display results
-print(wilcoxon_results)
 
 
 

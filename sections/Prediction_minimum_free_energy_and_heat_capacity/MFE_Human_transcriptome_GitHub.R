@@ -1,222 +1,80 @@
-# Script: Generate normalized MFE inputs for the human transcriptome (GENCODE v47)
-# Author: Arcadi Cipponi
+# RNA folding stability & heat-capacity (Cp) integration (GENCODE)
+# Input files: predicted MFE + Cp tables, integrate Cp (35–39 °C),
+#              diagnose residual length bias, apply Trotta normalization
+#              (40–600 nt) and an anchored ≤600-nt correction, export final tables.
+
+# 1) Load input tables:
+#    - Heat_capacity_complete_table: per-transcript Normalized_MFE, Transcript_length, and Cp columns (Cp_35C..Cp_39C).
+#    - Dataset_S1_Edoardo_Trotta.csv: reference MFE_ref(L) curve (Trotta 2014).
 #
-# What this script does (current functionality):
-# 1) Downloads the GENCODE v47 GTF (basic annotation) and imports it as a GFF table,
-#    filtering to `type == "transcript"`. It removes version suffixes from gene_id and
-#    transcript_id and creates a combined gene–transcript key (geneIDtxID).
-# 2) Downloads the GENCODE v47 transcriptome FASTA (.fa.gz), decompresses it, reads all
-#    transcript sequences, and standardizes FASTA headers to keep only the first field
-#    (the Ensembl transcript stable ID with version).
-# 3) Loads an Ensembl BioMart export that includes transcript lengths. It then filters
-#    that table to the set of transcripts present in the GENCODE FASTA, so lengths and
-#    sequences refer to the same transcript universe.
+# 2) Integrate Cp over 35–39 °C (trapezoidal rule):
+#    - Adds `integrated_Cp_trapz` per transcript using pracma::trapz on
+#      Cp_35C..Cp_39C; robust to missing temperatures.
 #
-# Notes / assumptions:
-# - Genome build: GRCh38; annotations: GENCODE v47 (basic).
-# - Transcript IDs in the FASTA are expected to match the BioMart "Transcript stable ID
-#   version" field (e.g., ENST00000335137.4).
-# - The script prepares inputs for downstream MFE/heat-capacity calculations with
-#   ViennaRNA (RNAfold / RNAheat). RNAfold’s length limit ~40,000 nt is noted below.
+# 3) Exploratory diagnostics of Normalized_MFE vs length:
+#    - Binned density + running-median trend (0–all nt; zoom 0–700 nt).
+#    - Confirms residual length-dependence after per-nt normalization.
 #
-# What is left to do (planned):
-# - Run ViennaRNA on the FASTA to compute raw MFE per transcript (see provided Bash
-#   snippets/files: RNA_MFE_prediction.rtf; RNA_heat_capacity_prediction.rtf).
-# - Join RNAfold outputs to the BioMart length table, then compute a normalized MFE
-#   metric (e.g., MFE per nucleotide: ΔG_total / length) and, if needed, z-scores
-#   across transcripts or per-biotype centering.
-# - Exclude or handle transcripts >40,000 nt before RNAfold (split or skip).
-# - Save tidy outputs (e.g., CSV/Parquet) with columns: transcript_id_version,
-#   gene_id, gene_name, length_nt, MFE_kcal_mol, norm_MFE_kcal_mol_per_nt, etc.
+# 4) Trotta normalization (valid for 40–600 nt):
+#    - Interpolates MFE_ref(L); computes MFEden = 100 * (MFE - MFEref) / (L - 8).
 #
-# Output (intended):
-# - A tidy table aligning each transcript with its sequence, length, and (after the
-#   ViennaRNA step) MFE and normalized MFE, ready for downstream analyses and plots.
+# OUTPUTS
+# - "Gencode_TX_norm_MFE_HC_table.csv": final table containing:
+#     * Normalized_MFE (anchored correction applied for L ≤ 600 only)
+#     * integrated_Cp_trapz (35–39 °C)
+#     * Trotta normalization for transcripts 40–600 nt
 
 
-library(httr)
-library(glue)
-library(rtracklayer)  
-library(dplyr)        
-library(stringr)     
-library(glue)     
+library(seqinr)
+library(dplyr)
+library(devtools)
+library(tidyverse)
+library(Biostrings)
+library(FastaUtils)
+library(biomaRt)
+library(cbioportalR)
+library(tibble)
+library(R.utils)
+library(rtracklayer)
 
-# Set download directory
-download_dir <- "Downloads/GTF_annotations"
-dir.create(download_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Define correct HTTP-based URL and file name
-file_name <- "gencode.v47.basic.annotation.gtf.gz"
-gencode_url <- glue("http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_47/{file_name}")
-gencode_path <- file.path(download_dir, file_name)
 
-# Always download the file (overwrite if already exists)
-message("Downloading GENCODE GTF file...")
-response <- GET(gencode_url, write_disk(gencode_path, overwrite = TRUE))
 
-# Check for successful download
-if (response$status_code == 200) {
-  message("Download complete.")
-} else {
-  stop("Download failed with status code: ", response$status_code)
+# Integrate Cp over 35–39 °C (trapezoid)
+library(pracma)
+
+temps <- 35:39
+cp_cols <- paste0("Cp_", temps, "C")
+
+# Safety: ensure Cp columns exist (in case a file had no values at some T)
+missing_cols <- setdiff(cp_cols, names(Heat_capacity_complete_table))
+if (length(missing_cols)) {
+  # add missing columns as NA so the mutate below doesn't error
+  Heat_capacity_complete_table[missing_cols] <- NA_real_
 }
 
-
-
-
-# Define path to downloaded GTF file
-download_dir <- "Downloads/GTF_annotations"
-file_name <- "gencode.v47.basic.annotation.gtf.gz"
-gencode_path <- file.path(download_dir, file_name)
-
-# Import GTF file and filter for transcript entries
-gencode <- readGFF(gencode_path) %>%
-  filter(type == "transcript")
-
-# Remove version numbers from gene_id and transcript_id
-gencode <- gencode %>%
+Heat_capacity_complete_table_IHC <- Heat_capacity_complete_table %>%
+  rowwise() %>%
   mutate(
-    gene_id = str_remove(gene_id, "\\..*$"),
-    transcript_id = str_remove(transcript_id, "\\..*$")
-  )
+    integrated_Cp_trapz = {
+      xi <- temps
+      yi <- as.numeric(c_across(all_of(cp_cols)))
+      ok <- is.finite(yi)
+      if (sum(ok) >= 2) pracma::trapz(xi[ok], yi[ok]) else NA_real_
+    }
+  ) %>%
+  ungroup()
 
-# Create combined gene-transcript ID column
-gencode <- gencode %>%
-  mutate(geneIDtxID = glue("{gene_id}-{transcript_id}"))
-
-# Sort by combined ID
-gencode <- arrange(gencode, geneIDtxID)
-
-
-
-
-
-library(R.utils)       
-library(seqinr)        
-
-# Create download directory
-download_dir <- "Downloads/GTF_annotations"
-dir.create(download_dir, recursive = TRUE, showWarnings = FALSE)
-
-# Define file name and URL
-file_name <- "gencode.v47.transcripts.fa.gz"
-gencode_url <- "http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_47/gencode.v47.transcripts.fa.gz"
-gz_path <- file.path(download_dir, file_name)
-
-# Download the transcript FASTA file (overwrite any existing file)
-message("Downloading GENCODE transcriptome FASTA...")
-GET(gencode_url, write_disk(gz_path, overwrite = TRUE))
-
-# Decompress the file (create a copy and keep the original .gz)
-decompressed_path <- gunzip(gz_path, remove = FALSE, overwrite = TRUE)
-
-# Read the decompressed FASTA
-message("Reading FASTA...")
-Gencode_transcripts_FASTA <- read.fasta(file = decompressed_path, seqtype = "DNA")
-
-# Clean sequence names: keep only the part before the first '|'
-cleaned_names <- sapply(strsplit(names(Gencode_transcripts_FASTA), "\\|"), `[`, 1)
-names(Gencode_transcripts_FASTA) <- cleaned_names
-
-# Report number of transcripts
-message("Number of transcripts loaded: ", length(Gencode_transcripts_FASTA))
+# Optional: quick QC
+cat("Rows with integrated_Cp_trapz = NA:",
+    sum(is.na(Heat_capacity_complete_table_IHC$integrated_Cp_trapz)), "\n")
 
 
+Gencode_TX_norm_MFE_HC_table <- Heat_capacity_complete_table
 
 
-
-
-
-
-
-
-
-# This file has been downloaded manually from Ensembl website
-# This file contains the entire list of transcripts present in the Genecode data and unlike to the Gencode transcripts annotation, it contains the transcripts length
-
-# I have followed these steps:
-# Via Web: https://www.ensembl.org --> Human --> BioMart at top --> Ensembl Genes --> Human Genes --> Select "Attributes" in left column --> 
-# Expand "Gene" (+ sign) in right column --> Select (Check mark) Gene Stable ID/Transcript Stable ID/Gene name/Transctipt length --> Click on count button in top left corner --> 86402 as of today. --> 
-# Click on "Results" --> Export All results to file --> Select CSV format (the file will have th extension .txt) --> Click "Go"
-Human_transcriptome_GRCh38_attributes <- read.csv("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/R_scripts/Prediction_transcript_MFE/Ensembl_Human_transcriptome_GRCh38/Human_transcriptome_mart_export.txt",
-                                                  stringsAsFactors = FALSE) %>%
-  dplyr::rename(ensembl_transcript_id_version = Transcript.stable.ID.version) %>%
-  dplyr::rename(Transcript_length = Transcript.length..including.UTRs.and.CDS.)
-# The file contains 412,243 transcripts
-
-# Check whether all Gencode transcripts are present in the ensembl annotation file
-# # Filter the file for the transcripts present in the FASTA file
-# # Extract the names from the FASTA headers
-fasta_transcript_ids <- names(Gencode_transcripts_FASTA)
-
-# # Filter the data frame based on the transcript IDs from the Gencode FASTA file
-Human_transcriptome_GRCh38_attributes_Genecode <- Human_transcriptome_GRCh38_attributes[
-  Human_transcriptome_GRCh38_attributes$ensembl_transcript_id_version %in% fasta_transcript_ids, ]
-
-
-
-
-
-
-
-# CALCULATE MFE FOR THE FULL GENCODE TRANSCRIPTOME
-#
-# Overview:
-# We compute minimum free energy (MFE) for all GENCODE v47 transcripts using ViennaRNA.
-# Results will later be merged with transcript lengths to derive a normalized metric
-# (e.g., ΔG per nucleotide).
-#
-# Important constraint:
-# RNAfold reliably handles transcripts up to ~40,000 nt. Transcripts exceeding this
-# length should be excluded or split prior to computation.
-#
-# How to run the external steps:
-# - Use the provided ViennaRNA command wrappers to generate:
-#   1) Per-transcript MFE (kcal/mol)
-#   2) Heat-capacity profiles (Cp) for downstream thermodynamic analyses
-#
-# Refer to these scripts:
-# - RNA_MFE_prediction.rtf
-# - RNA_heat_capacity_prediction.rtf
-#
-# Note:
-# If these are documentation/notes saved as .rtf, convert the commands into executable
-# shell scripts (e.g., RNA_MFE_prediction.sh, RNA_heat_capacity_prediction.sh) and
-# ensure ViennaRNA is on PATH. After running, import the outputs here and compute
-# normalized MFE (ΔG_total / length_nt).
-
-
-
-
-
-
-
-
-
-
-
-# The predicted MFE and heat capacity values for the human transcriptome 
-# have already been computed externally with ViennaRNA and stored in:
-#
-#   Gencode_TX_norm_MFE_HC_table.csv
-#
-# Contents:
-# - Each row corresponds to one GENCODE transcript.
-# - Columns include transcript ID, gene ID, transcript length, raw MFE,
-#   normalized MFE (ΔG per nucleotide), and heat capacity (Cp).
-# - Normalization at this stage is ONLY by transcript length.
-#
-# Next steps:
-# - This table can be used directly for downstream thermodynamic analyses
-#   or further normalized (e.g., z-scores, per-biotype scaling).
-
-Gencode_TX_norm_MFE_HC_table <- read.csv(
-  "path_to/Gencode_TX_norm_MFE_HC_table.csv",
-  stringsAsFactors = FALSE
-)
-
-
-
+write.csv(Gencode_TX_norm_MFE_HC_table, "path_to/Gencode_TX_norm_MFE_HC_table.csv", row.names = FALSE)
+#  This is the table with MFE values normalized by transcript length and with the heat capacity values across the T range 35 - 39 ˚C range
 
 
 
@@ -231,7 +89,6 @@ Gencode_TX_norm_MFE_HC_table <- read.csv(
 
 
 # Analysis normalized MFE values ####
-# Analysis RNA secondary structures normalized MFE values
 
 Table_ANNOTATED_gene_names <- Gencode_TX_norm_MFE_HC_table
 library(ggplot2)
@@ -252,8 +109,7 @@ ggplot(Table_ANNOTATED_gene_names, aes(x = Transcript_length, y = Normalized_MFE
   )
 
 # The scatter plot of normalized MFE versus transcript length reveals that short transcripts display a wide spread of per-nucleotide MFE values, while longer transcripts converge toward a narrower range. 
-# This indicates that although length normalization reduces the direct scaling of folding free energy with transcript size, residual length-dependent bias remains. Such bias likely arises from nonlinear scaling of thermodynamic stability and compositional differences across transcript length ranges.
-# Further correction, for example via GC- and length-adjusted residuals or shuffle-based z-scores, would be needed for fully length-independent comparisons.
+# This indicates that although length normalization reduces the direct scaling of folding free energy with transcript size, residual length-dependent bias remains. 
 
 
 # Fit and plot the LOESS line so the residual length bias is visually obvious
@@ -266,21 +122,21 @@ df <- Table_ANNOTATED_gene_names %>%
 
 # Compute a smooth trend via running medians on log-length bins
 trend <- df %>%
-  mutate(bin = cut(log1p(L), breaks = 80)) %>%              # ~80 bins; adjust if needed
+  mutate(bin = cut(log1p(L), breaks = 80)) %>%              
   group_by(bin) %>%
   summarise(
-    x = exp(mean(log1p(L), na.rm = TRUE)) - 1,               # bin center back on original scale
+    x = exp(mean(log1p(L), na.rm = TRUE)) - 1,               
     y = median(Normalized_MFE, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   filter(is.finite(x), is.finite(y))
 
 ggplot(df, aes(x = L, y = Normalized_MFE)) +
-  stat_bin2d(bins = 120) +                                   # density instead of points
-  geom_line(data = trend, aes(x = x, y = y),                 # smooth running-median trend
+  stat_bin2d(bins = 120) +                                  
+  geom_line(data = trend, aes(x = x, y = y),                
             linewidth = 1.2, color = "white") +
-  scale_fill_continuous(trans = "log10") +                   # highlight dense areas
-  scale_x_log10() +                                          # spreads short/long transcripts
+  scale_fill_continuous(trans = "log10") +                   
+  scale_x_log10() +                                          
   theme_classic() +
   labs(
     x = "Transcript length (nt, log scale)",
@@ -290,40 +146,18 @@ ggplot(df, aes(x = L, y = Normalized_MFE)) +
   )
 
 
-# Short RNAs (<200 nt): The median normalized MFE is highly variable and shifts abruptly. This volatility likely reflects both the small number of base pairs possible and compositional differences among very short RNAs (e.g., small ncRNAs, partial transcripts).
-# Intermediate lengths (~200 nt–1 kb): The median rapidly stabilizes toward ~–0.28 kcal/mol/nt.
-# Long RNAs (>1 kb): The trend flattens further, but there is still a slight upward drift (less negative per-nt MFE) as length increases, suggesting residual length-dependent bias even after per-nt normalization.
-# The flattening in the middle range indicates that normalization removes much of the first-order scaling, but the small slope for long transcripts suggests systematic effects remain—possibly due to:
-# Composition shifts with transcript size (e.g., GC enrichment or depletion in long transcripts).
-# Structural modularity in large RNAs that alters per-nt folding energetics.
-# ViennaRNA’s algorithmic limitations for very large molecules (ensemble approximations, energy model scaling).
 
-
-# This plot confirms that simple length normalization reduces but does not fully eliminate length-dependent structure in normalized MFE values. 
+# The plot confirms that simple length normalization reduces but does not fully eliminate length-dependent structure in normalized MFE values. 
 # Short RNAs display inherently greater variance in folding stability per nt, while long RNAs converge toward a narrower range with a mild upward bias. 
 # This issue has been addressed in the manuscript of E. Trotta:
 # Trotta, E., On the normalization of the minimum free energy of RNAs by sequence length, PLOS ONE 2014
-
 
 # Here below, I normalize the transcripts that are , 600 nt using the table and the formula provided in the manuscript of E. Trotta
 # This code generates the normalized MFE values for the entire Human transcriptome using the Trotta approach: 
 # Trotta, E., On the normalization of the minimum free energy of RNAs by sequence length, PLOS ONE 2014
 
-# Background:
-# The raw folding energy of a transcript of length L (nt) is the minimum free energy (MFE), measured in kcal/mol.
-#
-# A common normalization is the "average MFE per 100 nt" (AMFE):
-#
-#     AMFE = (100 * MFE) / L
-#
-# However, this naive normalization introduces a systematic bias
-# for short transcripts (< ~600 nt), which appear artificially
-# more stable simply because of scaling with length.
-#
-# Trotta (PLOS ONE, 2014) proposed a correction to remove this
-# length-dependent bias by referencing an empirical dataset of
-# expected folding energies for different transcript lengths.
-#
+
+
 # Formula:
 # For transcripts with 40 <= L <= 600 nt:
 #
@@ -351,23 +185,6 @@ ggplot(df, aes(x = L, y = Normalized_MFE)) +
 library(dplyr)
 library(ggplot2)
 library(scales)
-suppressPackageStartupMessages(require(mgcv))      # for GAM in ggpubr/geom_smooth
-use_hex <- requireNamespace("hexbin", quietly = TRUE)
-
-
-
-
-
-## Load the Gencode transcript MFE table
-
-# No need to escape spaces when the path is inside quotes
-# Gencode_TX_norm_MFE_HC_table <- read.csv(
-#   "/Volumes/AC_HD_8TB/Exp. 277 Analysis of Gibbs free energy in response to drug selection/R_scripts/Prediction_transcript_MFE/Gencode_TX_norm_MFE_HC_table.csv",
-#   stringsAsFactors = FALSE
-# )
-
-
-
 
 
 ## Helpers
@@ -437,38 +254,6 @@ maxL <- max(df_full$L, na.rm = TRUE)
 
 
 
-## Full-range plot (binned density + running-median trend)
-
-trend_full <- median_trend(
-  df_full %>% transmute(L = L, Y = Normalized_MFE),
-  x = "L", y = "Y",
-  from = 0, to = maxL,
-  target_bin_width = 10,  # ~10-nt bins
-  max_bins = 2000
-)
-
-p_full <- ggplot(df_full, aes(x = L, y = Normalized_MFE)) +
-  { if (use_hex) ggplot2::geom_hex(bins = 150) else ggplot2::stat_bin2d(bins = 150) } +
-  geom_line(data = trend_full, aes(x = x, y = y),
-            linewidth = 0.6, color = "white") +
-  scale_fill_continuous(trans = "log10", labels = label_number(accuracy = 1), name = "Count") +
-  coord_cartesian(xlim = c(0, maxL), ylim = c(-1.3, 0)) +
-  theme_classic() +
-  labs(
-    x = "Transcript length (nt)",
-    y = expression("Normalized MFE (kcal/mol/100 nt)"),
-    title = "Transcript length vs Normalized MFE (full transcriptome)"
-  )
-print(p_full)
-
-
-
-
-
-
-
-
-
 
 
 ## Short-range zoom (0–700 nt)
@@ -496,13 +281,6 @@ p_short <- ggplot(df_short, aes(x = L, y = Normalized_MFE)) +
     title = "Transcript length vs Normalized MFE (0–700 nt)"
   )
 print(p_short)
-
-
-
-
-
-
-
 
 
 
@@ -574,7 +352,7 @@ print(p_den)
 
 
 
-# Quick correlation within valid range
+# Correlation within valid range
 cor_test_mfeden <- with(
   subset(Complete_table_MFEden, !is.na(MFEden)),
   cor.test(Transcript_length, MFEden, method = "pearson")
@@ -703,6 +481,9 @@ bg_after_short <- if (use_hex) {
   list(geom_point(data = df_sub, aes(L, NM_adj), shape = 16, size = 0.4, alpha = 0.15))
 }
 
+
+
+
 # BEFORE (zoom < 600 nt): use the short-range trend you already computed
 p_before_zoom <- ggplot(dplyr::filter(df_all, L <= 600), aes(L, NM0)) +
   bg_before_short +
@@ -715,6 +496,9 @@ p_before_zoom <- ggplot(dplyr::filter(df_all, L <= 600), aes(L, NM0)) +
        title = "Before (zoom < 600 nt): original normalized values + trend") +
   theme_classic()
 print(p_before_zoom)
+
+
+
 
 # AFTER (zoom < 600 nt): flat anchored trend between [Lmin, 600]
 p_after_zoom <- ggplot(dplyr::filter(df_all, L <= 600), aes(L, NM_adj)) +
@@ -758,10 +542,6 @@ adj_map_dedup <- adj_map %>%
   arrange(ensembl_transcript_id_version, Transcript_length) %>%
   distinct(ensembl_transcript_id_version, Transcript_length, .keep_all = TRUE)
 
-# (Optional, stronger) Or aggregate if duplicates exist with identical NM_adj:
-# adj_map_dedup <- adj_map %>%
-#   group_by(ensembl_transcript_id_version, Transcript_length) %>%
-#   summarise(Normalized_MFE_new = first(Normalized_MFE_new), .groups = "drop")
 
 
 
@@ -825,60 +605,9 @@ ggplot(compare_df, aes(x = Normalized_MFE_orig, y = Normalized_MFE_new,
 # The blues dots refer to the transcripts with length ≤ 600 nts, which have been adjusted, while the red dots refer to the transcripts with length > 600 nts, which remain unchanged.
 
 
-# What fraction of the transcriptome are the transcripts < 600 nts?
-library(dplyr)
-
-# Assuming your working table is Gencode_TX_norm_MFE_HC_table_final
-transcript_stats <- Gencode_TX_norm_MFE_HC_table_final %>%
-  mutate(Group = if_else(Transcript_length <= 600, "<=600 nt", ">600 nt")) %>%
-  count(Group) %>%
-  mutate(Percent = 100 * n / sum(n))
-
-print(transcript_stats)
-
-
-# The transcripts with length ≤ 600 nts are 29% of the total transcriptome, while the transcripts with length > 600 nts are 71% of the total transcriptome.
-
 
 write.csv(Gencode_TX_norm_MFE_HC_table_final, "path_to/Gencode_TX_norm_MFE_HC_table.csv", row.names = FALSE)
-
-
 # This is the final table normalized only by transcript length and by Trotta approach (for transcripts < 600 nts)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

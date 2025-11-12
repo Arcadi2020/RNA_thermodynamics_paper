@@ -1,31 +1,23 @@
 # Script: Figure 1 – RNA secondary-structure stability across the human transcriptome
 #
 # Purpose:
-#   Reproduce all plots and statistics reported in Fig. 1 (A–E) and Supplementary
+#   Reproduce all plots and statistics reported in Fig. 1 and Supplementary
 #   Figs. 1–2. The analysis quantifies transcript RNA folding stability using
-#   length-normalized minimum free energy (Normalized_MFE = MFE / Transcript_length;
-#   units: kcal·mol⁻¹·nt⁻¹), compares stability across RNA biotypes and pathways,
+#   length-normalized minimum free energy (units: kcal·mol⁻¹·nt⁻¹), compares stability across RNA biotypes and pathways,
 #   identifies tail transcripts for GO GSEA, and relates stability to evolutionary age.
 #
-# What the script does (by section):
-#   • Global transcriptome: loads the annotated table (MFE, heat capacity, lengths,
-#     biotypes, IDs) and visualizes the Normalized_MFE distribution (histograms) for
-#     all transcripts and for protein-coding mRNAs; scatter of Normalized_MFE across
-#     protein-coding transcript IDs.
 #   • Fig. 1A – Biotypes: extracts tRNAs from the GENCODE tRNA GTF via genomic
-#     coordinates (GRCh38 FASTA), computes their MFE with RNAfold (LncFinder::run_RNAfold),
-#     and compares Normalized_MFE among protein-coding RNAs, tRNAs, and rRNAs using
-#     violin/density plots plus KS and Wilcoxon tests.
+#     coordinates (GRCh38 FASTA), computes their MFE and compares Normalized_MFE among protein-coding RNAs, tRNAs, and rRNAs using
+#     violin/density plots plus Wilcoxon tests.
 #   • Fig. 1B – Representative structures: selects protein-coding transcripts of
 #     similar length at the extremes and midpoint of the Normalized_MFE distribution
-#     (e.g., ~2,530 nt), fetches cDNA sequences via biomaRt, and (externally) visualizes
-#     their secondary structures with the RNAfold web server.
+#     fetches cDNA sequences via biomaRt, and (externally) visualizes their secondary structures with the RNAfold web server.
 #   • Suppl. Fig. 1a–b – Tail enrichment: defines 5th (most stable) and 95th (least
 #     stable) percentiles of protein-coding Normalized_MFE, exports gene lists, and
 #     plots top GO Biological Process terms for each tail from GO GSEA outputs.
 #   • Fig. 1C – Curated pathways: loads custom pathway gene sets (source("All_gene_sets_AC.R")),
 #     filters the transcript table by pathway, computes per-pathway Normalized_MFE mean ± SD,
-#     and plots point/error-bar summaries and box plots with a global mean reference line.
+#     and plots point/error-bar summaries.
 #   • Suppl. Fig. 2 – MSigDB validation: imports KEGG/Reactome/GO/Hallmark JSON gene sets
 #     (MSigDB), extracts symbols (rrapply), repeats the pathway-level Normalized_MFE mean ± SD
 #     summaries and box plots, and compares against the global mean to confirm curated results.
@@ -37,146 +29,19 @@
 #     linear trend.
 #
 # Required inputs (update paths):
-#   - Transcript metrics CSV:     path_to/Gencode_TX_norm_MFE_HC_table.csv
-#   - Curated pathways (R):       path_to/All_gene_sets_AC.R
-#   - GENCODE tRNAs (GTF):        path_to/gencode.v47.tRNAs.gtf.gz (or v48)
-#   - GRCh38 genome FASTA:        path_to/GRCh38.p14.genome.fa.gz
-#   - RNAfold (CLI in PATH) for tRNA MFE via LncFinder::run_RNAfold
-#   - GO GSEA outputs (CSV):      path_to/High_MFE_genes.csv, path_to/Low_MFE_genes.csv
-#   - MSigDB JSON gene sets:      e.g., path_to/c2.cp.v7.5.1.json and pathway-specific JSONs
-#   - Phylostratigraphy CSV:      path_to/PNAS_Genes_phylostratigraphy.csv
-#
-# Outputs (created or printed; add ggsave() where needed):
-#   - Histograms and scatter of Normalized_MFE (all & protein-coding)
-#   - Biotype comparisons: violin/density + KS/Wilcoxon (Fig. 1A)
-#   - Representative structures (Fig. 1B; structures rendered via RNAfold web server)
-#   - High_MFE.csv / Low_MFE.csv and GO bar plots (Suppl. Fig. 1; GSEA_high_MFE.pdf saved)
-#   - Curated pathway means ± SD and box plots (Fig. 1C)
-#   - MSigDB/KEGG/Reactome/GO/Hallmark validation plots (Suppl. Fig. 2)
-#   - Error-prone vs High-fidelity / NHEJ vs BER box plots + tests (Fig. 1D)
-#   - Phylostratigraphy means ± SD, box plots, KS/ANOVA/trend (Fig. 1E)
-#
-# Statistical notes:
-#   - Two-sample distribution tests: Kolmogorov–Smirnov and Wilcoxon rank-sum.
-#   - Pathway summaries reported as mean ± SD (kcal·mol⁻¹·nt⁻¹).
-#   - Phylostratigraphy includes KS pairwise tests, one-way ANOVA, and linear trend.
-#
-# Conventions:
-#   - Normalized_MFE = MFE / transcript length; more negative → greater folding stability.
-#   - tRNAs are not in the main transcript CSV and are derived from GTF/FASTA coordinates.
-#   - MSigDB parsing uses `rjson` + `rrapply`; sequence retrieval uses biomaRt.
+#   - Transcript metrics CSV:     Gencode_TX_norm_MFE_HC_table.csv
+#   - Curated pathways (R):       All_gene_sets_AC.R
+#   - GENCODE tRNAs (GTF):        gencode.v47.tRNAs.gtf.gz (or v48)
+#   - GRCh38 genome FASTA:        GRCh38.p14.genome.fa.gz
+#   - Phylostratigraphy CSV:      PNAS_Genes_phylostratigraphy.csv
 
 
 
-
-
-
-
-library(dplyr)
-library(readr)
-library(ggplot2)
-library(scales)
-library(gtools)
-library(tibble)
-library(reshape2)
-library(tidyverse)
-library(ggpubr)
-library(tidyr)
 
 
 # Load Table_ANNOTATED_MFE_heat_capacity ####
 Gencode_TX_norm_MFE_HC_table <- read.delim("path_to/Gencode_TX_norm_MFE_HC_table.csv",
                                                          sep = ",", header = T, stringsAsFactors = F)
-Table_ANNOTATED_gene_names <- Gencode_TX_norm_MFE_HC_table
-
-
-
-
-# Analysis entire Human annotated transcriptome
-
-# Generate a plot with the distribution of the Normalized_MFE values
-ggplot(Table_ANNOTATED_gene_names, aes(x = Normalized_MFE)) +
-  geom_histogram(binwidth = 0.001, color = "black") +
-  labs(title = "Distribution of the Minimum Free Energy (Normalized_MFE) values of the Human transcriptome",
-       x = "Normalized_MFE (kcal/mol)",
-       y = "Frequency") +
-  theme_classic() +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  scale_x_reverse(limits = c(0, -0.8)) +
-  # scale_x_continuous(breaks = seq(-10, 10, by = 0.1)) +
-  # scale_y_continuous(breaks = seq(0, 10000, by = 1000)) +
-  theme(axis.text.y = element_text(size = 10)) +
-  theme(axis.title.x = element_text(size = 12)) +
-  theme(axis.title.y = element_text(size = 12)) +
-  theme(legend.position = "none")
-
-
-
-# Plot Normalized_MFE vs transcript ID
-ggplot(Table_ANNOTATED_gene_names, aes(x = reorder(ensembl_transcript_id_version, Normalized_MFE), y = Normalized_MFE)) +
-  theme_classic() +
-  geom_point(stat = "identity", colour = "black", size = 2) +
-  # theme(axis.text.y = element_text(size=1)) +
-  theme(axis.text.y = element_blank()) + # Remove y-axis labels
-  theme(axis.title=element_text(size=20)) +
-  xlab("Human annotated transcriptome") + 
-  ylab("Normalized_MFE (kcal/mol)") +
-  ggtitle("Distribution of the Human transcriptome Normalized_MFE") +
-  coord_flip()
-
-
-
-
-
-
-
-# Analysis of human protein-coding mRNAs
-
-Table_ANNOTATED_gene_filtered <- dplyr::filter(Table_ANNOTATED_gene_names, transcript_biotype == "protein_coding")
-
-# It is also possible to exclude lncRNAs, ribosomal, Clorf_IDs, MicroRNAs, mitochondrial external_gene_names and snRNAs from the analysis. Transfer RNAs are not present in the initial dataset.
-# Table_ANNOTATED_gene_filtered <- Table_ANNOTATED_gene_names %>%
-#   dplyr::filter(!is.na(external_gene_name) & external_gene_name != "") %>%
-#   dplyr::filter(!startsWith(external_gene_name, "LINC")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "C1orf")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "MIR")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "MTND")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "RN7")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "RNA5")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "RNU1")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "RNU4")) %>%
-#   dplyr::filter(!startsWith(external_gene_name, "RNU6"))
-
-
-
-# Generate a plot with the distribution of the Normalized_MFE values
-ggplot(Table_ANNOTATED_gene_filtered, aes(x = Normalized_MFE)) +
-  geom_histogram(binwidth = 0.001, color = "black") +
-  labs(title = "Distribution of Normalized Minimum Free Energy Values for Human Protein-Coding mRNAs",
-       x = "Normalized_MFE (kcal/mol)",
-       y = "Frequency") +
-  theme_classic() +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  scale_x_reverse(limits = c(0, -0.8)) +
-  # scale_x_continuous(breaks = seq(-10, 10, by = 0.1)) +
-  # scale_y_continuous(breaks = seq(0, 10000, by = 1000)) +
-  theme(axis.text.y = element_text(size = 10)) +
-  theme(axis.title.x = element_text(size = 12)) +
-  theme(axis.title.y = element_text(size = 12)) +
-  theme(legend.position = "none")
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -186,16 +51,15 @@ ggplot(Table_ANNOTATED_gene_filtered, aes(x = Normalized_MFE)) +
 # Fig.1A ####
 # Analysis MFE tRNAs and ribosomal RNAs vs protein coding RNAs ####
 
-
+library(tidyverse)
+library(scales)
+library(gtools)
+library(reshape2)
+library(ggpubr)
 library(Biostrings)
-library(tibble)
-library(dplyr)
-library(stringr)
 library(LncFinder)
-library(tidyr)
 library(seqinr)
 library(devtools)
-library(tidyverse)
 library(FastaUtils)
 library(biomaRt)
 library(cbioportalR)
@@ -203,15 +67,6 @@ library(R.utils)
 library(rtracklayer)
 
 
-
-
-Gencode_TX_norm_MFE_HC_table <- read.delim("path_to/Gencode_TX_norm_MFE_HC_table.csv",
-                                           sep = ",", header = T, stringsAsFactors = F)
-Table_ANNOTATED_gene_names <- Gencode_TX_norm_MFE_HC_table
-# This file contains:
-# Protein coding transcripts
-# lncRNAs
-# ribosomal RNAs
 
 
 
@@ -228,17 +83,11 @@ Gencode_Protein_Coding <- Table_ANNOTATED_gene_names %>%
   dplyr::filter(transcript_biotype == "protein_coding")
 
 # Select the tRNAs from the Gencode transcriptome
-# The Gencode tRNAs are located in a different GTF file, so I need to load them separately
 # https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/gencode.v48.tRNAs.gtf.gz
 
 # Load tRNA annotations (filtering unwanted types)
-tRNAs <- readGFF("path_to/gencode.v47.tRNAs.gtf.gz") %>%
+tRNAs <- readGFF("path_to/Gencode_Human_transcriptome/gencode.v47.tRNAs.gtf.gz") %>%
   filter(!transcript_type %in% c("Pseudo_tRNA", "Undet_tRNA", "Sup_tRNA", "SeC_tRNA", "SeC(e)_tRNA"))
-
-# Access the FASTA files
-# The tRNAs GTF entries have transcript_id values like 20658, whereas Gencode_transcripts_FASTA uses canonical Ensembl transcript IDs like ENST00000xxxxx. This mismatch happens because:
-# The predicted tRNAs file (gencode.v48.tRNAs.gtf) does not use ENST IDs; it uses numerical IDs (internal ENSEMBL IDs).
-# The transcript FASTA file (gencode.v47.transcripts.fa) contains only standard ENST transcripts, not the predicted tRNAs.
 
 
 # Use the GTF coordinates to extract tRNAs
@@ -246,7 +95,7 @@ tRNAs <- readGFF("path_to/gencode.v47.tRNAs.gtf.gz") %>%
 # https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_48/GRCh38.p14.genome.fa.gz
 
 # Load the file
-genome_path <- "path_to/GRCh38.p14.genome.fa.gz"
+genome_path <- "path_to/Gencode_Human_transcriptome/GRCh38.p14.genome.fa.gz"
 
 # Read the compressed genome FASTA
 genome <- Biostrings::readDNAStringSet(genome_path)
@@ -266,7 +115,7 @@ tRNA_sequences <- DNAStringSet(mapply(function(chr, start, end, strand) {
 names(tRNA_sequences) <- tRNAs$transcript_id
 
 # 5. Save to FASTA with transcript_id as header
-output_path <- "path_to/tRNAs_sequences_v47.fa"
+output_path <- "path_to/Gencode_Human_transcriptome/tRNAs_sequences_v47.fa"
 writeXStringSet(tRNA_sequences, filepath = output_path)
 
 
@@ -353,11 +202,6 @@ ProteinCoding_MFE_labeled <- Table_ANNOTATED_gene_names %>%
   dplyr::select(Normalized_MFE) %>%
   dplyr::mutate(Group = "Protein_coding")
 
-# lncRNAs
-lncRNA_MFE_labeled <- Table_ANNOTATED_gene_names %>%
-  dplyr::filter(transcript_biotype == "lncRNA") %>%
-  dplyr::select(Normalized_MFE) %>%
-  dplyr::mutate(Group = "lncRNA")
 
 
 
@@ -395,7 +239,8 @@ MFE_violin <- ggplot(combined_MFE, aes(x = Group, y = Normalized_MFE, fill = Gro
 
 print(MFE_violin)
 
-
+ggsave("path_to/MFE_violin_tRNA_mRNA_rRNA_counts.pdf",
+       MFE_violin, width = 7, height = 8)
 
 
 
@@ -426,6 +271,14 @@ print(wilcox.test(rRNA_vals, protein_vals))
 
 
 
+
+
+# Mean Normalized_MFE for each RNA class
+mean_MFE_by_group <- combined_MFE %>%
+  dplyr::group_by(Group) %>%
+  dplyr::summarise(mean_Normalized_MFE = mean(Normalized_MFE, na.rm = TRUE))
+
+print(mean_MFE_by_group)
 
 
 
@@ -471,7 +324,83 @@ ggplot(combined_MFE, aes(x = Normalized_MFE, fill = Group, colour = Group)) +
 
 
 
+
+
+
+
 # Fig.1B ####
+
+# Analysis entire Human annotated transcriptome
+
+# Generate a plot with the distribution of the Normalized_MFE values
+ggplot(Table_ANNOTATED_gene_names, aes(x = Normalized_MFE)) +
+  geom_histogram(binwidth = 0.001, color = "black") +
+  labs(title = "Distribution of the Minimum Free Energy (Normalized_MFE) values of the Human transcriptome",
+       x = "Normalized_MFE (kcal/mol)",
+       y = "Frequency") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_reverse(limits = c(0, -0.8)) +
+  # scale_x_continuous(breaks = seq(-10, 10, by = 0.1)) +
+  # scale_y_continuous(breaks = seq(0, 10000, by = 1000)) +
+  theme(axis.text.y = element_text(size = 10)) +
+  theme(axis.title.x = element_text(size = 12)) +
+  theme(axis.title.y = element_text(size = 12)) +
+  theme(legend.position = "none")
+
+
+
+# Plot Normalized_MFE vs transcript ID
+ggplot(Table_ANNOTATED_gene_names, aes(x = reorder(ensembl_transcript_id_version, Normalized_MFE), y = Normalized_MFE)) +
+  theme_classic() +
+  geom_point(stat = "identity", colour = "black", size = 2) +
+  # theme(axis.text.y = element_text(size=1)) +
+  theme(axis.text.y = element_blank()) + # Remove y-axis labels
+  theme(axis.title=element_text(size=20)) +
+  xlab("Human annotated transcriptome") + 
+  ylab("Normalized_MFE (kcal/mol)") +
+  ggtitle("Distribution of the Human transcriptome Normalized_MFE") +
+  coord_flip()
+
+
+
+
+
+
+
+# Analysis of human protein-coding mRNAs
+Table_ANNOTATED_gene_filtered <- dplyr::filter(Table_ANNOTATED_gene_names, transcript_biotype == "protein_coding")
+
+
+
+
+# Generate a plot with the distribution of the Normalized_MFE values
+ggplot(Table_ANNOTATED_gene_filtered, aes(x = Normalized_MFE)) +
+  geom_histogram(binwidth = 0.001, color = "black") +
+  labs(title = "Distribution of Normalized Minimum Free Energy Values for Human Protein-Coding mRNAs",
+       x = "Normalized_MFE (kcal/mol)",
+       y = "Frequency") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_reverse(limits = c(0, -0.8)) +
+  # scale_x_continuous(breaks = seq(-10, 10, by = 0.1)) +
+  # scale_y_continuous(breaks = seq(0, 10000, by = 1000)) +
+  theme(axis.text.y = element_text(size = 10)) +
+  theme(axis.title.x = element_text(size = 12)) +
+  theme(axis.title.y = element_text(size = 12)) +
+  theme(legend.position = "none")
+
+
+
+
+
+
+
+
+
+
+
+
 # Plot the normalized MFE distribution of the Human protein-coding transcriptome (Normalized_MFE vs transcript ID).
 Human_protein_coding_TX <- ggplot(Table_ANNOTATED_gene_filtered, aes(x = reorder(ensembl_transcript_id, Normalized_MFE), y = Normalized_MFE)) +
   theme_classic() +
@@ -493,15 +422,16 @@ Human_protein_coding_TX <- ggplot(Table_ANNOTATED_gene_filtered, aes(x = reorder
 
 print(Human_protein_coding_TX)
 
+# Save the combined plot
+ggsave("Human_protein_coding_TX.pdf", plot = Human_protein_coding_TX, width = 5, height = 10, path = "path_to")
 
 
 
 
 
 
-# Fig.1B visualization secondary structures
-# Visualize the RNA secondary structures of selected transcripts
-# I have used the RNAfold webServer: http://rna.tbi.univie.ac.at//cgi-bin/RNAWebSuite/RNAfold.cgi
+
+
 
 
 
@@ -530,20 +460,6 @@ Result_selected_TX_MFE <- Table_ANNOTATED_gene_names %>%
 
 # View the result
 Result_selected_TX_MFE_df <- as.data.frame(Result_selected_TX_MFE)
-
-# Filter Transcript_length values that are present at least 3 times
-# This will select transcripts that have more common lengths
-# Result_selected_TX_MFE_df <- Result_selected_TX_MFE_df %>%
-#   group_by(Transcript_length) %>%
-#   filter(n() >= 3) %>%
-#   ungroup()
-
-# Look at transcriots with similar length but very different Normalized_MFE values
-# Identify the average transcript length (this will broaden the spectrum of candidate transcripts)
-
-# The mean transcript lengths in the adult cortex is 2,530 bp. These measurements were based on full-length transcript sequencing.
-# Data have been taken from the paper:
-# Full-length transcript sequencing of human and mouse cerebral cortex identifies widespread isoform diversity and alternative splicing, Szi Kay Leung et al. Cell Rep. 2021
 
 
 # I select the transcripts with a length of 2,530 bp
@@ -600,8 +516,6 @@ Min_target_index <- dplyr::filter(fasta_sequences, ensembl_transcript_id_version
 
 
 
-
-
 # Supplementary Fig.1a ####
 # Select the upper and lower quantiles of the distribution of the human protein coding RNAs
 filtered_data <- na.omit(Table_ANNOTATED_gene_filtered$Normalized_MFE)
@@ -623,6 +537,8 @@ High_MFE <- Table_ANNOTATED_gene_filtered %>%
   filter(Normalized_MFE > upper_quantile) %>%
   distinct(external_gene_name, .keep_all = TRUE)
 
+# Write the filtered data to a CSV file
+write.csv(High_MFE, file = "path_to/High_MFE.csv", row.names = F)
 
 
 # The gene list has been uploaded on https://geneontology.org/ for the Gene Set Enrichment Analysis (GSEA) in the  biological process database
@@ -683,7 +599,7 @@ GSEA_high_MFE <- ggplot(
 print(GSEA_high_MFE)
 
 # Save the combined plot
-ggsave("GSEA_high_MFE.pdf", plot = GSEA_high_MFE, width = 7, height = 6, path = "/Users/z3514253/Desktop")
+ggsave("GSEA_high_MFE.pdf", plot = GSEA_high_MFE, width = 7, height = 6, path = "path_to")
 
 
 
@@ -754,49 +670,8 @@ GSEA_low_MFE <- ggplot(
 # Print the plot
 print(GSEA_low_MFE)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Save the combined plot
+ggsave("GSEA_low_MFE.pdf", plot = GSEA_low_MFE, width = 7, height = 6, path = "path_to")
 
 
 
@@ -811,9 +686,6 @@ print(GSEA_low_MFE)
 
 # Fig.1C ####
 # Analysis MFE curated signaling pathways
-# More in general, I wonder whether the MFE had any impact on the evolution of the canonical signaling pathways.
-# In other words, do specific signaling pathways have a total high or low MFE which is consistent with the rate of proliferation, during which the specific signaling pathway is active? 
-# CALCULATE THE MFE OF CANONICAL SIGNALING PATHWAYS
 
 # This is the script which contains the curated gene sets
 source("path_to/All_gene_sets_AC.R")
@@ -821,11 +693,6 @@ source("path_to/All_gene_sets_AC.R")
 
 
 
-
-# These are the commands to filter the 'Table_ANNOTATED_gene_names' file (which contains the Normalized MFE of each transcript) with each curated gene set
-
-# Generate the function that filters each gene set in the target data frame
-# This function will be used in the following commands
 filtering <- function(x) {
   Filtering<-dplyr::filter(Table_ANNOTATED_gene_names, external_gene_name %in% x)
   return(Filtering)
@@ -852,15 +719,11 @@ for (i in (seq_along(Curated_dfs.output))) {
   do.call("<-",list(Curated_dfs.output[i], Curated_test_df[[i]]))
 }
 
-# Now simply type a gene set (for example: 'df_Cell_migration' to have the full table of the filtered data)
-# Each gene set is a data frame that can be used to generate the plots.
-
 
 
 
 
 # Generate new functions 'mean' and 'sd' and loop them through the 'Normalized_MFE' columns of each data frame generated by the automatic filtering here above
-
 # Generate the function for to calculate the MEAN of the normalized_MFE of each gene set resulting from the fuiltering here above.
 Mean_curated <- function(x) {
   mean_curated<-mean(x$Normalized_MFE)
@@ -936,31 +799,6 @@ ggplot(df, aes(x=reorder(Category, -mean), y=mean)) +
 
 
 
-# Create the box plot
-# IMPORTANT: 
-# Some of the gene sets have been removed because they were not relevant for the analysis of the MFE of signaling pathways and DNA repair processes.
-
-# The gene sets that have been removed are:
-# df_Cell_migration,
-# df_Cell_motility,
-# df_Gene_set_cell_adhesion,
-# df_Chemokines_and_chemotaxis,
-# df_Gene_set_Splicing_Factors,
-# df_ABC_SLC_transporters,
-# df_calcium_channel_activity,
-# df_Chaperone_mediated_protein_folding,
-# df_NF_kB_Target_genes,
-# df_TGFb_signaling_targets,
-# df_WNT_signaling_targets,
-# df_Cellular_Stress_Responses,
-# df_Antibacterial_response,
-# df_Antifungal_response,
-# df_Antiviral_response,
-# df_Apoptosis,
-# df_Autophagy,
-# df_Cancer_drug_resistance,
-# df_Pro_survival,
-# df_Chromatin_remodelling
 
 # Function to select specific columns from a list of data frames
 select_columns_from_dfs <- function(df_list, columns) {
@@ -1002,9 +840,6 @@ df_list <- list(
   df_VEGF_signaling,
   df_JNK_signaling_Vivanco
 )
-
-# Remove these samples from the list: df_Genes_UPregulated_in_dormancy_Gelman_2023
-
 
 
 
@@ -1092,6 +927,8 @@ coord_flip()
 
 print(MFE_curated_signaling_pathways)
 
+# Save the combined plot
+ggsave("MFE_curated_signaling_pathways.pdf", plot = MFE_curated_signaling_pathways, width = 4, height = 8, path = "path_to/output")
 
 
 
@@ -1152,11 +989,6 @@ BER_str
 
 
 # Supplementary Fig.2 ####
-# GSEA gene sets
-# Here below, I repeat the filtering automatic function using the GSEA gene sets
-
-# The data here above have been obtained using curated pathways generated by myself and other authors
-# It's better to confirm the data using KEGG signaling pathways
 # Import the GSEA pathways from; http://www.gsea-msigdb.org/gsea/downloads.jsp
 
 library(rjson)
@@ -1187,8 +1019,6 @@ GSEA_KEGG_MTOR_SIGNALING_PATHWAY <- as.character(stri_remove_empty(GSEA_KEGG_MTO
 
 
 # Here below I have downloaded the gene sets of the specific pathways analyzed here above, by accessing the GSEA database 
-# The json files have been saved in a folder of Exp 277
-
 GSEA_cell_motility <- fromJSON(file="path_to/GOBP_ACTIN_POLYMERIZATION_DEPENDENT_CELL_MOTILITY.v7.5.1.json")
 GSEA_cell_adhesion <- fromJSON(file="path_to/CELL_CELL_ADHESION.v7.5.1.json")
 GSEA_chemotaxis <- fromJSON(file="path_to/GOBP_CELL_CHEMOTAXIS.v7.5.1.json")
@@ -1278,7 +1108,6 @@ for (i in (seq_along(dfs.output))) {
 
 
 # Generate new functions 'mean' and 'sd' and loop them through the 'Normalized_MFE' columns of each data frame generated by the automatc filtering here above
-
 # Generate the function for to calculate the MEAN of the normalized_MFE of each gene set resulting from the fuiltering here above.
 Mean_GSEA <- function(x) {
   mean_GSEA<-mean(x$Normalized_MFE)
@@ -1373,19 +1202,13 @@ select_columns_from_dfs <- function(df_list, columns) {
 # List of data frames
 df_list <- list(
   df_GSEA_cell_motility, 
-  # df_GSEA_cell_adhesion, 
-  # df_GSEA_chemotaxis, 
-  # df_GSEA_splicing, 
   df_GSEA_homologous_recombination, 
   df_GSEA_NER, 
   df_GSEA_NHEJ, 
   df_GSEA_FA, 
   df_GSEA_BER, 
   df_GSEA_MMR, 
-  # df_GSEA_ABC_transporters, 
-  # df_GSEA_Ca_channels_activity, 
   df_GSEA_TNF_signaling, 
-  # df_GSEA_Chaperone_protein_folding, 
   df_GSEA_TGF_BETA, 
   df_GSEA_BMP, 
   df_GSEA_NFKB, 
@@ -1395,7 +1218,6 @@ df_list <- list(
   df_GSEA_AMPK, 
   df_GSEA_EGFR, 
   df_GSEA_HIPPO, 
-  # df_GSEA_HYPOXIA, 
   df_GSEA_IL6_JAK_STAT3, 
   df_GSEA_Insulin, 
   df_GSEA_JAK_STAT, 
@@ -1404,23 +1226,7 @@ df_list <- list(
   df_GSEA_PI3K_AKT, 
   df_GSEA_TOLL_LIKE_RECEPTOR, 
   df_GSEA_VEGF, 
-  # df_GSEA_Stress_response, 
-  # df_GSEA_Bacterial_response, 
-  # df_GSEA_Antifungal_response, 
-  # df_GSEA_Antiviral_response, 
-  # df_GSEA_Apoptosis, 
-  # df_GSEA_Autophagy, 
-  # df_GSEA_Drug_resistance, 
   df_GSEA_JNK
-  # df_GSEA_Chromatin_remodelling, 
-  # df_GSEA_CELL_CYCLE_G1_S_PHASE_TRANSITION, 
-  # df_GSEA_MITOTIC_SPINDLE_ORGANIZATION, 
-  # df_GSEA_POSITIVE_REGULATION_OF_CELL_MIGRATION, 
-  # df_GSEA_CELL_MIGRATION, 
-  # df_GSEA_POSITIVE_REGULATION_OF_ERK1_AND_ERK2_CASCADE, 
-  # df_GSEA_RESPONSE_TO_TYPE_I_INTERFERON, 
-  # df_GSEA_RESPONSE_TO_INTERFERON_GAMMA, 
-  # df_GSEA_GOBP_EMT
   )
 
 # Columns to select
@@ -1432,19 +1238,13 @@ selected_dfs <- select_columns_from_dfs(df_list, columns)
 # Naming the selected data frames for easy identification
 names(selected_dfs) <- c(
   "Cell motility", 
-  # "cell_adhesion", 
-  # "chemotaxis", 
-  # "splicing", 
   "Homologous_recombination", 
   "Nucleotide excision repair", 
   "Non-homologous end joining", 
   "Fanconi anemia", 
   "Base excision repair", 
   "Mismatch repair", 
-  # "ABC_transporters", 
-  # "Ca_channels_activity", 
   "TNF signaling", 
-  # "Chaperone_protein_folding", 
   "TGF Bsta signaling", 
   "BMP signaling", 
   "NFKB signaling", 
@@ -1454,7 +1254,6 @@ names(selected_dfs) <- c(
   "AMPK signaling", 
   "EGFR signaling", 
   "HIPPO signaling", 
-  # "HYPOXIA", 
   "IL6 JAK STAT3 signaling", 
   "Insulin signaling", 
   "JAK STAT signaling", 
@@ -1463,23 +1262,7 @@ names(selected_dfs) <- c(
   "PI3K AKT signaling", 
   "TOLL like recetor signaling", 
   "VEGF signaling", 
-  # "Stress_response", 
-  # "Bacterial_response", 
-  # "Antifungal_response", 
-  # "Antiviral_response", 
-  # "Apoptosis", 
-  # "Autophagy", 
-  # "Drug_resistance", 
   "JNK signaling"
-  # "Chromatin_remodelling", 
-  # "CELL_CYCLE_G1_S_PHASE_TRANSITION", 
-  # "MITOTIC_SPINDLE_ORGANIZATION", 
-  # "POS_REG_OF_CELL_MIGRATION", 
-  # "CELL_MIGRATION", 
-  # "POS_REG_OF_ERK1_AND_ERK2_CASCADE", 
-  # "RESPONSE_TO_TYPE_I_INTERFERON", 
-  # "RESPONSE_TO_INTERFERON_GAMMA", 
-  # "GOBP_EMT"
 )
 
 # Print the first few rows of each selected data frame for verification
@@ -1539,14 +1322,7 @@ ggplot(combined_df, aes(x = reorder(source, -Normalized_MFE), y = Normalized_MFE
 
 
 
-
-
-
-
-
 # Fig.1D ####
-# Open the curated gene sets
-
 source("path_to/All_gene_sets_AC.R")
 
 
@@ -1584,11 +1360,6 @@ ggplot(combined_MFE, aes(x = Group, y = Normalized_MFE, fill = Group)) +
 
 
 
-
-
-# The NHEJ and error-prone DNA polymerases have less negative DG values, opposite to high-fidelity DNA repair mechanisms like BER and high-fidelity DNA polymerases.
-
-
 # Box plot
 # Filter the dataset for Error-prone and High-fidelity DNA polymerases
 Error_prone_genes_MFE <- dplyr::filter(Table_ANNOTATED_gene_filtered, external_gene_name %in% Error_prone_DNA_polymerases)
@@ -1616,7 +1387,7 @@ mean_normalized_MFE <- mean(combined_MFE$Normalized_MFE)
 EP_HF_DNArepair_replication <- ggplot(combined_MFE, aes(x = Group, y = Normalized_MFE, fill = Group)) +
   geom_boxplot() +
   stat_summary(fun = mean, geom = "point", shape = 19, size = 3, color = "blue") +  # Add mean points
-  geom_hline(yintercept = mean_normalized_MFE, linetype = "dashed", color = "black", size = 1) +  # Add horizontal line for mean
+  # geom_hline(yintercept = mean_normalized_MFE, linetype = "dashed", color = "black", size = 1) +  # Add horizontal line for mean
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
         axis.title.x = element_text(size = 20),  # Increase x title font size
@@ -1625,10 +1396,13 @@ EP_HF_DNArepair_replication <- ggplot(combined_MFE, aes(x = Group, y = Normalize
   labs(x = "", y = "Normalized MFE (kcal/mol)", title = "") +
   scale_fill_manual(values = c("EP DNA pol" = "lightgrey", "HF DNA pol" = "lightgrey", "BER" = "lightgrey", "NHEJ" = "lightgrey")) +
   scale_x_discrete(limits = c("NHEJ", "BER", "EP DNA pol", "HF DNA pol")) +
+  scale_y_continuous(limits = c(-0.6, 0)) +
   theme(legend.position = "none")  # Remove the legend
 
 print(EP_HF_DNArepair_replication)
 
+# Save the combined plot
+ggsave("EP_HF_DNArepair_replication.pdf", plot = EP_HF_DNArepair_replication, width = 3, height = 5, path = "path_to")
 
 
 # KS test
@@ -1664,17 +1438,6 @@ print(wilcox_test_EP_HF_pol)
 
 # Fig.1E ####
 # Phylostratigraphic analysis
-# The code here below calculates the Ages Index of the entire Human transcriptome.
-
-# The original script used to calculate the Transcriptome Age Index (TAI) for a given set of gene expression data and corresponding phylostratum values is in the following path:
-# /Volumes/AC_HD_8TB/Exp.\ 271\ Profiling\ of\ alternative\ splicing\ landscape_Nanopore\ sequencing\ drug\ treatment\ 72h/R_scripts/TAI_72h_calculated_on_gene_counts_AC_GOOD_TO_USE.R
-# The script contains the formula:
-# # The TAI formula has been published in Tigros et al. PNAS 2017
-# tai <- function(ps,gene_exp) {
-#   TAI<-(sum(ps*gene_exp)) / (sum(gene_exp))
-#   return(TAI)
-# }
-
 # The TAI is a measure used in evolutionary biology to assess the "evolutionary age" of a transcriptome based on the gene expression levels and their associated phylostratum, which represents the evolutionary origin of each gene.
 
 
@@ -1751,7 +1514,8 @@ MFE_phylostratigraphy <- ggplot(Table_plylostratigraphy_MFE_box_plot, aes(x = Ph
 
 print(MFE_phylostratigraphy)
 
-
+# Save the combined plot
+ggsave("MFE_phylostratigraphy.pdf", plot = MFE_phylostratigraphy, width = 3, height = 5, path = "path_to")
 
 
 # KS test
@@ -1794,6 +1558,18 @@ print(p_value)
 # Perform Linear Trend Analysis
 linear_model <- lm(Normalized_MFE ~ Phylostrata_name, data = Filtered_phylostrata_MFE)
 summary(linear_model)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

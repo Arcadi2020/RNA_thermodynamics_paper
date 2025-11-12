@@ -1,7 +1,7 @@
 # Script: Figure 4 — iLINCS cohort filtering, pathway NES heatmaps, volcano+boxplots, and per-sample MFE violins
 #
 # Purpose
-#   Reproduce Fig. 4 (A–F) from iLINCS transcriptomic perturbation data at 3.33 µM and 10 µM.
+#   Reproduce Fig. 4 from iLINCS transcriptomic perturbation data at 3.33 µM and 10 µM.
 #   The script builds “growth-arrest / no-mitogenic-signaling” cohorts via GSEA filters,
 #   summarizes cell line–drug coverage, and visualizes ΔG_fold effects (Normalized MFE)
 #   at the cohort and per-sample levels.
@@ -20,49 +20,7 @@
 #       - cellinfo_beta.csv                       # cell line → primary_disease
 #       - iLINCs_complete_data_selected_samples.csv  # Drug → TARGET, TARGET_PATHWAY
 #       - Extended_Table_ANNOTATED_iLINCs/Table_ANNOTATED_iLINCs.csv  # ensembl_id, Normalized_MFE, p_value, z_score
-#
-# Key definitions & filters (applied separately at 3.33 µM and 10 µM)
-#   • Required IDs present: {KEGG hsa04110 (Cell cycle), Signt_1, Signt_2, Signt_3}.
-#   • Growth arrest: NES < 0 for hsa04110 AND each Signt_*.
-#   • No mitogenic signaling: exclude any sample with NES > 0 in the curated “mitogenic/RTK/MAPK/PI3K etc.” set (ids_to_check vector).
-#   • Effect size used in volcano: Log10_MFE_change = log10(MeanMFE_DOWN / MeanMFE_UP).
-#   • Significance line in volcano: p = 0.05 → 1.301 on the –log10 scale (Wilcoxon test).
-#
-# What each panel generates
-#   Fig. 4A (3.33 µM)
-#     • Builds iLINCS sample inventory from list objects; counts unique cell lines, drugs, and line–drug combos.
-#     • Applies the 3-step GSEA filter to form the “Cell-cycle↓ / No-mitogenic” cohort.
-#     • Heatmap of pathway/signature NES for the retained samples (KEGG names via KEGGREST).
-#     • Faceted tile plot of retained line–drug pairs grouped by primary_disease × TARGET_PATHWAY.
-#
-#   Fig. 4B (3.33 µM)
-#     • Volcano plot of Log10_MFE_change vs –log10(p) (Wilcoxon) with threshold lines and selected labels.
-#     • Top-aligned horizontal boxplot of Log10_MFE_change; one-sample t-test of mean(Log10_MFE_change) > 0.
-#     • Combined figure saved (boxplot over volcano).
-#
-#   Fig. 4C (3.33 µM)
-#     • Per-sample violin+box plots of Normalized_MFE for significant genes (z_score > 0 vs z_score < 0)
-#       for highlighted samples (e.g., HCC515_neratinib, HT29_trametinib, PC3_palbociclib); PDFs saved.
-#
-#   Fig. 4D (10 µM)
-#     • Repeats the 3-step GSEA filtering at 10 µM and renders the cohort NES heatmap.
-#
-#   Fig. 4E (10 µM)
-#     • Volcano + top-aligned boxplot (as in 4B) for the 10 µM cohort, with selected labels
-#       (e.g., ES2_lapatinib, PC3_torin-1, A375_tozasertib); combined figure saved; t-test reported.
-#
-#   Fig. 4F (10 µM)
-#     • Per-sample violin+box plots of Normalized_MFE for the labeled 10 µM examples; PDFs saved.
-#
-# Console summaries & saved tables
-#   • Prints counts of unique cell lines, drugs, and line–drug combinations at each stage.
-#   • Exposes intermediate sample IDs (Samples_* vectors) after each filter.
-#   • Writes final line–drug tables for plotting and reporting.
-#
-# Notes
-#   • KEGG pathway names are fetched/cleaned with KEGGREST; “signaling pathway” suffix shortened to “signaling”.
-#   • TARGET_PATHWAY text normalized (e.g., “ATR-Chk1 DNA damage response” → “DNA damage response”).
-#   • All file paths are placeholders (“path_to/...”) and must be updated before running.
+
 
 
 library(readr)
@@ -81,7 +39,7 @@ library(gridExtra)
 
 
 # Load the environment of the script output
-load("path_to//Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines_environment.RData")
+load("path_to/Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines_environment.RData")
 
 
 
@@ -89,7 +47,7 @@ load("path_to//Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines_environment.
 # Fig. 4A ####
 # Load the list object
 # This is the total number of iLINCs samples that has been downloaded
-directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
 result_list <- readRDS(file.path(directory, "iLINCs_data_unfiltered.rds"))
 # 1,609 samples
 
@@ -102,12 +60,13 @@ sample_names <- names(result_list)
 # Extract cell line names (everything before the first "_")
 cell_lines <- sub("_.*", "", sample_names)
 unique_cell_lines <- unique(cell_lines)
-length(unique_cell_lines)  # Number of unique cell lines
+length(unique_cell_lines)
+# 37 cells lines
 
 # Extract drug names (between the first and second "_")
 drug_names <- sapply(strsplit(sample_names, "_"), `[`, 2)
 unique_drugs <- unique(drug_names)
-length(unique_drugs)  # Number of unique drugs
+length(unique_drugs)
 
 # Optional: print out the unique names if you want to inspect them
 head(unique_cell_lines)
@@ -116,7 +75,7 @@ head(unique_drugs)
 
 
 # Filtering only cancer cell lines
-directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
 result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
 # 774 samples
 
@@ -167,11 +126,11 @@ print(length(Unique_anti_cancer_agents))
 # In the first filtering step samples with negative NES values for the cell cycle KEGG pathway (hsa04110) are seleted (totally 423).
 
 # Open the combined_kk2 generated using the gseKEGG function of the clusterProfiler package
-GSEA_combined_kk2 <- read.delim("path_to//Results_GSEA/combined_kk2_results.csv",
+GSEA_combined_kk2 <- read.delim("path_to/Results_GSEA/combined_kk2_results.csv",
                                 sep = ",", header = T, stringsAsFactors = F)
 
 # Open the combined_gsea generated using the GSEA function of the clusterProfiler to assess the proliferation signatures
-GSEA_combined_iLINCs <- read.delim("path_to//Results_GSEA/combined_gsea_results.csv",
+GSEA_combined_iLINCs <- read.delim("path_to/Results_GSEA/combined_gsea_results.csv",
                                    sep = ",", header = T, stringsAsFactors = F)
 
 # Join the GSEA_combined_kk2 data frame with the results of the proliferation signatures GSEA
@@ -248,7 +207,7 @@ iLINCS_cell_cycle_arrest_mitogenic_signaling <- dplyr::filter(GSEA_combined_kk2_
                                                               !Sample %in% samples_to_exclude$Sample)
 
 Samples_3.33uM_N3 <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
-# 27 samples
+# 24 samples
 
 
 
@@ -444,7 +403,7 @@ print(Heatmap_cell_cycle)
 
 
 Samples_3.33uM_N3 <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
-# 27 samples
+# 24 samples
 
 
 
@@ -462,7 +421,7 @@ print(nrow(Cell_line_drug_combinations))
 # Write the final dataset to a file
 iLINCs_Cell_line_drug_combinations_final <-  Cell_line_drug_combinations %>%
   separate(Sample, into = c("Cell_line", "Drug"), sep = "_", remove = FALSE)
-output_directory <- "/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Manuscript/Figures/Fig_4/Other_files"
+output_directory <- "path_to/Fig_4/Other_files"
 write.csv(iLINCs_Cell_line_drug_combinations_final, file = paste0(output_directory, "/iLINCs_Cell_line_drug_combinations_3.33uM.csv"), row.names = FALSE)
 
 
@@ -471,7 +430,7 @@ Cell_lines <- iLINCS_cell_cycle_arrest_mitogenic_signaling %>%
   dplyr::mutate(Sample = gsub("(^[^_]+)_.*", "\\1", Sample)) %>%
   dplyr::distinct(Sample)
 print(nrow(Cell_lines))
-# 8 human cancer cell lines
+# 7 human cancer cell lines
 
 # How many drugs are present in the final dataset
 Drugs <- iLINCS_cell_cycle_arrest_mitogenic_signaling %>%
@@ -490,7 +449,7 @@ print(nrow(Drugs))
 
 
 # Load the complete iLINCs 3.33 uM data
-all_results_2_complete <- read.csv("path_to//Results_all_cancer_cell_lines_3.33uM.csv",
+all_results_2_complete <- read.csv("path_to/Results_all_cancer_cell_lines_3.33uM.csv",
                                    header = TRUE, sep = ",", stringsAsFactors = FALSE)
 
 
@@ -517,20 +476,20 @@ iLINCS_analysis <- all_results_2_complete %>%
 Cell_line_drug_combinations <- iLINCS_analysis %>%
   dplyr::distinct(SampleName)
 print(nrow(Cell_line_drug_combinations))
-# 27 combinations
+# 24 combinations
 
 
 # How many different cell lines are present in the final dataset
 Cell_lines <- iLINCS_analysis %>%
   dplyr::distinct(cell_line)
 print(nrow(Cell_lines))
-# 8 human cancer cell lines
+# 7 human cancer cell lines
 
 # How many drugs are present in the final dataset
 Drugs <- iLINCS_analysis %>%
   dplyr::distinct(Drug)
 print(nrow(Drugs))
-# 17 different drugs
+# 16 different drugs
 
 
 
@@ -543,7 +502,7 @@ print(nrow(Drugs))
 # Add information on cell lines and drugs and group the samples accordingly
 
 # Open the iLINCs cell_info file
-iLINCs_cell_info <- read.delim("path_to//Analysis_iLINCS_Python_script_Anthony/cellinfo_beta.csv",
+iLINCs_cell_info <- read.delim("path_to/cellinfo_beta.csv",
                                sep = ",", header = T, stringsAsFactors = F) %>%
   dplyr::rename(iLINCs_cell_line = cell_iname)
 
@@ -560,7 +519,7 @@ iLINCs_cell_info_complete <- dplyr::left_join(iLINCS_analysis, iLINCs_cell_info,
 
 # Add the drug targets
 # In the original data frame, some of the drug targets, were missing. They have been added together with the relative signaling pathways. The file has been save as .csv file and loaded here below.
-iLINCs_drug_info_complete <- read.delim("path_to//Analysis_iLINCS_Python_script_Anthony/iLINCs_complete_data_selected_samples.csv",
+iLINCs_drug_info_complete <- read.delim("path_to/iLINCs_complete_data_selected_samples.csv",
                                         sep = ",", header = T, stringsAsFactors = F) %>%
   dplyr::select("Anti_cancer_agents", "TARGET", "TARGET_PATHWAY") %>%
   dplyr::rename(Drug = Anti_cancer_agents) %>%
@@ -615,6 +574,17 @@ print(Tile_plot_iLINCs_cell_lines_drugs_grouped)
 
 
 
+# How many different cell lines are present in the final datset:
+iLINCS_cell_lines_3.33uM_unique <- unique(IlINCs_complete_df$iLINCs_cell_line)
+length(iLINCS_cell_lines_3.33uM_unique)
+
+# How many cancer types does the dataset include:
+iLINCS_cancer_types_3.33uM_unique <- unique(IlINCs_complete_df$primary_disease)
+length(iLINCS_cancer_types_3.33uM_unique)
+
+# How many distinct drugs does the dataset contain:
+iLINCS_drugs_3.33uM_unique <- unique(IlINCs_complete_df$Drug)
+length(iLINCS_drugs_3.33uM_unique)
 
 
 
@@ -704,7 +674,7 @@ iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(
 print(iLINCS_analysis_plot_membrane_receptors)
 
 # Save the plot
-ggsave("iLINCS_analysis_volcano_plot.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "path_to/output")
+ggsave("iLINCS_analysis_volcano_plot.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "path_to/Desktop")
 
 
 
@@ -814,7 +784,7 @@ iLINCS_analysis_boxplot_horizontal <- ggplot(iLINCS_analysis, aes(y = "", x = Lo
 print(iLINCS_analysis_boxplot_horizontal)
 
 # Save the plot
-ggsave("iLINCS_analysis_boxplot_horizontal.pdf", plot = iLINCS_analysis_boxplot_horizontal, width = 5, height = 1.5, path = "path_to/output")
+ggsave("iLINCS_analysis_boxplot_horizontal.pdf", plot = iLINCS_analysis_boxplot_horizontal, width = 5, height = 1.5, path = "path_to/Desktop")
 
 
 # Null hypothesis (H0) the mean of the distribution is 0.
@@ -855,7 +825,7 @@ combined_plot <- iLINCS_analysis_boxplot_horizontal / iLINCS_analysis_plot_membr
 print(combined_plot)
 
 # Save the combined plot
-ggsave("Combined_iLINCS_analysis_3.33_uM.tiff", plot = combined_plot, width = 5, height = 8.5, path = "path_to/output", dpi = 300)
+ggsave("Combined_iLINCS_analysis_3.33_uM.tiff", plot = combined_plot, width = 5, height = 8.5, path = "path_to/Desktop", dpi = 300)
 
 
 
@@ -868,7 +838,8 @@ test_result <- t.test(iLINCS_analysis$Log10_MFE_change, mu = 0, alternative = "g
 print(test_result)
 
 
-
+wilcox_result <- wilcox.test(iLINCS_analysis$Log10_MFE_change, mu = 0, alternative = "greater", exact = FALSE)
+print(wilcox_result)
 
 
 
@@ -893,17 +864,17 @@ print(test_result)
 # Violin plots samples 3.33 uM
 
 # Load the complete data generated in STEP 7 the R script:
-# path_to//Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_AC.R
+# path_to/Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_AC.R
 
 # Load the list object from the specified directory (STEP 7 of the original R script)
-directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
 result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
 
 
 
 
 # Select the samples of interest:
-all_results_2_complete <- read.csv("path_to//Results_all_cancer_cell_lines_3.33uM.csv",
+all_results_2_complete <- read.csv("path_to/Results_all_cancer_cell_lines_3.33uM.csv",
                                    header = TRUE, sep = ",", stringsAsFactors = FALSE)
 
 # Edit the names of the samples to match the iLINCs format
@@ -924,7 +895,7 @@ iLINCs_selected_samples <- result_list_2[grep(paste(iLINCs_all_results_2_complet
 
 
 # Open the Table_ANNOTATED_iLINCs
-Table_ANNOTATED_iLINCs <- read.delim("path_to//Extended_Table_ANNOTATED_iLINCs/Table_ANNOTATED_iLINCs.csv",
+Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
 
@@ -1012,7 +983,7 @@ process_result_list <- function(Sample_name) {
     plot = MFE_Sample_name,
     width = 7,
     height = 5,
-    path = "path_to/output"  # Specify the path to save the plot
+    path = "path_to/Desktop"  # Specify the path to save the plot
   )
   
   # Store the plot in the list
@@ -1054,7 +1025,7 @@ ggsave(
   plot = combined_plot,
   width = 5,
   height = 16,  # Increased height to better accommodate spacing
-  path = "path_to/output"
+  path = "path_to/Desktop"
 )
 
 print(all_results)
@@ -1076,29 +1047,13 @@ print(all_results)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ANALYSIS iLINCs DATA 10 µM ####
 # The data have been generated in the R script which analyses the iLINCs datasets:
-# path_to//Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_AC.R
+# path_to/Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_AC.R
 
 
 # Load the environment of the script output
-load("path_to//Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_environment_selected.RData")
+load("path_to/Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_environment_selected.RData")
 
 
 library(readr)
@@ -1119,37 +1074,14 @@ library(gridExtra)
 
 # Fig. 4D ####
 
-# This is the total number of iLINCs cell lines that have been treated with agents targeting mitogenic signaling (drugs targeting effectors of chromatin remodelling and agents targeting the proteasome have been removed)
-# directory <- "path_to//Output_script_cancer_cell_lines_10uM"
-# result_list <- readRDS(file.path(directory, "iLINCs_data_unfiltered.rds"))
-# length(result_list)
-# 4,381 samples
-
-
-
-
-
-# Filtering only cancer cell lines
-# The file has been saved in the RData object.
-# directory <- "path_to//Output_script_cancer_cell_lines_10uM"
-# result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
-# length(result_list_2)
-# 2,364 samples
-
-
-
-
-# The samples are subjected to GSEA. The output is NES for specific mitogenic signaling pathways and specific cell proliferation signatures 
-# In the first filtering step samples with negative NES values for the cell cycle KEGG pathway (hsa04110) are selected (totally 423).
-
 # Open the combined_kk2 generated using the gseKEGG function of the clusterProfiler package
 # These data show the samples that have ≥1 pathway with a significant NES value
-GSEA_combined_kk2 <- read.delim("path_to//Analysis_iLINCS_Python_script_Anthony/Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_10uM/Results_GSEA/combined_kk2_results.csv",
+GSEA_combined_kk2 <- read.delim("path_to/combined_kk2_results.csv",
                                 sep = ",", header = T, stringsAsFactors = F)
 
 # Open the combined_gsea generated using the GSEA function of the clusterProfiler to assess the proliferation signatures
 # These data show the samples that have ≥1 proliferation signature with a significant NES value 
-GSEA_combined_iLINCs <- read.delim("path_to//Analysis_iLINCS_Python_script_Anthony/Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_10uM/Results_GSEA/combined_gsea_results.csv",
+GSEA_combined_iLINCs <- read.delim("path_to/combined_gsea_results.csv",
                                    sep = ",", header = T, stringsAsFactors = F)
 
 # Join the GSEA_combined_kk2 data frame with the results of the proliferation signatures GSEA
@@ -1255,7 +1187,7 @@ Cell_line_drug_combinations <- iLINCS_cell_cycle_arrest_mitogenic_signaling %>%
 # Write the final dataset to a file
 iLINCs_Cell_line_drug_combinations_final <-  Cell_line_drug_combinations %>%
   separate(Sample, into = c("Cell_line", "Drug"), sep = "_", remove = FALSE)
-output_directory <- "/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Manuscript/Figures/Fig_3"
+output_directory <- "path_to/Fig_3"
 write.csv(iLINCs_Cell_line_drug_combinations_final, file = paste0(output_directory, "/iLINCs_Cell_line_drug_combinations.csv"), row.names = FALSE)
 
 
@@ -1263,13 +1195,13 @@ write.csv(iLINCs_Cell_line_drug_combinations_final, file = paste0(output_directo
 Cell_lines <- iLINCS_cell_cycle_arrest_mitogenic_signaling %>%
   mutate(Sample = gsub("(^[^_]+)_.*", "\\1", Sample)) %>%
   dplyr::distinct(Sample)
-# 39 human cancer cell lines
+# 36 human cancer cell lines
 
 # How many drugs are present in the final dataset
 Drugs <- iLINCS_cell_cycle_arrest_mitogenic_signaling %>%
   mutate(Sample = gsub("^[^_]+_([^_]+)_.*", "\\1", Sample)) %>%
   dplyr::distinct(Sample)
-# 32 different drugs
+# 33 different drugs
 
 
 
@@ -1368,7 +1300,7 @@ Samples_N3 <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
 # 143 samples
 
 # Save the plot
-ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 12, height = 14, path = "path_to/output")
+ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 12, height = 14, path = "path_to/Desktop")
 
 
 
@@ -1396,7 +1328,7 @@ ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 12, height =
 # Fig. 4E ####
 
 # Load the complete iLINCs data
-all_results_2_complete <- read.csv("path_to//Analysis_iLINCS_Python_script_Anthony/Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_10uM/Results_all_cancer_cell_lines_10uM.csv",
+all_results_2_complete <- read.csv("path_to/Results_all_cancer_cell_lines_10uM.csv",
                                    header = TRUE, sep = ",", stringsAsFactors = FALSE)
 
 
@@ -1413,7 +1345,7 @@ iLINCS_analysis <- dplyr::mutate(all_results_2_complete, Log10_MFE_change = log1
 # Add information on cell lines and drugs and group the samples accordingly
 
 # Open the iLINCs cell_info file
-iLINCs_cell_info <- read.delim("path_to//Analysis_iLINCS_Python_script_Anthony/cellinfo_beta.csv",
+iLINCs_cell_info <- read.delim("path_to/cellinfo_beta.csv",
                                sep = ",", header = T, stringsAsFactors = F) %>%
   dplyr::rename(iLINCs_cell_line = cell_iname)
 
@@ -1431,7 +1363,7 @@ iLINCs_cell_info_complete <- dplyr::left_join(iLINCS_analysis, iLINCs_cell_info,
 
 # Add the drug targets
 # In the original data frame, some of the drug targets, were missing. They have been added together with the relative signaling pathways. The file has been save as .csv file and loaded here below.
-iLINCs_drug_info_complete <- read.delim("path_to//Analysis_iLINCS_Python_script_Anthony/iLINCs_complete_data_selected_samples.csv",
+iLINCs_drug_info_complete <- read.delim("path_to/iLINCs_complete_data_selected_samples.csv",
                                         sep = ",", header = T, stringsAsFactors = F) %>%
   dplyr::select("Anti_cancer_agents", "TARGET", "TARGET_PATHWAY") %>%
   dplyr::rename(Drug = Anti_cancer_agents)
@@ -1528,12 +1460,6 @@ iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10
 
 print(iLINCS_analysis_plot_membrane_receptors)
 
-# Save the plot
-# ggsave("iLINCS_analysis_volcano_plot.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "path_to/output")
-
-
-
-
 
 
 
@@ -1565,7 +1491,7 @@ N_total_iLINCs_UP <- iLINCS_analysis %>%
   nrow()
 Total_iLINCs_UP <- (100/(nrow(iLINCS_analysis))*N_total_iLINCs_UP)
 print(Total_iLINCs_UP)
-# 65% of the samples corresponding to 91 cell lines 
+# 62.5% of the samples corresponding to 91 cell lines 
 
 
 # Cell lines with a significant UP-regulation of high MFE transcripts
@@ -1573,11 +1499,11 @@ N_iLINCs_UP_p.val <- dplyr::filter(iLINCS_analysis, Quadrant == "UP_regulated_hi
   nrow()
 iLINCs_p.val_UP <- (100/(nrow(iLINCS_analysis))*N_iLINCs_UP_p.val)
 print(iLINCs_p.val_UP)
-# 25.71% of the total number of samples has a significant UP-regulation of high MFE transcripts
+# 27.2% of the total number of samples has a significant UP-regulation of high MFE transcripts
 
 Perecentage_iLINCs_UP <- (100/(Total_iLINCs_UP)*iLINCs_p.val_UP)
 print(Perecentage_iLINCs_UP)
-# This corresponds to 39.56% of the samples with am up-regulation of high MFE transcripts
+# This corresponds to 43.4% of the samples with am up-regulation of high MFE transcripts
 
 
 
@@ -1588,22 +1514,22 @@ N_total_iLINCs_DOWN <- iLINCS_analysis %>%
   dplyr::filter(Quadrant %in% c("DOWN_regulated_high_MFE_TX", "Q4")) %>%
   nrow()
 print(N_total_iLINCs_DOWN)
-# 49 cell lines
+# 55 cell lines
 
 Total_iLINCs_DOWN <- (100/(nrow(iLINCS_analysis))*N_total_iLINCs_DOWN)
 print(Total_iLINCs_DOWN)
-# Corresponding to 35% of the total number of samples
+# Corresponding to 37.4% of the total number of samples
 
 
 # Cell lines with a significant DOWN-regulation of high MFE transcripts
 N_iLINCs_DOWN_p.val <- dplyr::filter(iLINCS_analysis, Quadrant == "DOWN_regulated_high_MFE_TX") %>%
   nrow()
 print(N_iLINCs_DOWN_p.val)
-# 12 cell lines with a significant DOWN-regulation of high MFE transcripts
+# 13 cell lines with a significant DOWN-regulation of high MFE transcripts
 
 Perecentage_iLINCs_DOWN <- (100/(N_total_iLINCs_DOWN)*N_iLINCs_DOWN_p.val)
 print(Perecentage_iLINCs_DOWN)
-# 24.48% of the samples with a DOWN-regulation of high MFE transcripts has significant p values
+# 23.6% of the samples with a DOWN-regulation of high MFE transcripts has significant p values
 
 iLINCs_p.val_DOWN <- (100/(nrow(iLINCS_analysis))*N_iLINCs_DOWN_p.val)
 print(iLINCs_p.val_DOWN)
@@ -1627,7 +1553,7 @@ library(ggrepel)
 
 # Filter the subset of samples with a significant up-regulation of transcripts with increased heta capacity
 iLINCS_heat_capacity_UP_p_val_plot <- dplyr::filter(iLINCS_analysis, Quadrant == "UP_regulated_high_MFE_TX") %>%
-  dplyr::filter(Log10_Specific_heat_change > 0 & wilcox_test_all_UP_vs_DOWN_Specific_heat < 0.05)
+  dplyr::filter(Log10_Cp_37C_change > 0 & wilcox_test_all_UP_vs_DOWN_Cp_37C < 0.05)
 
 # Create the plot
 iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10_MFE_change, y = -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_pValue))) +
@@ -1707,10 +1633,6 @@ geom_text_repel(
 # Print the plot
 print(iLINCS_analysis_plot_membrane_receptors)
 
-# Save the plot
-ggsave("iLINCS_analysis_volcano_plot.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "path_to/output")
-
-
 
 
 
@@ -1740,7 +1662,7 @@ iLINCS_analysis_boxplot_horizontal <- ggplot(iLINCS_analysis, aes(y = "", x = Lo
 print(iLINCS_analysis_boxplot_horizontal)
 
 # Save the plot
-ggsave("iLINCS_analysis_boxplot_horizontal.pdf", plot = iLINCS_analysis_boxplot_horizontal, width = 5, height = 1.5, path = "path_to/output")
+ggsave("iLINCS_analysis_boxplot_horizontal.pdf", plot = iLINCS_analysis_boxplot_horizontal, width = 5, height = 1.5, path = "path_to/Desktop")
 
 
 # Null hypothesis (H0) the mean of the distribution is 0.
@@ -1777,22 +1699,37 @@ combined_plot <- iLINCS_analysis_boxplot_horizontal / iLINCS_analysis_plot_membr
 print(combined_plot)
 
 # Save the combined plot
-ggsave("combined_iLINCS_analysis_10_uM.tiff", plot = combined_plot, width = 5, height = 8.5, path = "path_to/output", dpi = 300)
+ggsave("combined_iLINCS_analysis_10_uM.tiff", plot = combined_plot, width = 5, height = 8.5, path = "path_to/Desktop", dpi = 300)
 
-# Null hypothesis (H0) the mean of the distribution is 0.
-# Alternative hypothesis (HA) the mean of the distribution is greater than 0.
-# Perform a One-Sample t-Test:
+# Null hypothesis (H0): the mean of the distribution is 0.
+# Alternative hypothesis (HA): the mean of the distribution is greater than 0.
 
-test_result <- t.test(iLINCS_analysis$Log10_MFE_change, mu = 0, alternative = "greater")
-print(test_result)
+# One-sample t-test (parametric)
+t_test_result <- t.test(iLINCS_analysis$Log10_MFE_change, mu = 0, alternative = "greater")
+print(t_test_result)
+
+# Wilcoxon signed-rank test (non-parametric, recommended for skewed data)
+# H0: median(Log10_MFE_change) = 0
+# HA: median(Log10_MFE_change) > 0
+wilcox_result <- wilcox.test(iLINCS_analysis$Log10_MFE_change, mu = 0, alternative = "greater", exact = FALSE)
+print(wilcox_result)
 
 
 
 
 
 
+# How many different cell lines are present in the final datset:
+iLINCS_cell_lines_10uM_unique <- unique(iLINCS_analysis$iLINCs_cell_line)
+length(iLINCS_cell_lines_10uM_unique)
 
+# How many cancer types does the dataset include:
+iLINCS_cancer_types_10uM_unique <- unique(iLINCS_analysis$subtype)
+length(iLINCS_cancer_types_10uM_unique)
 
+# How many distinct drugs does the dataset contain:
+iLINCS_drugs_10uM_unique <- unique(iLINCS_analysis$Drug)
+length(iLINCS_drugs_10uM_unique)
 
 
 
@@ -1813,20 +1750,6 @@ print(test_result)
 
 # Fig. 4F ####
 
-# Load the complete data generated in STEP 7 the R script:
-# path_to//Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_AC.R
-
-# Load the list object from the specified directory (STEP 7 of the original R script)
-# directory <- "path_to//Output_script_cancer_cell_lines_10uM"
-# result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
-
-
-# Select the samples of interest:
-# all_results_2_complete <- read.csv("path_to//Analysis_iLINCS_Python_script_Anthony/Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_10uM/Results_all_cancer_cell_lines_10uM.csv",
-#                                    header = TRUE, sep = ",", stringsAsFactors = FALSE) 
-
-# The objects "result_list_2" and "all_results_2_complete" have been saved in the intial RData object
-
 # Edit the names of the samples to match the iLINCs format
 all_results_2_complete$iLINCs_cell_line_drug <- sub("^(([^_]*_[^_]*)_).*", "\\1", all_results_2_complete$SampleName)
 
@@ -1841,7 +1764,7 @@ iLINCs_all_results_2_complete_filtered <- dplyr::filter(all_results_2_complete, 
 iLINCs_selected_samples <- result_list_2[grep(paste(iLINCs_all_results_2_complete_filtered$SampleName, collapse = "|"), names(result_list_2))]
 
 # Open the Table_ANNOTATED_iLINCs
-Table_ANNOTATED_iLINCs <- read.delim("path_to//Extended_Table_ANNOTATED_iLINCs/Table_ANNOTATED_iLINCs.csv",
+Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
 
@@ -1922,7 +1845,7 @@ process_result_list <- function(Sample_name) {
     plot = MFE_Sample_name,
     width = 5,
     height = 4,
-    path = "path_to/output"  # Specify the path to save the plot
+    path = "path_to/Desktop"  # Specify the path to save the plot
   )
   
   # Store the plot in the list

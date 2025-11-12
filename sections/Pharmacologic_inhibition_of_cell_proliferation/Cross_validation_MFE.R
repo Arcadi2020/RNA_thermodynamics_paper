@@ -2,9 +2,8 @@
 # The raw counts of each data set have been downloaded from GREIN (http://www.ilincs.org/apps/grein/)
 
 # Aim
-# This script analyzes RNA-seq datasets (e.g. GSE182018, OCI-AML2 ± HHT)
-# to assess how transcript expression changes relate to RNA thermodynamic
-# properties (Normalized_MFE per nucleotide and Specific_heat).
+# This script analyzes RNA-seq datasets to assess how transcript expression changes relate to RNA thermodynamic
+# properties (Normalized_MFE per nucleotide and Cp_37C).
 # It also evaluates curated proliferation and cell-cycle gene sets.
 #
 # Key Steps
@@ -20,7 +19,7 @@
 #    - QC checks: dispersion plot, PCA, heatmaps of sample distances.
 #
 # 4) Join DE results with thermodynamic annotations:
-#    - Scatter plots of log2FC vs Normalized_MFE / Specific_heat
+#    - Scatter plots of log2FC vs Normalized_MFE / Cp_37C
 #    - Compare UP vs DOWN groups (t-test, KS, permutation test)
 #    - Define “high-MFE” transcripts (75th percentile cutoff),
 #      test enrichment with two-proportion z-tests.
@@ -42,7 +41,7 @@
 #
 # Outputs
 # - QC plots (PCA, sample heatmaps, dispersion)
-# - Scatter/box/violin plots for MFE and Specific_heat
+# - Scatter/box/violin plots for MFE and Cp_37C
 # - Statistics (t-tests, KS tests, permutation, z-tests)
 # - Gene set summaries with mean ± SD log2FC and box plots
 
@@ -408,7 +407,7 @@ rownames(GSE182018_norm_TX_counts_df) <- NULL
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE182018_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE182018_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length,
-                GSM5516279, GSM5516280, GSM5516281, GSM5516282, GSM5516283, GSM5516284, GSM5516285, GSM5516286, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM5516279, GSM5516280, GSM5516281, GSM5516282, GSM5516283, GSM5516284, GSM5516285, GSM5516286, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE182018$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -509,7 +508,7 @@ GSE182018_long_data <- GSE182018_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE182018_norm_TX_aggregated_data_avg_counts <- GSE182018_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -632,7 +631,7 @@ GSE182018_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE182018, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE182018, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -645,7 +644,7 @@ ggplot(MFE_GSE182018, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE182018, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE182018, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -659,12 +658,12 @@ ggplot(MFE_GSE182018, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
   labs(y="Heat capacity (J/C)",x="",title="GSE182018_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE182018_UP <- mean(MFE_GSE182018_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE182018_DOWN <- mean(MFE_GSE182018_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE182018_all_UP_vs_DOWN <- t.test(MFE_GSE182018_DOWN$Specific_heat, MFE_GSE182018_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE182018_UP <- mean(MFE_GSE182018_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE182018_DOWN <- mean(MFE_GSE182018_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE182018_all_UP_vs_DOWN <- t.test(MFE_GSE182018_DOWN$Cp_37C, MFE_GSE182018_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE182018_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE182018_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE182018_DOWN$Specific_heat, MFE_GSE182018_UP$Specific_heat)
+ks_test_GSE182018_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE182018_DOWN$Cp_37C, MFE_GSE182018_UP$Cp_37C)
 print(ks_test_GSE182018_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -674,10 +673,10 @@ print(ks_test_GSE182018_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE182018_high_MFE_TX_in_UP_heat_capacity <- mean(GSE182018_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE182018_high_MFE_TX_in_UP_heat_capacity <- mean(GSE182018_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE182018_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE182018_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE182018_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE182018_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE182018_heat_capacity_gain_UP_vs_DOWN <- GSE182018_high_MFE_TX_in_UP_heat_capacity - GSE182018_high_MFE_TX_in_DOWN_heat_capacity
@@ -685,17 +684,17 @@ cat("GSE182018 net heat capacity UP vs DOWN high MFE TX:", GSE182018_heat_capaci
 
 
 # Extract specific heat data
-GSE182018_Specific_heat_UP <- GSE182018_high_MFE_TX_in_UP$Specific_heat
-GSE182018_Specific_heat_DOWN <- GSE182018_high_MFE_TX_in_DOWN$Specific_heat
+GSE182018_Cp_37C_UP <- GSE182018_high_MFE_TX_in_UP$Cp_37C
+GSE182018_Cp_37C_DOWN <- GSE182018_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE182018_Specific_heat_data <- data.frame(
-  GSE182018_Specific_heat = c(GSE182018_Specific_heat_UP, GSE182018_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE182018_Specific_heat_UP)), rep("DOWN", length(GSE182018_Specific_heat_DOWN))))
+GSE182018_Cp_37C_data <- data.frame(
+  GSE182018_Cp_37C = c(GSE182018_Cp_37C_UP, GSE182018_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE182018_Cp_37C_UP)), rep("DOWN", length(GSE182018_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE182018_Specific_heat_data, aes(x = regulation, y = GSE182018_Specific_heat, fill = regulation)) +
+ggplot(GSE182018_Cp_37C_data, aes(x = regulation, y = GSE182018_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE182018 specific Heat of High MFE Transcripts",
        x = "",
@@ -705,13 +704,13 @@ ggplot(GSE182018_Specific_heat_data, aes(x = regulation, y = GSE182018_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
         
-Mean_heat_capacity_GSE182018_high_MFE_TX_UP <- mean(GSE182018_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE182018_high_MFE_TX_DOWN <- mean(GSE182018_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE182018_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE182018_high_MFE_TX_in_DOWN$Specific_heat, GSE182018_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE182018_high_MFE_TX_UP <- mean(GSE182018_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE182018_high_MFE_TX_DOWN <- mean(GSE182018_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE182018_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE182018_high_MFE_TX_in_DOWN$Cp_37C, GSE182018_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE182018_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE182018_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE182018_high_MFE_TX_in_DOWN$Specific_heat, GSE182018_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE182018_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE182018_high_MFE_TX_in_DOWN$Cp_37C, GSE182018_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE182018_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -1444,7 +1443,7 @@ GSE192446_JAR_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE192
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE192446_JAR_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE192446_JAR_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                JAR_DMSO_rep1, JAR_DMSO_rep2, JAR_DMSO_rep3, JAR_vorinostat_rep1, JAR_vorinostat_rep2, JAR_vorinostat_rep3, Normalized_MFE, Temperature, Specific_heat) %>%
+                JAR_DMSO_rep1, JAR_DMSO_rep2, JAR_DMSO_rep3, JAR_vorinostat_rep1, JAR_vorinostat_rep2, JAR_vorinostat_rep3, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE192446_JAR$ensembl_transcript_id)
 
 
@@ -1549,7 +1548,7 @@ GSE192446_JAR_long_data <- GSE192446_JAR_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE192446_JAR_norm_TX_aggregated_data_avg_counts <- GSE192446_JAR_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -1660,7 +1659,7 @@ GSE192446_JAR_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE192446_JAR, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE192446_JAR, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -1673,7 +1672,7 @@ ggplot(MFE_GSE192446_JAR, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE192446_JAR, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE192446_JAR, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -1687,12 +1686,12 @@ ggplot(MFE_GSE192446_JAR, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE192446_JAR_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE192446_JAR_UP <- mean(MFE_GSE192446_JAR_UP$Specific_heat)
-Mean_heat_capacity_GSE192446_JAR_DOWN <- mean(MFE_GSE192446_JAR_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE192446_JAR_all_UP_vs_DOWN <- t.test(MFE_GSE192446_JAR_DOWN$Specific_heat, MFE_GSE192446_JAR_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE192446_JAR_UP <- mean(MFE_GSE192446_JAR_UP$Cp_37C)
+Mean_heat_capacity_GSE192446_JAR_DOWN <- mean(MFE_GSE192446_JAR_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE192446_JAR_all_UP_vs_DOWN <- t.test(MFE_GSE192446_JAR_DOWN$Cp_37C, MFE_GSE192446_JAR_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE192446_JAR_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE192446_JAR_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE192446_JAR_DOWN$Specific_heat, MFE_GSE192446_JAR_UP$Specific_heat)
+ks_test_GSE192446_JAR_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE192446_JAR_DOWN$Cp_37C, MFE_GSE192446_JAR_UP$Cp_37C)
 print(ks_test_GSE192446_JAR_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -1702,10 +1701,10 @@ print(ks_test_GSE192446_JAR_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE192446_JAR_high_MFE_TX_in_UP_heat_capacity <- mean(GSE192446_JAR_high_MFE_TX_in_UP$Specific_heat)
+GSE192446_JAR_high_MFE_TX_in_UP_heat_capacity <- mean(GSE192446_JAR_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE192446_JAR_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE192446_JAR_high_MFE_TX_in_DOWN$Specific_heat)
+GSE192446_JAR_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE192446_JAR_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE192446_JAR_heat_capacity_gain_UP_vs_DOWN <- GSE192446_JAR_high_MFE_TX_in_UP_heat_capacity - GSE192446_JAR_high_MFE_TX_in_DOWN_heat_capacity
@@ -1713,17 +1712,17 @@ cat("GSE192446_JAR net heat capacity UP vs DOWN high MFE TX:", GSE192446_JAR_hea
 
 
 # Extract specific heat data
-GSE192446_JAR_Specific_heat_UP <- GSE192446_JAR_high_MFE_TX_in_UP$Specific_heat
-GSE192446_JAR_Specific_heat_DOWN <- GSE192446_JAR_high_MFE_TX_in_DOWN$Specific_heat
+GSE192446_JAR_Cp_37C_UP <- GSE192446_JAR_high_MFE_TX_in_UP$Cp_37C
+GSE192446_JAR_Cp_37C_DOWN <- GSE192446_JAR_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE192446_JAR_Specific_heat_data <- data.frame(
-  GSE192446_JAR_Specific_heat = c(GSE192446_JAR_Specific_heat_UP, GSE192446_JAR_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE192446_JAR_Specific_heat_UP)), rep("DOWN", length(GSE192446_JAR_Specific_heat_DOWN))))
+GSE192446_JAR_Cp_37C_data <- data.frame(
+  GSE192446_JAR_Cp_37C = c(GSE192446_JAR_Cp_37C_UP, GSE192446_JAR_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE192446_JAR_Cp_37C_UP)), rep("DOWN", length(GSE192446_JAR_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE192446_JAR_Specific_heat_data, aes(x = regulation, y = GSE192446_JAR_Specific_heat, fill = regulation)) +
+ggplot(GSE192446_JAR_Cp_37C_data, aes(x = regulation, y = GSE192446_JAR_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE192446_JAR specific Heat of High MFE Transcripts",
        x = "",
@@ -1733,13 +1732,13 @@ ggplot(GSE192446_JAR_Specific_heat_data, aes(x = regulation, y = GSE192446_JAR_S
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE192446_JAR_high_MFE_TX_UP <- mean(GSE192446_JAR_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE192446_JAR_high_MFE_TX_DOWN <- mean(GSE192446_JAR_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE192446_JAR_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE192446_JAR_high_MFE_TX_in_DOWN$Specific_heat, GSE192446_JAR_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE192446_JAR_high_MFE_TX_UP <- mean(GSE192446_JAR_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE192446_JAR_high_MFE_TX_DOWN <- mean(GSE192446_JAR_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE192446_JAR_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE192446_JAR_high_MFE_TX_in_DOWN$Cp_37C, GSE192446_JAR_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE192446_JAR_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE192446_JAR_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE192446_JAR_high_MFE_TX_in_DOWN$Specific_heat, GSE192446_JAR_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE192446_JAR_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE192446_JAR_high_MFE_TX_in_DOWN$Cp_37C, GSE192446_JAR_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE192446_JAR_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -1785,7 +1784,7 @@ GSE192446_JEG3_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE19
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE192446_JEG3_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE192446_JEG3_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                JEG3_DMSO_rep1, JEG3_DMSO_rep2, JEG3_DMSO_rep3, JEG3_vorinostat_rep1, JEG3_vorinostat_rep2, JEG3_vorinostat_rep3, Normalized_MFE, Temperature, Specific_heat) %>%
+                JEG3_DMSO_rep1, JEG3_DMSO_rep2, JEG3_DMSO_rep3, JEG3_vorinostat_rep1, JEG3_vorinostat_rep2, JEG3_vorinostat_rep3, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE192446_JEG3$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -1883,7 +1882,7 @@ GSE192446_JEG3_long_data <- GSE192446_JEG3_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE192446_JEG3_norm_TX_aggregated_data_avg_counts <- GSE192446_JEG3_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -1994,7 +1993,7 @@ GSE192446_JEG3_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE192446_JEG3, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE192446_JEG3, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -2007,7 +2006,7 @@ ggplot(MFE_GSE192446_JEG3, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE192446_JEG3, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE192446_JEG3, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -2021,12 +2020,12 @@ ggplot(MFE_GSE192446_JEG3, aes(x = factor(log2FoldChange > 0), y = Specific_heat
   labs(y="Heat capacity (J/C)",x="",title="GSE192446_JEG3_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE192446_JEG3_UP <- mean(MFE_GSE192446_JEG3_UP$Specific_heat)
-Mean_heat_capacity_GSE192446_JEG3_DOWN <- mean(MFE_GSE192446_JEG3_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE192446_JEG3_all_UP_vs_DOWN <- t.test(MFE_GSE192446_JEG3_DOWN$Specific_heat, MFE_GSE192446_JEG3_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE192446_JEG3_UP <- mean(MFE_GSE192446_JEG3_UP$Cp_37C)
+Mean_heat_capacity_GSE192446_JEG3_DOWN <- mean(MFE_GSE192446_JEG3_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE192446_JEG3_all_UP_vs_DOWN <- t.test(MFE_GSE192446_JEG3_DOWN$Cp_37C, MFE_GSE192446_JEG3_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE192446_JEG3_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE192446_JEG3_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE192446_JEG3_DOWN$Specific_heat, MFE_GSE192446_JEG3_UP$Specific_heat)
+ks_test_GSE192446_JEG3_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE192446_JEG3_DOWN$Cp_37C, MFE_GSE192446_JEG3_UP$Cp_37C)
 print(ks_test_GSE192446_JEG3_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -2036,10 +2035,10 @@ print(ks_test_GSE192446_JEG3_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE192446_JEG3_high_MFE_TX_in_UP_heat_capacity <- mean(GSE192446_JEG3_high_MFE_TX_in_UP$Specific_heat)
+GSE192446_JEG3_high_MFE_TX_in_UP_heat_capacity <- mean(GSE192446_JEG3_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE192446_JEG3_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE192446_JEG3_high_MFE_TX_in_DOWN$Specific_heat)
+GSE192446_JEG3_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE192446_JEG3_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE192446_JEG3_heat_capacity_gain_UP_vs_DOWN <- GSE192446_JEG3_high_MFE_TX_in_UP_heat_capacity - GSE192446_JEG3_high_MFE_TX_in_DOWN_heat_capacity
@@ -2047,17 +2046,17 @@ cat("GSE192446_JEG3 net heat capacity UP vs DOWN high MFE TX:", GSE192446_JEG3_h
 
 
 # Extract specific heat data
-GSE192446_JEG3_Specific_heat_UP <- GSE192446_JEG3_high_MFE_TX_in_UP$Specific_heat
-GSE192446_JEG3_Specific_heat_DOWN <- GSE192446_JEG3_high_MFE_TX_in_DOWN$Specific_heat
+GSE192446_JEG3_Cp_37C_UP <- GSE192446_JEG3_high_MFE_TX_in_UP$Cp_37C
+GSE192446_JEG3_Cp_37C_DOWN <- GSE192446_JEG3_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE192446_JEG3_Specific_heat_data <- data.frame(
-  GSE192446_JEG3_Specific_heat = c(GSE192446_JEG3_Specific_heat_UP, GSE192446_JEG3_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE192446_JEG3_Specific_heat_UP)), rep("DOWN", length(GSE192446_JEG3_Specific_heat_DOWN))))
+GSE192446_JEG3_Cp_37C_data <- data.frame(
+  GSE192446_JEG3_Cp_37C = c(GSE192446_JEG3_Cp_37C_UP, GSE192446_JEG3_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE192446_JEG3_Cp_37C_UP)), rep("DOWN", length(GSE192446_JEG3_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE192446_JEG3_Specific_heat_data, aes(x = regulation, y = GSE192446_JEG3_Specific_heat, fill = regulation)) +
+ggplot(GSE192446_JEG3_Cp_37C_data, aes(x = regulation, y = GSE192446_JEG3_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE192446_JEG3 specific Heat of High MFE Transcripts",
        x = "",
@@ -2067,13 +2066,13 @@ ggplot(GSE192446_JEG3_Specific_heat_data, aes(x = regulation, y = GSE192446_JEG3
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE192446_JEG3_high_MFE_TX_UP <- mean(GSE192446_JEG3_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE192446_JEG3_high_MFE_TX_DOWN <- mean(GSE192446_JEG3_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE192446_JEG3_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE192446_JEG3_high_MFE_TX_in_DOWN$Specific_heat, GSE192446_JEG3_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE192446_JEG3_high_MFE_TX_UP <- mean(GSE192446_JEG3_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE192446_JEG3_high_MFE_TX_DOWN <- mean(GSE192446_JEG3_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE192446_JEG3_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE192446_JEG3_high_MFE_TX_in_DOWN$Cp_37C, GSE192446_JEG3_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE192446_JEG3_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE192446_JEG3_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE192446_JEG3_high_MFE_TX_in_DOWN$Specific_heat, GSE192446_JEG3_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE192446_JEG3_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE192446_JEG3_high_MFE_TX_in_DOWN$Cp_37C, GSE192446_JEG3_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE192446_JEG3_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -3033,7 +3032,7 @@ GSE165325_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE165325_
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM5031593, GSM5031595, GSM5031596, GSM5031598, GSM5031599, GSM5031601, GSM5031602, GSM5031603, 
                 GSM5031604, GSM5031605, GSM5031607, GSM5031608, GSM5031609, GSM5031610, GSM5031611, GSM5031612, 
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -3043,7 +3042,7 @@ GSE165325_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE165325_
 # Convert from wide to long format
 GSE165325_G2_norm_TX_counts_MFE_df <- GSE165325_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM5031595, GSM5031599, GSM5031603, GSM5031610, GSM5031596, GSM5031601, GSM5031604, GSM5031607, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM5031595, GSM5031599, GSM5031603, GSM5031610, GSM5031596, GSM5031601, GSM5031604, GSM5031607, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE165325_G2$ensembl_transcript_id)
 
 
@@ -3137,7 +3136,7 @@ ggplot(MFE_GSE165325_G2, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)
 # Convert from wide to long format
 GSE165325_bort_norm_TX_counts_MFE_df <- GSE165325_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM5031595, GSM5031599, GSM5031603, GSM5031610, GSM5031608, GSM5031609, GSM5031611, GSM5031612, Normalized_MFE, Temperature, Specific_heat)  %>%
+                GSM5031595, GSM5031599, GSM5031603, GSM5031610, GSM5031608, GSM5031609, GSM5031611, GSM5031612, Normalized_MFE, Cp_37C)  %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE165325_bort$ensembl_transcript_id)
 
 
@@ -3227,7 +3226,7 @@ ggplot(MFE_GSE165325_bort, aes(x = factor(log2FoldChange > 0), y = Normalized_MF
 # Convert from wide to long format
 GSE165325_mg132_norm_TX_counts_MFE_df <- GSE165325_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM5031595, GSM5031599, GSM5031603, GSM5031610, GSM5031593, GSM5031598, GSM5031602, GSM5031605, Normalized_MFE, Temperature, Specific_heat)  %>%
+                GSM5031595, GSM5031599, GSM5031603, GSM5031610, GSM5031593, GSM5031598, GSM5031602, GSM5031605, Normalized_MFE, Cp_37C)  %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE165325_mg132$ensembl_transcript_id)
 
 
@@ -3339,7 +3338,7 @@ GSE165325_G2_long_data <- GSE165325_G2_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE165325_G2_norm_TX_aggregated_data_avg_counts <- GSE165325_G2_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -3479,7 +3478,7 @@ GSE165325_bort_long_data <- GSE165325_bort_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE165325_bort_norm_TX_aggregated_data_avg_counts <- GSE165325_bort_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -3611,7 +3610,7 @@ GSE165325_mg132_long_data <- GSE165325_mg132_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE165325_mg132_norm_TX_aggregated_data_avg_counts <- GSE165325_mg132_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -3734,7 +3733,7 @@ GSE165325_mg132_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE165325_G2, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE165325_G2, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -3747,7 +3746,7 @@ ggplot(MFE_GSE165325_G2, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE165325_G2, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE165325_G2, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -3761,12 +3760,12 @@ ggplot(MFE_GSE165325_G2, aes(x = factor(log2FoldChange > 0), y = Specific_heat))
   labs(y="Heat capacity (J/C)",x="",title="GSE165325_G2_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE165325_G2_UP <- mean(MFE_GSE165325_G2_UP$Specific_heat)
-Mean_heat_capacity_GSE165325_G2_DOWN <- mean(MFE_GSE165325_G2_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE165325_G2_all_UP_vs_DOWN <- t.test(MFE_GSE165325_G2_DOWN$Specific_heat, MFE_GSE165325_G2_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE165325_G2_UP <- mean(MFE_GSE165325_G2_UP$Cp_37C)
+Mean_heat_capacity_GSE165325_G2_DOWN <- mean(MFE_GSE165325_G2_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE165325_G2_all_UP_vs_DOWN <- t.test(MFE_GSE165325_G2_DOWN$Cp_37C, MFE_GSE165325_G2_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE165325_G2_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE165325_G2_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE165325_G2_DOWN$Specific_heat, MFE_GSE165325_G2_UP$Specific_heat)
+ks_test_GSE165325_G2_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE165325_G2_DOWN$Cp_37C, MFE_GSE165325_G2_UP$Cp_37C)
 print(ks_test_GSE165325_G2_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -3776,10 +3775,10 @@ print(ks_test_GSE165325_G2_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE165325_G2_high_MFE_TX_in_UP_heat_capacity <- mean(GSE165325_G2_high_MFE_TX_in_UP$Specific_heat)
+GSE165325_G2_high_MFE_TX_in_UP_heat_capacity <- mean(GSE165325_G2_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE165325_G2_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE165325_G2_high_MFE_TX_in_DOWN$Specific_heat)
+GSE165325_G2_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE165325_G2_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE165325_G2_heat_capacity_gain_UP_vs_DOWN <- GSE165325_G2_high_MFE_TX_in_UP_heat_capacity - GSE165325_G2_high_MFE_TX_in_DOWN_heat_capacity
@@ -3787,17 +3786,17 @@ cat("GSE165325_G2 net heat capacity UP vs DOWN high MFE TX:", GSE165325_G2_heat_
 
 
 # Extract specific heat data
-GSE165325_G2_Specific_heat_UP <- GSE165325_G2_high_MFE_TX_in_UP$Specific_heat
-GSE165325_G2_Specific_heat_DOWN <- GSE165325_G2_high_MFE_TX_in_DOWN$Specific_heat
+GSE165325_G2_Cp_37C_UP <- GSE165325_G2_high_MFE_TX_in_UP$Cp_37C
+GSE165325_G2_Cp_37C_DOWN <- GSE165325_G2_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE165325_G2_Specific_heat_data <- data.frame(
-  GSE165325_G2_Specific_heat = c(GSE165325_G2_Specific_heat_UP, GSE165325_G2_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE165325_G2_Specific_heat_UP)), rep("DOWN", length(GSE165325_G2_Specific_heat_DOWN))))
+GSE165325_G2_Cp_37C_data <- data.frame(
+  GSE165325_G2_Cp_37C = c(GSE165325_G2_Cp_37C_UP, GSE165325_G2_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE165325_G2_Cp_37C_UP)), rep("DOWN", length(GSE165325_G2_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE165325_G2_Specific_heat_data, aes(x = regulation, y = GSE165325_G2_Specific_heat, fill = regulation)) +
+ggplot(GSE165325_G2_Cp_37C_data, aes(x = regulation, y = GSE165325_G2_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE165325_G2 specific Heat of High MFE Transcripts",
        x = "",
@@ -3807,13 +3806,13 @@ ggplot(GSE165325_G2_Specific_heat_data, aes(x = regulation, y = GSE165325_G2_Spe
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE165325_G2_high_MFE_TX_UP <- mean(GSE165325_G2_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE165325_G2_high_MFE_TX_DOWN <- mean(GSE165325_G2_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE165325_G2_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE165325_G2_high_MFE_TX_in_DOWN$Specific_heat, GSE165325_G2_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE165325_G2_high_MFE_TX_UP <- mean(GSE165325_G2_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE165325_G2_high_MFE_TX_DOWN <- mean(GSE165325_G2_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE165325_G2_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE165325_G2_high_MFE_TX_in_DOWN$Cp_37C, GSE165325_G2_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE165325_G2_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE165325_G2_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE165325_G2_high_MFE_TX_in_DOWN$Specific_heat, GSE165325_G2_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE165325_G2_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE165325_G2_high_MFE_TX_in_DOWN$Cp_37C, GSE165325_G2_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE165325_G2_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -3828,7 +3827,7 @@ print(ks_test_heat_capacity_GSE165325_G2_all_high_MFE_TX_UP_vs_DOWN)
 
 # This is calculated on the total n. of transcripts with a significant lobort fold change
 # Generate a scatter plot Lobort_FC vs heat capacity
-ggplot(MFE_GSE165325_bort, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE165325_bort, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -3841,7 +3840,7 @@ ggplot(MFE_GSE165325_bort, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE165325_bort, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE165325_bort, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -3855,12 +3854,12 @@ ggplot(MFE_GSE165325_bort, aes(x = factor(log2FoldChange > 0), y = Specific_heat
   labs(y="Heat capacity (J/C)",x="",title="GSE165325_bort_Lobort_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE165325_bort_UP <- mean(MFE_GSE165325_bort_UP$Specific_heat)
-Mean_heat_capacity_GSE165325_bort_DOWN <- mean(MFE_GSE165325_bort_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE165325_bort_all_UP_vs_DOWN <- t.test(MFE_GSE165325_bort_DOWN$Specific_heat, MFE_GSE165325_bort_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE165325_bort_UP <- mean(MFE_GSE165325_bort_UP$Cp_37C)
+Mean_heat_capacity_GSE165325_bort_DOWN <- mean(MFE_GSE165325_bort_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE165325_bort_all_UP_vs_DOWN <- t.test(MFE_GSE165325_bort_DOWN$Cp_37C, MFE_GSE165325_bort_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE165325_bort_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE165325_bort_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE165325_bort_DOWN$Specific_heat, MFE_GSE165325_bort_UP$Specific_heat)
+ks_test_GSE165325_bort_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE165325_bort_DOWN$Cp_37C, MFE_GSE165325_bort_UP$Cp_37C)
 print(ks_test_GSE165325_bort_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -3870,10 +3869,10 @@ print(ks_test_GSE165325_bort_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE165325_bort_high_MFE_TX_in_UP_heat_capacity <- mean(GSE165325_bort_high_MFE_TX_in_UP$Specific_heat)
+GSE165325_bort_high_MFE_TX_in_UP_heat_capacity <- mean(GSE165325_bort_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE165325_bort_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE165325_bort_high_MFE_TX_in_DOWN$Specific_heat)
+GSE165325_bort_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE165325_bort_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE165325_bort_heat_capacity_gain_UP_vs_DOWN <- GSE165325_bort_high_MFE_TX_in_UP_heat_capacity - GSE165325_bort_high_MFE_TX_in_DOWN_heat_capacity
@@ -3881,17 +3880,17 @@ cat("GSE165325_bort net heat capacity UP vs DOWN high MFE TX:", GSE165325_bort_h
 
 
 # Extract specific heat data
-GSE165325_bort_Specific_heat_UP <- GSE165325_bort_high_MFE_TX_in_UP$Specific_heat
-GSE165325_bort_Specific_heat_DOWN <- GSE165325_bort_high_MFE_TX_in_DOWN$Specific_heat
+GSE165325_bort_Cp_37C_UP <- GSE165325_bort_high_MFE_TX_in_UP$Cp_37C
+GSE165325_bort_Cp_37C_DOWN <- GSE165325_bort_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE165325_bort_Specific_heat_data <- data.frame(
-  GSE165325_bort_Specific_heat = c(GSE165325_bort_Specific_heat_UP, GSE165325_bort_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE165325_bort_Specific_heat_UP)), rep("DOWN", length(GSE165325_bort_Specific_heat_DOWN))))
+GSE165325_bort_Cp_37C_data <- data.frame(
+  GSE165325_bort_Cp_37C = c(GSE165325_bort_Cp_37C_UP, GSE165325_bort_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE165325_bort_Cp_37C_UP)), rep("DOWN", length(GSE165325_bort_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE165325_bort_Specific_heat_data, aes(x = regulation, y = GSE165325_bort_Specific_heat, fill = regulation)) +
+ggplot(GSE165325_bort_Cp_37C_data, aes(x = regulation, y = GSE165325_bort_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE165325_bort specific Heat of High MFE Transcripts",
        x = "",
@@ -3901,13 +3900,13 @@ ggplot(GSE165325_bort_Specific_heat_data, aes(x = regulation, y = GSE165325_bort
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE165325_bort_high_MFE_TX_UP <- mean(GSE165325_bort_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE165325_bort_high_MFE_TX_DOWN <- mean(GSE165325_bort_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE165325_bort_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE165325_bort_high_MFE_TX_in_DOWN$Specific_heat, GSE165325_bort_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE165325_bort_high_MFE_TX_UP <- mean(GSE165325_bort_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE165325_bort_high_MFE_TX_DOWN <- mean(GSE165325_bort_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE165325_bort_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE165325_bort_high_MFE_TX_in_DOWN$Cp_37C, GSE165325_bort_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE165325_bort_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE165325_bort_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE165325_bort_high_MFE_TX_in_DOWN$Specific_heat, GSE165325_bort_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE165325_bort_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE165325_bort_high_MFE_TX_in_DOWN$Cp_37C, GSE165325_bort_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE165325_bort_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -3927,7 +3926,7 @@ print(ks_test_heat_capacity_GSE165325_bort_all_high_MFE_TX_UP_vs_DOWN)
 
 # This is calculated on the total n. of transcripts with a significant lomg132 fold change
 # Generate a scatter plot Lomg132_FC vs heat capacity
-ggplot(MFE_GSE165325_mg132, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE165325_mg132, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -3940,7 +3939,7 @@ ggplot(MFE_GSE165325_mg132, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE165325_mg132, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE165325_mg132, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -3954,12 +3953,12 @@ ggplot(MFE_GSE165325_mg132, aes(x = factor(log2FoldChange > 0), y = Specific_hea
   labs(y="Heat capacity (J/C)",x="",title="GSE165325_mg132_Lomg132_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE165325_mg132_UP <- mean(MFE_GSE165325_mg132_UP$Specific_heat)
-Mean_heat_capacity_GSE165325_mg132_DOWN <- mean(MFE_GSE165325_mg132_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE165325_mg132_all_UP_vs_DOWN <- t.test(MFE_GSE165325_mg132_DOWN$Specific_heat, MFE_GSE165325_mg132_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE165325_mg132_UP <- mean(MFE_GSE165325_mg132_UP$Cp_37C)
+Mean_heat_capacity_GSE165325_mg132_DOWN <- mean(MFE_GSE165325_mg132_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE165325_mg132_all_UP_vs_DOWN <- t.test(MFE_GSE165325_mg132_DOWN$Cp_37C, MFE_GSE165325_mg132_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE165325_mg132_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE165325_mg132_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE165325_mg132_DOWN$Specific_heat, MFE_GSE165325_mg132_UP$Specific_heat)
+ks_test_GSE165325_mg132_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE165325_mg132_DOWN$Cp_37C, MFE_GSE165325_mg132_UP$Cp_37C)
 print(ks_test_GSE165325_mg132_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -3969,10 +3968,10 @@ print(ks_test_GSE165325_mg132_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE165325_mg132_high_MFE_TX_in_UP_heat_capacity <- mean(GSE165325_mg132_high_MFE_TX_in_UP$Specific_heat)
+GSE165325_mg132_high_MFE_TX_in_UP_heat_capacity <- mean(GSE165325_mg132_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE165325_mg132_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE165325_mg132_high_MFE_TX_in_DOWN$Specific_heat)
+GSE165325_mg132_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE165325_mg132_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE165325_mg132_heat_capacity_gain_UP_vs_DOWN <- GSE165325_mg132_high_MFE_TX_in_UP_heat_capacity - GSE165325_mg132_high_MFE_TX_in_DOWN_heat_capacity
@@ -3980,17 +3979,17 @@ cat("GSE165325_mg132 net heat capacity UP vs DOWN high MFE TX:", GSE165325_mg132
 
 
 # Extract specific heat data
-GSE165325_mg132_Specific_heat_UP <- GSE165325_mg132_high_MFE_TX_in_UP$Specific_heat
-GSE165325_mg132_Specific_heat_DOWN <- GSE165325_mg132_high_MFE_TX_in_DOWN$Specific_heat
+GSE165325_mg132_Cp_37C_UP <- GSE165325_mg132_high_MFE_TX_in_UP$Cp_37C
+GSE165325_mg132_Cp_37C_DOWN <- GSE165325_mg132_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE165325_mg132_Specific_heat_data <- data.frame(
-  GSE165325_mg132_Specific_heat = c(GSE165325_mg132_Specific_heat_UP, GSE165325_mg132_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE165325_mg132_Specific_heat_UP)), rep("DOWN", length(GSE165325_mg132_Specific_heat_DOWN))))
+GSE165325_mg132_Cp_37C_data <- data.frame(
+  GSE165325_mg132_Cp_37C = c(GSE165325_mg132_Cp_37C_UP, GSE165325_mg132_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE165325_mg132_Cp_37C_UP)), rep("DOWN", length(GSE165325_mg132_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE165325_mg132_Specific_heat_data, aes(x = regulation, y = GSE165325_mg132_Specific_heat, fill = regulation)) +
+ggplot(GSE165325_mg132_Cp_37C_data, aes(x = regulation, y = GSE165325_mg132_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE165325_mg132 specific Heat of High MFE Transcripts",
        x = "",
@@ -4000,13 +3999,13 @@ ggplot(GSE165325_mg132_Specific_heat_data, aes(x = regulation, y = GSE165325_mg1
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE165325_mg132_high_MFE_TX_UP <- mean(GSE165325_mg132_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE165325_mg132_high_MFE_TX_DOWN <- mean(GSE165325_mg132_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE165325_mg132_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE165325_mg132_high_MFE_TX_in_DOWN$Specific_heat, GSE165325_mg132_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE165325_mg132_high_MFE_TX_UP <- mean(GSE165325_mg132_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE165325_mg132_high_MFE_TX_DOWN <- mean(GSE165325_mg132_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE165325_mg132_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE165325_mg132_high_MFE_TX_in_DOWN$Cp_37C, GSE165325_mg132_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE165325_mg132_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE165325_mg132_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE165325_mg132_high_MFE_TX_in_DOWN$Specific_heat, GSE165325_mg132_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE165325_mg132_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE165325_mg132_high_MFE_TX_in_DOWN$Cp_37C, GSE165325_mg132_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE165325_mg132_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -5229,7 +5228,7 @@ GSE137535_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE137535_
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE137535_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE137535_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4081442, GSM4081443, GSM4081444, GSM4081445, GSM4081446, GSM4081447, GSM4081448, GSM4081449, GSM4081450, GSM4081451, GSM4081452, GSM4081453, Normalized_MFE, Temperature, Specific_heat)
+                GSM4081442, GSM4081443, GSM4081444, GSM4081445, GSM4081446, GSM4081447, GSM4081448, GSM4081449, GSM4081450, GSM4081451, GSM4081452, GSM4081453, Normalized_MFE, Cp_37C)
 
 
 
@@ -5240,7 +5239,7 @@ GSE137535_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE137535_
 # Convert from wide to long format
 GSE137535_DEX_norm_TX_counts_MFE_df <- GSE137535_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4081451, GSM4081452, GSM4081453, GSM4081445, GSM4081446, GSM4081447, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4081451, GSM4081452, GSM4081453, GSM4081445, GSM4081446, GSM4081447, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE137535_DEX$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -5335,7 +5334,7 @@ ggplot(MFE_GSE137535_DEX, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE
 # Convert from wide to long format
 GSE137535_DEX_SH454_norm_TX_counts_MFE_df <- GSE137535_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4081451, GSM4081452, GSM4081453, GSM4081448, GSM4081449, GSM4081450, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4081451, GSM4081452, GSM4081453, GSM4081448, GSM4081449, GSM4081450, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE137535_DEX_SH454$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -5432,7 +5431,7 @@ ggplot(MFE_GSE137535_DEX_SH454, aes(x = factor(log2FoldChange > 0), y = Normaliz
 # Convert from wide to long format
 GSE137535_SH454_norm_TX_counts_MFE_df <- GSE137535_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4081451, GSM4081452, GSM4081453, GSM4081442, GSM4081443, GSM4081444, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4081451, GSM4081452, GSM4081453, GSM4081442, GSM4081443, GSM4081444, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE137535_SH454$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -5547,7 +5546,7 @@ GSE137535_DEX_long_data <- GSE137535_DEX_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE137535_DEX_norm_TX_aggregated_data_avg_counts <- GSE137535_DEX_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -5659,7 +5658,7 @@ GSE137535_DEX_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE137535_DEX, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE137535_DEX, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -5672,7 +5671,7 @@ ggplot(MFE_GSE137535_DEX, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE137535_DEX, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE137535_DEX, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -5686,12 +5685,12 @@ ggplot(MFE_GSE137535_DEX, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE137535_DEX_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE137535_DEX_UP <- mean(MFE_GSE137535_DEX_UP$Specific_heat)
-Mean_heat_capacity_GSE137535_DEX_DOWN <- mean(MFE_GSE137535_DEX_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE137535_DEX_all_UP_vs_DOWN <- t.test(MFE_GSE137535_DEX_DOWN$Specific_heat, MFE_GSE137535_DEX_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE137535_DEX_UP <- mean(MFE_GSE137535_DEX_UP$Cp_37C)
+Mean_heat_capacity_GSE137535_DEX_DOWN <- mean(MFE_GSE137535_DEX_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE137535_DEX_all_UP_vs_DOWN <- t.test(MFE_GSE137535_DEX_DOWN$Cp_37C, MFE_GSE137535_DEX_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE137535_DEX_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE137535_DEX_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE137535_DEX_DOWN$Specific_heat, MFE_GSE137535_DEX_UP$Specific_heat)
+ks_test_GSE137535_DEX_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE137535_DEX_DOWN$Cp_37C, MFE_GSE137535_DEX_UP$Cp_37C)
 print(ks_test_GSE137535_DEX_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -5701,10 +5700,10 @@ print(ks_test_GSE137535_DEX_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE137535_DEX_high_MFE_TX_in_UP_heat_capacity <- mean(GSE137535_DEX_high_MFE_TX_in_UP$Specific_heat)
+GSE137535_DEX_high_MFE_TX_in_UP_heat_capacity <- mean(GSE137535_DEX_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE137535_DEX_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE137535_DEX_high_MFE_TX_in_DOWN$Specific_heat)
+GSE137535_DEX_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE137535_DEX_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE137535_DEX_heat_capacity_gain_UP_vs_DOWN <- GSE137535_DEX_high_MFE_TX_in_UP_heat_capacity - GSE137535_DEX_high_MFE_TX_in_DOWN_heat_capacity
@@ -5712,17 +5711,17 @@ cat("GSE137535_DEX net heat capacity UP vs DOWN high MFE TX:", GSE137535_DEX_hea
 
 
 # Extract specific heat data
-GSE137535_DEX_Specific_heat_UP <- GSE137535_DEX_high_MFE_TX_in_UP$Specific_heat
-GSE137535_DEX_Specific_heat_DOWN <- GSE137535_DEX_high_MFE_TX_in_DOWN$Specific_heat
+GSE137535_DEX_Cp_37C_UP <- GSE137535_DEX_high_MFE_TX_in_UP$Cp_37C
+GSE137535_DEX_Cp_37C_DOWN <- GSE137535_DEX_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE137535_DEX_Specific_heat_data <- data.frame(
-  GSE137535_DEX_Specific_heat = c(GSE137535_DEX_Specific_heat_UP, GSE137535_DEX_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE137535_DEX_Specific_heat_UP)), rep("DOWN", length(GSE137535_DEX_Specific_heat_DOWN))))
+GSE137535_DEX_Cp_37C_data <- data.frame(
+  GSE137535_DEX_Cp_37C = c(GSE137535_DEX_Cp_37C_UP, GSE137535_DEX_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE137535_DEX_Cp_37C_UP)), rep("DOWN", length(GSE137535_DEX_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE137535_DEX_Specific_heat_data, aes(x = regulation, y = GSE137535_DEX_Specific_heat, fill = regulation)) +
+ggplot(GSE137535_DEX_Cp_37C_data, aes(x = regulation, y = GSE137535_DEX_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE137535_DEX specific Heat of High MFE Transcripts",
        x = "",
@@ -5732,13 +5731,13 @@ ggplot(GSE137535_DEX_Specific_heat_data, aes(x = regulation, y = GSE137535_DEX_S
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE137535_DEX_high_MFE_TX_UP <- mean(GSE137535_DEX_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE137535_DEX_high_MFE_TX_DOWN <- mean(GSE137535_DEX_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE137535_DEX_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE137535_DEX_high_MFE_TX_in_DOWN$Specific_heat, GSE137535_DEX_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE137535_DEX_high_MFE_TX_UP <- mean(GSE137535_DEX_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE137535_DEX_high_MFE_TX_DOWN <- mean(GSE137535_DEX_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE137535_DEX_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE137535_DEX_high_MFE_TX_in_DOWN$Cp_37C, GSE137535_DEX_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE137535_DEX_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE137535_DEX_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE137535_DEX_high_MFE_TX_in_DOWN$Specific_heat, GSE137535_DEX_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE137535_DEX_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE137535_DEX_high_MFE_TX_in_DOWN$Cp_37C, GSE137535_DEX_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE137535_DEX_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -5764,7 +5763,7 @@ GSE137535_DEX_SH454_long_data <- GSE137535_DEX_SH454_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE137535_DEX_SH454_norm_TX_aggregated_data_avg_counts <- GSE137535_DEX_SH454_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -5874,7 +5873,7 @@ GSE137535_DEX_SH454_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE137535_DEX_SH454, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE137535_DEX_SH454, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -5887,7 +5886,7 @@ ggplot(MFE_GSE137535_DEX_SH454, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE137535_DEX_SH454, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE137535_DEX_SH454, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -5901,12 +5900,12 @@ ggplot(MFE_GSE137535_DEX_SH454, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE137535_DEX_SH454_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE137535_DEX_SH454_UP <- mean(MFE_GSE137535_DEX_SH454_UP$Specific_heat)
-Mean_heat_capacity_GSE137535_DEX_SH454_DOWN <- mean(MFE_GSE137535_DEX_SH454_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE137535_DEX_SH454_all_UP_vs_DOWN <- t.test(MFE_GSE137535_DEX_SH454_DOWN$Specific_heat, MFE_GSE137535_DEX_SH454_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE137535_DEX_SH454_UP <- mean(MFE_GSE137535_DEX_SH454_UP$Cp_37C)
+Mean_heat_capacity_GSE137535_DEX_SH454_DOWN <- mean(MFE_GSE137535_DEX_SH454_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE137535_DEX_SH454_all_UP_vs_DOWN <- t.test(MFE_GSE137535_DEX_SH454_DOWN$Cp_37C, MFE_GSE137535_DEX_SH454_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE137535_DEX_SH454_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE137535_DEX_SH454_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE137535_DEX_SH454_DOWN$Specific_heat, MFE_GSE137535_DEX_SH454_UP$Specific_heat)
+ks_test_GSE137535_DEX_SH454_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE137535_DEX_SH454_DOWN$Cp_37C, MFE_GSE137535_DEX_SH454_UP$Cp_37C)
 print(ks_test_GSE137535_DEX_SH454_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -5916,10 +5915,10 @@ print(ks_test_GSE137535_DEX_SH454_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE137535_DEX_SH454_high_MFE_TX_in_UP_heat_capacity <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_UP$Specific_heat)
+GSE137535_DEX_SH454_high_MFE_TX_in_UP_heat_capacity <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE137535_DEX_SH454_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Specific_heat)
+GSE137535_DEX_SH454_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE137535_DEX_SH454_heat_capacity_gain_UP_vs_DOWN <- GSE137535_DEX_SH454_high_MFE_TX_in_UP_heat_capacity - GSE137535_DEX_SH454_high_MFE_TX_in_DOWN_heat_capacity
@@ -5927,17 +5926,17 @@ cat("GSE137535_DEX_SH454 net heat capacity UP vs DOWN high MFE TX:", GSE137535_D
 
 
 # Extract specific heat data
-GSE137535_DEX_SH454_Specific_heat_UP <- GSE137535_DEX_SH454_high_MFE_TX_in_UP$Specific_heat
-GSE137535_DEX_SH454_Specific_heat_DOWN <- GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Specific_heat
+GSE137535_DEX_SH454_Cp_37C_UP <- GSE137535_DEX_SH454_high_MFE_TX_in_UP$Cp_37C
+GSE137535_DEX_SH454_Cp_37C_DOWN <- GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE137535_DEX_SH454_Specific_heat_data <- data.frame(
-  GSE137535_DEX_SH454_Specific_heat = c(GSE137535_DEX_SH454_Specific_heat_UP, GSE137535_DEX_SH454_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE137535_DEX_SH454_Specific_heat_UP)), rep("DOWN", length(GSE137535_DEX_SH454_Specific_heat_DOWN))))
+GSE137535_DEX_SH454_Cp_37C_data <- data.frame(
+  GSE137535_DEX_SH454_Cp_37C = c(GSE137535_DEX_SH454_Cp_37C_UP, GSE137535_DEX_SH454_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE137535_DEX_SH454_Cp_37C_UP)), rep("DOWN", length(GSE137535_DEX_SH454_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE137535_DEX_SH454_Specific_heat_data, aes(x = regulation, y = GSE137535_DEX_SH454_Specific_heat, fill = regulation)) +
+ggplot(GSE137535_DEX_SH454_Cp_37C_data, aes(x = regulation, y = GSE137535_DEX_SH454_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE137535_DEX_SH454 specific Heat of High MFE Transcripts",
        x = "",
@@ -5947,13 +5946,13 @@ ggplot(GSE137535_DEX_SH454_Specific_heat_data, aes(x = regulation, y = GSE137535
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE137535_DEX_SH454_high_MFE_TX_UP <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE137535_DEX_SH454_high_MFE_TX_DOWN <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE137535_DEX_SH454_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Specific_heat, GSE137535_DEX_SH454_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE137535_DEX_SH454_high_MFE_TX_UP <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE137535_DEX_SH454_high_MFE_TX_DOWN <- mean(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE137535_DEX_SH454_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Cp_37C, GSE137535_DEX_SH454_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE137535_DEX_SH454_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE137535_DEX_SH454_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Specific_heat, GSE137535_DEX_SH454_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE137535_DEX_SH454_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE137535_DEX_SH454_high_MFE_TX_in_DOWN$Cp_37C, GSE137535_DEX_SH454_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE137535_DEX_SH454_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -5990,7 +5989,7 @@ GSE137535_SH454_long_data <- GSE137535_SH454_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE137535_SH454_norm_TX_aggregated_data_avg_counts <- GSE137535_SH454_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -6178,7 +6177,7 @@ cat("Z-statistic for low MFE TX counts in Control vs SH454:", z_stat_low, "\n")
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE137535_SH454, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE137535_SH454, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -6191,7 +6190,7 @@ ggplot(MFE_GSE137535_SH454, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE137535_SH454, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE137535_SH454, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -6205,12 +6204,12 @@ ggplot(MFE_GSE137535_SH454, aes(x = factor(log2FoldChange > 0), y = Specific_hea
   labs(y="Heat capacity (J/C)",x="",title="GSE137535_SH454_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE137535_SH454_UP <- mean(MFE_GSE137535_SH454_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE137535_SH454_DOWN <- mean(MFE_GSE137535_SH454_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE137535_SH454_all_UP_vs_DOWN <- t.test(MFE_GSE137535_SH454_DOWN$Specific_heat, MFE_GSE137535_SH454_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE137535_SH454_UP <- mean(MFE_GSE137535_SH454_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE137535_SH454_DOWN <- mean(MFE_GSE137535_SH454_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE137535_SH454_all_UP_vs_DOWN <- t.test(MFE_GSE137535_SH454_DOWN$Cp_37C, MFE_GSE137535_SH454_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE137535_SH454_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE137535_SH454_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE137535_SH454_DOWN$Specific_heat, MFE_GSE137535_SH454_UP$Specific_heat)
+ks_test_GSE137535_SH454_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE137535_SH454_DOWN$Cp_37C, MFE_GSE137535_SH454_UP$Cp_37C)
 print(ks_test_GSE137535_SH454_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -6220,10 +6219,10 @@ print(ks_test_GSE137535_SH454_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE137535_SH454_high_MFE_TX_in_UP_heat_capacity <- mean(GSE137535_SH454_high_MFE_TX_in_UP$Specific_heat)
+GSE137535_SH454_high_MFE_TX_in_UP_heat_capacity <- mean(GSE137535_SH454_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE137535_SH454_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE137535_SH454_high_MFE_TX_in_DOWN$Specific_heat)
+GSE137535_SH454_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE137535_SH454_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE137535_SH454_heat_capacity_gain_UP_vs_DOWN <- GSE137535_SH454_high_MFE_TX_in_UP_heat_capacity - GSE137535_SH454_high_MFE_TX_in_DOWN_heat_capacity
@@ -6231,17 +6230,17 @@ cat("GSE137535_SH454 net heat capacity UP vs DOWN high MFE TX:", GSE137535_SH454
 
 
 # Extract specific heat data
-GSE137535_SH454_Specific_heat_UP <- GSE137535_SH454_high_MFE_TX_in_UP$Specific_heat
-GSE137535_SH454_Specific_heat_DOWN <- GSE137535_SH454_high_MFE_TX_in_DOWN$Specific_heat
+GSE137535_SH454_Cp_37C_UP <- GSE137535_SH454_high_MFE_TX_in_UP$Cp_37C
+GSE137535_SH454_Cp_37C_DOWN <- GSE137535_SH454_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE137535_SH454_Specific_heat_data <- data.frame(
-  GSE137535_SH454_Specific_heat = c(GSE137535_SH454_Specific_heat_UP, GSE137535_SH454_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE137535_SH454_Specific_heat_UP)), rep("DOWN", length(GSE137535_SH454_Specific_heat_DOWN))))
+GSE137535_SH454_Cp_37C_data <- data.frame(
+  GSE137535_SH454_Cp_37C = c(GSE137535_SH454_Cp_37C_UP, GSE137535_SH454_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE137535_SH454_Cp_37C_UP)), rep("DOWN", length(GSE137535_SH454_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE137535_SH454_Specific_heat_data, aes(x = regulation, y = GSE137535_SH454_Specific_heat, fill = regulation)) +
+ggplot(GSE137535_SH454_Cp_37C_data, aes(x = regulation, y = GSE137535_SH454_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE137535_SH454 specific Heat of High MFE Transcripts",
        x = "",
@@ -6251,13 +6250,13 @@ ggplot(GSE137535_SH454_Specific_heat_data, aes(x = regulation, y = GSE137535_SH4
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE137535_SH454_high_MFE_TX_UP <- mean(GSE137535_SH454_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE137535_SH454_high_MFE_TX_DOWN <- mean(GSE137535_SH454_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE137535_SH454_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE137535_SH454_high_MFE_TX_in_DOWN$Specific_heat, GSE137535_SH454_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE137535_SH454_high_MFE_TX_UP <- mean(GSE137535_SH454_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE137535_SH454_high_MFE_TX_DOWN <- mean(GSE137535_SH454_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE137535_SH454_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE137535_SH454_high_MFE_TX_in_DOWN$Cp_37C, GSE137535_SH454_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE137535_SH454_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE137535_SH454_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE137535_SH454_high_MFE_TX_in_DOWN$Specific_heat, GSE137535_SH454_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE137535_SH454_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE137535_SH454_high_MFE_TX_in_DOWN$Cp_37C, GSE137535_SH454_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE137535_SH454_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -7684,7 +7683,7 @@ GSE100327_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE100327_
 GSE100327_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE100327_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, GSM2677861, GSM2677862, GSM2677863, GSM2677864, GSM2677865, GSM2677866, GSM2677867, GSM2677868, GSM2677869, GSM2677870, GSM2677871,
                 GSM2677872, GSM2677873, GSM2677874, GSM2677875, GSM2677876, GSM2677877, GSM2677878, GSM2677879, GSM2677880, GSM2677881, GSM2677882, GSM2677883, GSM2677884, GSM2677885, GSM2677886, GSM2677887, GSM2677888,
-                GSM2677889, GSM2677890, Normalized_MFE, Temperature, Specific_heat)
+                GSM2677889, GSM2677890, Normalized_MFE, Cp_37C)
 
 
 
@@ -7694,7 +7693,7 @@ GSE100327_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE100327_
 # GSE100327_BxPC
 GSE100327_BxPC_norm_TX_counts_MFE_df <- GSE100327_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2677861, GSM2677862, GSM2677863, GSM2677864, GSM2677865, GSM2677866, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2677861, GSM2677862, GSM2677863, GSM2677864, GSM2677865, GSM2677866, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE100327_BxPC$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -7787,7 +7786,7 @@ ggplot(MFE_GSE100327_BxPC, aes(x = factor(log2FoldChange > 0), y = Normalized_MF
 # GSE100327_MIA_PaCa
 GSE100327_MIA_PaCa_norm_TX_counts_MFE_df <- GSE100327_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2677867, GSM2677868, GSM2677869, GSM2677870, GSM2677871, GSM2677872, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2677867, GSM2677868, GSM2677869, GSM2677870, GSM2677871, GSM2677872, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE100327_MIA_PaCa$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -7878,7 +7877,7 @@ ggplot(MFE_GSE100327_MIA_PaCa, aes(x = factor(log2FoldChange > 0), y = Normalize
 # GSE100327_PANC
 GSE100327_PANC_norm_TX_counts_MFE_df <- GSE100327_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2677873, GSM2677874, GSM2677875, GSM2677876, GSM2677877, GSM2677878, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2677873, GSM2677874, GSM2677875, GSM2677876, GSM2677877, GSM2677878, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE100327_PANC$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -7966,7 +7965,7 @@ ggplot(MFE_GSE100327_PANC, aes(x = factor(log2FoldChange > 0), y = Normalized_MF
 # GSE100327_1334
 GSE100327_1334_norm_TX_counts_MFE_df <- GSE100327_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2677879, GSM2677880, GSM2677881, GSM2677882, GSM2677883, GSM2677884, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2677879, GSM2677880, GSM2677881, GSM2677882, GSM2677883, GSM2677884, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE100327_1334$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -8056,7 +8055,7 @@ ggplot(MFE_GSE100327_1334, aes(x = factor(log2FoldChange > 0), y = Normalized_MF
 # GSE100327_779e
 GSE100327_779e_norm_TX_counts_MFE_df <- GSE100327_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2677885, GSM2677886, GSM2677887, GSM2677888, GSM2677889, GSM2677890, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2677885, GSM2677886, GSM2677887, GSM2677888, GSM2677889, GSM2677890, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE100327_779e$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -8167,7 +8166,7 @@ GSE100327_BxPC_long_data <- GSE100327_BxPC_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE100327_BxPC_norm_TX_aggregated_data_avg_counts <- GSE100327_BxPC_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -8281,7 +8280,7 @@ GSE100327_BxPC_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE100327_BxPC, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE100327_BxPC, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -8294,7 +8293,7 @@ ggplot(MFE_GSE100327_BxPC, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE100327_BxPC, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE100327_BxPC, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -8308,12 +8307,12 @@ ggplot(MFE_GSE100327_BxPC, aes(x = factor(log2FoldChange > 0), y = Specific_heat
   labs(y="Heat capacity (J/C)",x="",title="GSE100327_BxPC_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE100327_BxPC_UP <- mean(MFE_GSE100327_BxPC_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_BxPC_DOWN <- mean(MFE_GSE100327_BxPC_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_BxPC_all_UP_vs_DOWN <- t.test(MFE_GSE100327_BxPC_DOWN$Specific_heat, MFE_GSE100327_BxPC_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_BxPC_UP <- mean(MFE_GSE100327_BxPC_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_BxPC_DOWN <- mean(MFE_GSE100327_BxPC_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_BxPC_all_UP_vs_DOWN <- t.test(MFE_GSE100327_BxPC_DOWN$Cp_37C, MFE_GSE100327_BxPC_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_BxPC_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE100327_BxPC_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_BxPC_DOWN$Specific_heat, MFE_GSE100327_BxPC_UP$Specific_heat)
+ks_test_GSE100327_BxPC_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_BxPC_DOWN$Cp_37C, MFE_GSE100327_BxPC_UP$Cp_37C)
 print(ks_test_GSE100327_BxPC_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -8323,10 +8322,10 @@ print(ks_test_GSE100327_BxPC_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE100327_BxPC_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_BxPC_high_MFE_TX_in_UP$Specific_heat)
+GSE100327_BxPC_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_BxPC_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE100327_BxPC_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_BxPC_high_MFE_TX_in_DOWN$Specific_heat)
+GSE100327_BxPC_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_BxPC_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE100327_BxPC_heat_capacity_gain_UP_vs_DOWN <- GSE100327_BxPC_high_MFE_TX_in_UP_heat_capacity - GSE100327_BxPC_high_MFE_TX_in_DOWN_heat_capacity
@@ -8334,17 +8333,17 @@ cat("GSE100327_BxPC net heat capacity UP vs DOWN high MFE TX:", GSE100327_BxPC_h
 
 
 # Extract specific heat data
-GSE100327_BxPC_Specific_heat_UP <- GSE100327_BxPC_high_MFE_TX_in_UP$Specific_heat
-GSE100327_BxPC_Specific_heat_DOWN <- GSE100327_BxPC_high_MFE_TX_in_DOWN$Specific_heat
+GSE100327_BxPC_Cp_37C_UP <- GSE100327_BxPC_high_MFE_TX_in_UP$Cp_37C
+GSE100327_BxPC_Cp_37C_DOWN <- GSE100327_BxPC_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE100327_BxPC_Specific_heat_data <- data.frame(
-  GSE100327_BxPC_Specific_heat = c(GSE100327_BxPC_Specific_heat_UP, GSE100327_BxPC_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE100327_BxPC_Specific_heat_UP)), rep("DOWN", length(GSE100327_BxPC_Specific_heat_DOWN))))
+GSE100327_BxPC_Cp_37C_data <- data.frame(
+  GSE100327_BxPC_Cp_37C = c(GSE100327_BxPC_Cp_37C_UP, GSE100327_BxPC_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE100327_BxPC_Cp_37C_UP)), rep("DOWN", length(GSE100327_BxPC_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE100327_BxPC_Specific_heat_data, aes(x = regulation, y = GSE100327_BxPC_Specific_heat, fill = regulation)) +
+ggplot(GSE100327_BxPC_Cp_37C_data, aes(x = regulation, y = GSE100327_BxPC_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE100327_BxPC specific Heat of High MFE Transcripts",
        x = "",
@@ -8354,13 +8353,13 @@ ggplot(GSE100327_BxPC_Specific_heat_data, aes(x = regulation, y = GSE100327_BxPC
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE100327_BxPC_high_MFE_TX_UP <- mean(GSE100327_BxPC_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_BxPC_high_MFE_TX_DOWN <- mean(GSE100327_BxPC_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_BxPC_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_BxPC_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_BxPC_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_BxPC_high_MFE_TX_UP <- mean(GSE100327_BxPC_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_BxPC_high_MFE_TX_DOWN <- mean(GSE100327_BxPC_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_BxPC_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_BxPC_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_BxPC_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_BxPC_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE100327_BxPC_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_BxPC_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_BxPC_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE100327_BxPC_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_BxPC_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_BxPC_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE100327_BxPC_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -8393,7 +8392,7 @@ GSE100327_MIA_PaCa_long_data <- GSE100327_MIA_PaCa_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE100327_MIA_PaCa_norm_TX_aggregated_data_avg_counts <- GSE100327_MIA_PaCa_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -8503,7 +8502,7 @@ GSE100327_MIA_PaCa_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE100327_MIA_PaCa, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE100327_MIA_PaCa, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -8516,7 +8515,7 @@ ggplot(MFE_GSE100327_MIA_PaCa, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE100327_MIA_PaCa, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE100327_MIA_PaCa, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -8530,12 +8529,12 @@ ggplot(MFE_GSE100327_MIA_PaCa, aes(x = factor(log2FoldChange > 0), y = Specific_
   labs(y="Heat capacity (J/C)",x="",title="GSE100327_MIA_PaCa_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE100327_MIA_PaCa_UP <- mean(MFE_GSE100327_MIA_PaCa_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_MIA_PaCa_DOWN <- mean(MFE_GSE100327_MIA_PaCa_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_MIA_PaCa_all_UP_vs_DOWN <- t.test(MFE_GSE100327_MIA_PaCa_DOWN$Specific_heat, MFE_GSE100327_MIA_PaCa_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_MIA_PaCa_UP <- mean(MFE_GSE100327_MIA_PaCa_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_MIA_PaCa_DOWN <- mean(MFE_GSE100327_MIA_PaCa_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_MIA_PaCa_all_UP_vs_DOWN <- t.test(MFE_GSE100327_MIA_PaCa_DOWN$Cp_37C, MFE_GSE100327_MIA_PaCa_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_MIA_PaCa_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE100327_MIA_PaCa_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_MIA_PaCa_DOWN$Specific_heat, MFE_GSE100327_MIA_PaCa_UP$Specific_heat)
+ks_test_GSE100327_MIA_PaCa_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_MIA_PaCa_DOWN$Cp_37C, MFE_GSE100327_MIA_PaCa_UP$Cp_37C)
 print(ks_test_GSE100327_MIA_PaCa_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -8545,10 +8544,10 @@ print(ks_test_GSE100327_MIA_PaCa_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE100327_MIA_PaCa_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Specific_heat)
+GSE100327_MIA_PaCa_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Specific_heat)
+GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE100327_MIA_PaCa_heat_capacity_gain_UP_vs_DOWN <- GSE100327_MIA_PaCa_high_MFE_TX_in_UP_heat_capacity - GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN_heat_capacity
@@ -8556,17 +8555,17 @@ cat("GSE100327_MIA_PaCa net heat capacity UP vs DOWN high MFE TX:", GSE100327_MI
 
 
 # Extract specific heat data
-GSE100327_MIA_PaCa_Specific_heat_UP <- GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Specific_heat
-GSE100327_MIA_PaCa_Specific_heat_DOWN <- GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Specific_heat
+GSE100327_MIA_PaCa_Cp_37C_UP <- GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Cp_37C
+GSE100327_MIA_PaCa_Cp_37C_DOWN <- GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE100327_MIA_PaCa_Specific_heat_data <- data.frame(
-  GSE100327_MIA_PaCa_Specific_heat = c(GSE100327_MIA_PaCa_Specific_heat_UP, GSE100327_MIA_PaCa_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE100327_MIA_PaCa_Specific_heat_UP)), rep("DOWN", length(GSE100327_MIA_PaCa_Specific_heat_DOWN))))
+GSE100327_MIA_PaCa_Cp_37C_data <- data.frame(
+  GSE100327_MIA_PaCa_Cp_37C = c(GSE100327_MIA_PaCa_Cp_37C_UP, GSE100327_MIA_PaCa_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE100327_MIA_PaCa_Cp_37C_UP)), rep("DOWN", length(GSE100327_MIA_PaCa_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE100327_MIA_PaCa_Specific_heat_data, aes(x = regulation, y = GSE100327_MIA_PaCa_Specific_heat, fill = regulation)) +
+ggplot(GSE100327_MIA_PaCa_Cp_37C_data, aes(x = regulation, y = GSE100327_MIA_PaCa_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE100327_MIA_PaCa specific Heat of High MFE Transcripts",
        x = "",
@@ -8576,13 +8575,13 @@ ggplot(GSE100327_MIA_PaCa_Specific_heat_data, aes(x = regulation, y = GSE100327_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE100327_MIA_PaCa_high_MFE_TX_UP <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_MIA_PaCa_high_MFE_TX_DOWN <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_MIA_PaCa_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_MIA_PaCa_high_MFE_TX_UP <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_MIA_PaCa_high_MFE_TX_DOWN <- mean(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_MIA_PaCa_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_MIA_PaCa_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE100327_MIA_PaCa_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE100327_MIA_PaCa_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_MIA_PaCa_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_MIA_PaCa_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE100327_MIA_PaCa_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -8610,7 +8609,7 @@ GSE100327_PANC_long_data <- GSE100327_PANC_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE100327_PANC_norm_TX_aggregated_data_avg_counts <- GSE100327_PANC_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -8721,7 +8720,7 @@ GSE100327_PANC_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE100327_PANC, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE100327_PANC, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -8734,7 +8733,7 @@ ggplot(MFE_GSE100327_PANC, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE100327_PANC, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE100327_PANC, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -8748,12 +8747,12 @@ ggplot(MFE_GSE100327_PANC, aes(x = factor(log2FoldChange > 0), y = Specific_heat
   labs(y="Heat capacity (J/C)",x="",title="GSE100327_PANC_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE100327_PANC_UP <- mean(MFE_GSE100327_PANC_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_PANC_DOWN <- mean(MFE_GSE100327_PANC_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_PANC_all_UP_vs_DOWN <- t.test(MFE_GSE100327_PANC_DOWN$Specific_heat, MFE_GSE100327_PANC_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_PANC_UP <- mean(MFE_GSE100327_PANC_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_PANC_DOWN <- mean(MFE_GSE100327_PANC_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_PANC_all_UP_vs_DOWN <- t.test(MFE_GSE100327_PANC_DOWN$Cp_37C, MFE_GSE100327_PANC_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_PANC_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE100327_PANC_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_PANC_DOWN$Specific_heat, MFE_GSE100327_PANC_UP$Specific_heat)
+ks_test_GSE100327_PANC_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_PANC_DOWN$Cp_37C, MFE_GSE100327_PANC_UP$Cp_37C)
 print(ks_test_GSE100327_PANC_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -8764,10 +8763,10 @@ print(ks_test_GSE100327_PANC_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE100327_PANC_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_PANC_high_MFE_TX_in_UP$Specific_heat)
+GSE100327_PANC_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_PANC_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE100327_PANC_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_PANC_high_MFE_TX_in_DOWN$Specific_heat)
+GSE100327_PANC_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_PANC_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE100327_PANC_heat_capacity_gain_UP_vs_DOWN <- GSE100327_PANC_high_MFE_TX_in_UP_heat_capacity - GSE100327_PANC_high_MFE_TX_in_DOWN_heat_capacity
@@ -8775,17 +8774,17 @@ cat("GSE100327_PANC net heat capacity UP vs DOWN high MFE TX:", GSE100327_PANC_h
 
 
 # Extract specific heat data
-GSE100327_PANC_Specific_heat_UP <- GSE100327_PANC_high_MFE_TX_in_UP$Specific_heat
-GSE100327_PANC_Specific_heat_DOWN <- GSE100327_PANC_high_MFE_TX_in_DOWN$Specific_heat
+GSE100327_PANC_Cp_37C_UP <- GSE100327_PANC_high_MFE_TX_in_UP$Cp_37C
+GSE100327_PANC_Cp_37C_DOWN <- GSE100327_PANC_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE100327_PANC_Specific_heat_data <- data.frame(
-  GSE100327_PANC_Specific_heat = c(GSE100327_PANC_Specific_heat_UP, GSE100327_PANC_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE100327_PANC_Specific_heat_UP)), rep("DOWN", length(GSE100327_PANC_Specific_heat_DOWN))))
+GSE100327_PANC_Cp_37C_data <- data.frame(
+  GSE100327_PANC_Cp_37C = c(GSE100327_PANC_Cp_37C_UP, GSE100327_PANC_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE100327_PANC_Cp_37C_UP)), rep("DOWN", length(GSE100327_PANC_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE100327_PANC_Specific_heat_data, aes(x = regulation, y = GSE100327_PANC_Specific_heat, fill = regulation)) +
+ggplot(GSE100327_PANC_Cp_37C_data, aes(x = regulation, y = GSE100327_PANC_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE100327_PANC specific Heat of High MFE Transcripts",
        x = "",
@@ -8795,13 +8794,13 @@ ggplot(GSE100327_PANC_Specific_heat_data, aes(x = regulation, y = GSE100327_PANC
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE100327_PANC_high_MFE_TX_UP <- mean(GSE100327_PANC_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_PANC_high_MFE_TX_DOWN <- mean(GSE100327_PANC_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_PANC_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_PANC_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_PANC_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_PANC_high_MFE_TX_UP <- mean(GSE100327_PANC_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_PANC_high_MFE_TX_DOWN <- mean(GSE100327_PANC_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_PANC_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_PANC_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_PANC_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_PANC_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE100327_PANC_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_PANC_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_PANC_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE100327_PANC_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_PANC_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_PANC_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE100327_PANC_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -8836,7 +8835,7 @@ GSE100327_1334_long_data <- GSE100327_1334_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE100327_1334_norm_TX_aggregated_data_avg_counts <- GSE100327_1334_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -8948,7 +8947,7 @@ GSE100327_1334_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE100327_1334, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE100327_1334, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -8961,7 +8960,7 @@ ggplot(MFE_GSE100327_1334, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE100327_1334, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE100327_1334, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -8975,12 +8974,12 @@ ggplot(MFE_GSE100327_1334, aes(x = factor(log2FoldChange > 0), y = Specific_heat
   labs(y="Heat capacity (J/C)",x="",title="GSE100327_1334_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE100327_1334_UP <- mean(MFE_GSE100327_1334_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_1334_DOWN <- mean(MFE_GSE100327_1334_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_1334_all_UP_vs_DOWN <- t.test(MFE_GSE100327_1334_DOWN$Specific_heat, MFE_GSE100327_1334_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_1334_UP <- mean(MFE_GSE100327_1334_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_1334_DOWN <- mean(MFE_GSE100327_1334_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_1334_all_UP_vs_DOWN <- t.test(MFE_GSE100327_1334_DOWN$Cp_37C, MFE_GSE100327_1334_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_1334_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE100327_1334_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_1334_DOWN$Specific_heat, MFE_GSE100327_1334_UP$Specific_heat)
+ks_test_GSE100327_1334_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_1334_DOWN$Cp_37C, MFE_GSE100327_1334_UP$Cp_37C)
 print(ks_test_GSE100327_1334_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -8990,10 +8989,10 @@ print(ks_test_GSE100327_1334_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE100327_1334_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_1334_high_MFE_TX_in_UP$Specific_heat)
+GSE100327_1334_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_1334_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE100327_1334_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_1334_high_MFE_TX_in_DOWN$Specific_heat)
+GSE100327_1334_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_1334_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE100327_1334_heat_capacity_gain_UP_vs_DOWN <- GSE100327_1334_high_MFE_TX_in_UP_heat_capacity - GSE100327_1334_high_MFE_TX_in_DOWN_heat_capacity
@@ -9001,17 +9000,17 @@ cat("GSE100327_1334 net heat capacity UP vs DOWN high MFE TX:", GSE100327_1334_h
 
 
 # Extract specific heat data
-GSE100327_1334_Specific_heat_UP <- GSE100327_1334_high_MFE_TX_in_UP$Specific_heat
-GSE100327_1334_Specific_heat_DOWN <- GSE100327_1334_high_MFE_TX_in_DOWN$Specific_heat
+GSE100327_1334_Cp_37C_UP <- GSE100327_1334_high_MFE_TX_in_UP$Cp_37C
+GSE100327_1334_Cp_37C_DOWN <- GSE100327_1334_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE100327_1334_Specific_heat_data <- data.frame(
-  GSE100327_1334_Specific_heat = c(GSE100327_1334_Specific_heat_UP, GSE100327_1334_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE100327_1334_Specific_heat_UP)), rep("DOWN", length(GSE100327_1334_Specific_heat_DOWN))))
+GSE100327_1334_Cp_37C_data <- data.frame(
+  GSE100327_1334_Cp_37C = c(GSE100327_1334_Cp_37C_UP, GSE100327_1334_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE100327_1334_Cp_37C_UP)), rep("DOWN", length(GSE100327_1334_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE100327_1334_Specific_heat_data, aes(x = regulation, y = GSE100327_1334_Specific_heat, fill = regulation)) +
+ggplot(GSE100327_1334_Cp_37C_data, aes(x = regulation, y = GSE100327_1334_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE100327_1334 specific Heat of High MFE Transcripts",
        x = "",
@@ -9021,13 +9020,13 @@ ggplot(GSE100327_1334_Specific_heat_data, aes(x = regulation, y = GSE100327_1334
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE100327_1334_high_MFE_TX_UP <- mean(GSE100327_1334_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_1334_high_MFE_TX_DOWN <- mean(GSE100327_1334_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_1334_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_1334_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_1334_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_1334_high_MFE_TX_UP <- mean(GSE100327_1334_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_1334_high_MFE_TX_DOWN <- mean(GSE100327_1334_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_1334_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_1334_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_1334_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_1334_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE100327_1334_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_1334_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_1334_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE100327_1334_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_1334_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_1334_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE100327_1334_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -9058,7 +9057,7 @@ GSE100327_779e_long_data <- GSE100327_779e_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE100327_779e_norm_TX_aggregated_data_avg_counts <- GSE100327_779e_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -9168,7 +9167,7 @@ GSE100327_779e_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE100327_779e, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE100327_779e, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -9181,7 +9180,7 @@ ggplot(MFE_GSE100327_779e, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE100327_779e, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE100327_779e, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -9195,12 +9194,12 @@ ggplot(MFE_GSE100327_779e, aes(x = factor(log2FoldChange > 0), y = Specific_heat
   labs(y="Heat capacity (J/C)",x="",title="GSE100327_779e_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE100327_779e_UP <- mean(MFE_GSE100327_779e_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_779e_DOWN <- mean(MFE_GSE100327_779e_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_779e_all_UP_vs_DOWN <- t.test(MFE_GSE100327_779e_DOWN$Specific_heat, MFE_GSE100327_779e_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_779e_UP <- mean(MFE_GSE100327_779e_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_779e_DOWN <- mean(MFE_GSE100327_779e_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_779e_all_UP_vs_DOWN <- t.test(MFE_GSE100327_779e_DOWN$Cp_37C, MFE_GSE100327_779e_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_779e_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE100327_779e_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_779e_DOWN$Specific_heat, MFE_GSE100327_779e_UP$Specific_heat)
+ks_test_GSE100327_779e_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE100327_779e_DOWN$Cp_37C, MFE_GSE100327_779e_UP$Cp_37C)
 print(ks_test_GSE100327_779e_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -9210,10 +9209,10 @@ print(ks_test_GSE100327_779e_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE100327_779e_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_779e_high_MFE_TX_in_UP$Specific_heat)
+GSE100327_779e_high_MFE_TX_in_UP_heat_capacity <- mean(GSE100327_779e_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE100327_779e_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_779e_high_MFE_TX_in_DOWN$Specific_heat)
+GSE100327_779e_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE100327_779e_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE100327_779e_heat_capacity_gain_UP_vs_DOWN <- GSE100327_779e_high_MFE_TX_in_UP_heat_capacity - GSE100327_779e_high_MFE_TX_in_DOWN_heat_capacity
@@ -9221,17 +9220,17 @@ cat("GSE100327_779e net heat capacity UP vs DOWN high MFE TX:", GSE100327_779e_h
 
 
 # Extract specific heat data
-GSE100327_779e_Specific_heat_UP <- GSE100327_779e_high_MFE_TX_in_UP$Specific_heat
-GSE100327_779e_Specific_heat_DOWN <- GSE100327_779e_high_MFE_TX_in_DOWN$Specific_heat
+GSE100327_779e_Cp_37C_UP <- GSE100327_779e_high_MFE_TX_in_UP$Cp_37C
+GSE100327_779e_Cp_37C_DOWN <- GSE100327_779e_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE100327_779e_Specific_heat_data <- data.frame(
-  GSE100327_779e_Specific_heat = c(GSE100327_779e_Specific_heat_UP, GSE100327_779e_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE100327_779e_Specific_heat_UP)), rep("DOWN", length(GSE100327_779e_Specific_heat_DOWN))))
+GSE100327_779e_Cp_37C_data <- data.frame(
+  GSE100327_779e_Cp_37C = c(GSE100327_779e_Cp_37C_UP, GSE100327_779e_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE100327_779e_Cp_37C_UP)), rep("DOWN", length(GSE100327_779e_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE100327_779e_Specific_heat_data, aes(x = regulation, y = GSE100327_779e_Specific_heat, fill = regulation)) +
+ggplot(GSE100327_779e_Cp_37C_data, aes(x = regulation, y = GSE100327_779e_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE100327_779e specific Heat of High MFE Transcripts",
        x = "",
@@ -9241,13 +9240,13 @@ ggplot(GSE100327_779e_Specific_heat_data, aes(x = regulation, y = GSE100327_779e
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE100327_779e_high_MFE_TX_UP <- mean(GSE100327_779e_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE100327_779e_high_MFE_TX_DOWN <- mean(GSE100327_779e_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE100327_779e_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_779e_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_779e_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE100327_779e_high_MFE_TX_UP <- mean(GSE100327_779e_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE100327_779e_high_MFE_TX_DOWN <- mean(GSE100327_779e_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE100327_779e_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE100327_779e_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_779e_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE100327_779e_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE100327_779e_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_779e_high_MFE_TX_in_DOWN$Specific_heat, GSE100327_779e_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE100327_779e_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE100327_779e_high_MFE_TX_in_DOWN$Cp_37C, GSE100327_779e_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE100327_779e_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -11109,7 +11108,7 @@ GSE105083_MIA_PACA2_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", 
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE105083_MIA_PACA2_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE105083_MIA_PACA2_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2817701, GSM2817702, GSM2817704, GSM2817705, GSM2817706, GSM2817707, GSM2817709, GSM2817709, GSM2817710, GSM2817711, Normalized_MFE, Temperature, Specific_heat)
+                GSM2817701, GSM2817702, GSM2817704, GSM2817705, GSM2817706, GSM2817707, GSM2817709, GSM2817709, GSM2817710, GSM2817711, Normalized_MFE, Cp_37C)
 
 
 
@@ -11121,7 +11120,7 @@ GSE105083_MIA_PACA2_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, 
 # Convert from wide to long format
 GSE105083_MIA_PACA2_6h_norm_TX_counts_MFE_df <- GSE105083_MIA_PACA2_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2817701, GSM2817702, GSM2817704, GSM2817705, GSM2817706, GSM2817707, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2817701, GSM2817702, GSM2817704, GSM2817705, GSM2817706, GSM2817707, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE105083_MIA_PACA2_6h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -11219,7 +11218,7 @@ ggplot(MFE_GSE105083_MIA_PACA2_6h, aes(x = factor(log2FoldChange > 0), y = Norma
 # Convert from wide to long format
 GSE105083_MIA_PACA2_24h_norm_TX_counts_MFE_df <- GSE105083_MIA_PACA2_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2817701, GSM2817702, GSM2817704, GSM2817709, GSM2817710, GSM2817711, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2817701, GSM2817702, GSM2817704, GSM2817709, GSM2817710, GSM2817711, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE105083_MIA_PACA2_24h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -11329,7 +11328,7 @@ GSE105083_MIA_PACA2_6h_long_data <- GSE105083_MIA_PACA2_6h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE105083_MIA_PACA2_6h_norm_TX_aggregated_data_avg_counts <- GSE105083_MIA_PACA2_6h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -11516,7 +11515,7 @@ cat("Z-statistic for the test:", z_stat, "\n")
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE105083_MIA_PACA2_6h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE105083_MIA_PACA2_6h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -11529,7 +11528,7 @@ ggplot(MFE_GSE105083_MIA_PACA2_6h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE105083_MIA_PACA2_6h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE105083_MIA_PACA2_6h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -11543,12 +11542,12 @@ ggplot(MFE_GSE105083_MIA_PACA2_6h, aes(x = factor(log2FoldChange > 0), y = Speci
   labs(y="Heat capacity (J/C)",x="",title="GSE105083_MIA_PACA2_6h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE105083_MIA_PACA2_6h_UP <- mean(MFE_GSE105083_MIA_PACA2_6h_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE105083_MIA_PACA2_6h_DOWN <- mean(MFE_GSE105083_MIA_PACA2_6h_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE105083_MIA_PACA2_6h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_MIA_PACA2_6h_DOWN$Specific_heat, MFE_GSE105083_MIA_PACA2_6h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_6h_UP <- mean(MFE_GSE105083_MIA_PACA2_6h_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_6h_DOWN <- mean(MFE_GSE105083_MIA_PACA2_6h_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE105083_MIA_PACA2_6h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_MIA_PACA2_6h_DOWN$Cp_37C, MFE_GSE105083_MIA_PACA2_6h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_MIA_PACA2_6h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE105083_MIA_PACA2_6h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_MIA_PACA2_6h_DOWN$Specific_heat, MFE_GSE105083_MIA_PACA2_6h_UP$Specific_heat)
+ks_test_GSE105083_MIA_PACA2_6h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_MIA_PACA2_6h_DOWN$Cp_37C, MFE_GSE105083_MIA_PACA2_6h_UP$Cp_37C)
 print(ks_test_GSE105083_MIA_PACA2_6h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -11558,10 +11557,10 @@ print(ks_test_GSE105083_MIA_PACA2_6h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Specific_heat)
+GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE105083_MIA_PACA2_6h_heat_capacity_gain_UP_vs_DOWN <- GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP_heat_capacity - GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN_heat_capacity
@@ -11569,17 +11568,17 @@ cat("GSE105083_MIA_PACA2_6h net heat capacity UP vs DOWN high MFE TX:", GSE10508
 
 
 # Extract specific heat data
-GSE105083_MIA_PACA2_6h_Specific_heat_UP <- GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Specific_heat
-GSE105083_MIA_PACA2_6h_Specific_heat_DOWN <- GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Specific_heat
+GSE105083_MIA_PACA2_6h_Cp_37C_UP <- GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Cp_37C
+GSE105083_MIA_PACA2_6h_Cp_37C_DOWN <- GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE105083_MIA_PACA2_6h_Specific_heat_data <- data.frame(
-  GSE105083_MIA_PACA2_6h_Specific_heat = c(GSE105083_MIA_PACA2_6h_Specific_heat_UP, GSE105083_MIA_PACA2_6h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE105083_MIA_PACA2_6h_Specific_heat_UP)), rep("DOWN", length(GSE105083_MIA_PACA2_6h_Specific_heat_DOWN))))
+GSE105083_MIA_PACA2_6h_Cp_37C_data <- data.frame(
+  GSE105083_MIA_PACA2_6h_Cp_37C = c(GSE105083_MIA_PACA2_6h_Cp_37C_UP, GSE105083_MIA_PACA2_6h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE105083_MIA_PACA2_6h_Cp_37C_UP)), rep("DOWN", length(GSE105083_MIA_PACA2_6h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE105083_MIA_PACA2_6h_Specific_heat_data, aes(x = regulation, y = GSE105083_MIA_PACA2_6h_Specific_heat, fill = regulation)) +
+ggplot(GSE105083_MIA_PACA2_6h_Cp_37C_data, aes(x = regulation, y = GSE105083_MIA_PACA2_6h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE105083_MIA_PACA2_6h specific Heat of High MFE Transcripts",
        x = "",
@@ -11589,13 +11588,13 @@ ggplot(GSE105083_MIA_PACA2_6h_Specific_heat_data, aes(x = regulation, y = GSE105
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE105083_MIA_PACA2_6h_high_MFE_TX_UP <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE105083_MIA_PACA2_6h_high_MFE_TX_DOWN <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE105083_MIA_PACA2_6h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_6h_high_MFE_TX_UP <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_6h_high_MFE_TX_DOWN <- mean(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE105083_MIA_PACA2_6h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_MIA_PACA2_6h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE105083_MIA_PACA2_6h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE105083_MIA_PACA2_6h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_MIA_PACA2_6h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_MIA_PACA2_6h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE105083_MIA_PACA2_6h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -11625,7 +11624,7 @@ GSE105083_MIA_PACA2_24h_long_data <- GSE105083_MIA_PACA2_24h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE105083_MIA_PACA2_24h_norm_TX_aggregated_data_avg_counts <- GSE105083_MIA_PACA2_24h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -11805,7 +11804,7 @@ cat("Z-statistic for the test:", z_stat, "\n")
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE105083_MIA_PACA2_24h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE105083_MIA_PACA2_24h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -11818,7 +11817,7 @@ ggplot(MFE_GSE105083_MIA_PACA2_24h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE105083_MIA_PACA2_24h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE105083_MIA_PACA2_24h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -11832,12 +11831,12 @@ ggplot(MFE_GSE105083_MIA_PACA2_24h, aes(x = factor(log2FoldChange > 0), y = Spec
   labs(y="Heat capacity (J/C)",x="",title="GSE105083_MIA_PACA2_24h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE105083_MIA_PACA2_24h_UP <- mean(MFE_GSE105083_MIA_PACA2_24h_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE105083_MIA_PACA2_24h_DOWN <- mean(MFE_GSE105083_MIA_PACA2_24h_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE105083_MIA_PACA2_24h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_MIA_PACA2_24h_DOWN$Specific_heat, MFE_GSE105083_MIA_PACA2_24h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_24h_UP <- mean(MFE_GSE105083_MIA_PACA2_24h_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_24h_DOWN <- mean(MFE_GSE105083_MIA_PACA2_24h_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE105083_MIA_PACA2_24h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_MIA_PACA2_24h_DOWN$Cp_37C, MFE_GSE105083_MIA_PACA2_24h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_MIA_PACA2_24h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE105083_MIA_PACA2_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_MIA_PACA2_24h_DOWN$Specific_heat, MFE_GSE105083_MIA_PACA2_24h_UP$Specific_heat)
+ks_test_GSE105083_MIA_PACA2_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_MIA_PACA2_24h_DOWN$Cp_37C, MFE_GSE105083_MIA_PACA2_24h_UP$Cp_37C)
 print(ks_test_GSE105083_MIA_PACA2_24h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -11847,10 +11846,10 @@ print(ks_test_GSE105083_MIA_PACA2_24h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Specific_heat)
+GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE105083_MIA_PACA2_24h_heat_capacity_gain_UP_vs_DOWN <- GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP_heat_capacity - GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN_heat_capacity
@@ -11858,17 +11857,17 @@ cat("GSE105083_MIA_PACA2_24h net heat capacity UP vs DOWN high MFE TX:", GSE1050
 
 
 # Extract specific heat data
-GSE105083_MIA_PACA2_24h_Specific_heat_UP <- GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Specific_heat
-GSE105083_MIA_PACA2_24h_Specific_heat_DOWN <- GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Specific_heat
+GSE105083_MIA_PACA2_24h_Cp_37C_UP <- GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Cp_37C
+GSE105083_MIA_PACA2_24h_Cp_37C_DOWN <- GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE105083_MIA_PACA2_24h_Specific_heat_data <- data.frame(
-  GSE105083_MIA_PACA2_24h_Specific_heat = c(GSE105083_MIA_PACA2_24h_Specific_heat_UP, GSE105083_MIA_PACA2_24h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE105083_MIA_PACA2_24h_Specific_heat_UP)), rep("DOWN", length(GSE105083_MIA_PACA2_24h_Specific_heat_DOWN))))
+GSE105083_MIA_PACA2_24h_Cp_37C_data <- data.frame(
+  GSE105083_MIA_PACA2_24h_Cp_37C = c(GSE105083_MIA_PACA2_24h_Cp_37C_UP, GSE105083_MIA_PACA2_24h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE105083_MIA_PACA2_24h_Cp_37C_UP)), rep("DOWN", length(GSE105083_MIA_PACA2_24h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE105083_MIA_PACA2_24h_Specific_heat_data, aes(x = regulation, y = GSE105083_MIA_PACA2_24h_Specific_heat, fill = regulation)) +
+ggplot(GSE105083_MIA_PACA2_24h_Cp_37C_data, aes(x = regulation, y = GSE105083_MIA_PACA2_24h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE105083_MIA_PACA2_24h specific Heat of High MFE Transcripts",
        x = "",
@@ -11878,13 +11877,13 @@ ggplot(GSE105083_MIA_PACA2_24h_Specific_heat_data, aes(x = regulation, y = GSE10
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE105083_MIA_PACA2_24h_high_MFE_TX_UP <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE105083_MIA_PACA2_24h_high_MFE_TX_DOWN <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE105083_MIA_PACA2_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_24h_high_MFE_TX_UP <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE105083_MIA_PACA2_24h_high_MFE_TX_DOWN <- mean(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE105083_MIA_PACA2_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_MIA_PACA2_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE105083_MIA_PACA2_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE105083_MIA_PACA2_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_MIA_PACA2_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_MIA_PACA2_24h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE105083_MIA_PACA2_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -11925,7 +11924,7 @@ GSE105083_PANC1_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE1
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE105083_PANC1_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE105083_PANC1_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2817713, GSM2817715, GSM2817716, GSM2817717, GSM2817718, GSM2817719, GSM2817722, GSM2817723, GSM2817724, Normalized_MFE, Temperature, Specific_heat)
+                GSM2817713, GSM2817715, GSM2817716, GSM2817717, GSM2817718, GSM2817719, GSM2817722, GSM2817723, GSM2817724, Normalized_MFE, Cp_37C)
 
 
 
@@ -11937,7 +11936,7 @@ GSE105083_PANC1_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE1
 # Convert from wide to long format
 GSE105083_PANC1_6h_norm_TX_counts_MFE_df <- GSE105083_PANC1_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2817713, GSM2817715, GSM2817716, GSM2817717, GSM2817718, GSM2817719, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2817713, GSM2817715, GSM2817716, GSM2817717, GSM2817718, GSM2817719, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE105083_PANC1_6h$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -12031,7 +12030,7 @@ ggplot(MFE_GSE105083_PANC1_6h, aes(x = factor(log2FoldChange > 0), y = Normalize
 # Convert from wide to long format
 GSE105083_PANC1_24h_norm_TX_counts_MFE_df <- GSE105083_PANC1_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM2817713, GSM2817715, GSM2817716, GSM2817722, GSM2817723, GSM2817724, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM2817713, GSM2817715, GSM2817716, GSM2817722, GSM2817723, GSM2817724, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_GSE105083_PANC1_24h$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -12153,7 +12152,7 @@ GSE105083_PANC1_6h_long_data <- GSE105083_PANC1_6h_long_data %>%
 
 # Aggregate data by condition and calculate average counts
 GSE105083_PANC1_6h_norm_TX_aggregated_data_avg_counts <- GSE105083_PANC1_6h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -12319,7 +12318,7 @@ cat("GSE105083_PANC1_6h net change counts low MFE TX drug vs control:", GSE10508
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE105083_PANC1_6h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE105083_PANC1_6h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -12332,7 +12331,7 @@ ggplot(MFE_GSE105083_PANC1_6h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE105083_PANC1_6h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE105083_PANC1_6h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -12346,12 +12345,12 @@ ggplot(MFE_GSE105083_PANC1_6h, aes(x = factor(log2FoldChange > 0), y = Specific_
   labs(y="Heat capacity (J/C)",x="",title="GSE105083_PANC1_6h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE105083_PANC1_6h_UP <- mean(MFE_GSE105083_PANC1_6h_UP$Specific_heat)
-Mean_heat_capacity_GSE105083_PANC1_6h_DOWN <- mean(MFE_GSE105083_PANC1_6h_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE105083_PANC1_6h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_PANC1_6h_DOWN$Specific_heat, MFE_GSE105083_PANC1_6h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_PANC1_6h_UP <- mean(MFE_GSE105083_PANC1_6h_UP$Cp_37C)
+Mean_heat_capacity_GSE105083_PANC1_6h_DOWN <- mean(MFE_GSE105083_PANC1_6h_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE105083_PANC1_6h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_PANC1_6h_DOWN$Cp_37C, MFE_GSE105083_PANC1_6h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_PANC1_6h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE105083_PANC1_6h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_PANC1_6h_DOWN$Specific_heat, MFE_GSE105083_PANC1_6h_UP$Specific_heat)
+ks_test_GSE105083_PANC1_6h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_PANC1_6h_DOWN$Cp_37C, MFE_GSE105083_PANC1_6h_UP$Cp_37C)
 print(ks_test_GSE105083_PANC1_6h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -12361,10 +12360,10 @@ print(ks_test_GSE105083_PANC1_6h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE105083_PANC1_6h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_UP$Specific_heat)
+GSE105083_PANC1_6h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE105083_PANC1_6h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE105083_PANC1_6h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE105083_PANC1_6h_heat_capacity_gain_UP_vs_DOWN <- GSE105083_PANC1_6h_high_MFE_TX_in_UP_heat_capacity - GSE105083_PANC1_6h_high_MFE_TX_in_DOWN_heat_capacity
@@ -12372,17 +12371,17 @@ cat("GSE105083_PANC1_6h net heat capacity UP vs DOWN high MFE TX:", GSE105083_PA
 
 
 # Extract specific heat data
-GSE105083_PANC1_6h_Specific_heat_UP <- GSE105083_PANC1_6h_high_MFE_TX_in_UP$Specific_heat
-GSE105083_PANC1_6h_Specific_heat_DOWN <- GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Specific_heat
+GSE105083_PANC1_6h_Cp_37C_UP <- GSE105083_PANC1_6h_high_MFE_TX_in_UP$Cp_37C
+GSE105083_PANC1_6h_Cp_37C_DOWN <- GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE105083_PANC1_6h_Specific_heat_data <- data.frame(
-  GSE105083_PANC1_6h_Specific_heat = c(GSE105083_PANC1_6h_Specific_heat_UP, GSE105083_PANC1_6h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE105083_PANC1_6h_Specific_heat_UP)), rep("DOWN", length(GSE105083_PANC1_6h_Specific_heat_DOWN))))
+GSE105083_PANC1_6h_Cp_37C_data <- data.frame(
+  GSE105083_PANC1_6h_Cp_37C = c(GSE105083_PANC1_6h_Cp_37C_UP, GSE105083_PANC1_6h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE105083_PANC1_6h_Cp_37C_UP)), rep("DOWN", length(GSE105083_PANC1_6h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE105083_PANC1_6h_Specific_heat_data, aes(x = regulation, y = GSE105083_PANC1_6h_Specific_heat, fill = regulation)) +
+ggplot(GSE105083_PANC1_6h_Cp_37C_data, aes(x = regulation, y = GSE105083_PANC1_6h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE105083_PANC1_6h specific Heat of High MFE Transcripts",
        x = "",
@@ -12392,13 +12391,13 @@ ggplot(GSE105083_PANC1_6h_Specific_heat_data, aes(x = regulation, y = GSE105083_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE105083_PANC1_6h_high_MFE_TX_UP <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE105083_PANC1_6h_high_MFE_TX_DOWN <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE105083_PANC1_6h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_PANC1_6h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_PANC1_6h_high_MFE_TX_UP <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE105083_PANC1_6h_high_MFE_TX_DOWN <- mean(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE105083_PANC1_6h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_PANC1_6h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_PANC1_6h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE105083_PANC1_6h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_PANC1_6h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE105083_PANC1_6h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_PANC1_6h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_PANC1_6h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE105083_PANC1_6h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -12435,7 +12434,7 @@ GSE105083_PANC1_24h_long_data <- GSE105083_PANC1_24h_long_data %>%
 
 # Aggregate data by condition and calculate average counts
 GSE105083_PANC1_24h_norm_TX_aggregated_data_avg_counts <- GSE105083_PANC1_24h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -12606,7 +12605,7 @@ cat("GSE105083_PANC1_24h net change counts low MFE TX drug vs control:", GSE1050
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE105083_PANC1_24h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_GSE105083_PANC1_24h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -12619,7 +12618,7 @@ ggplot(MFE_GSE105083_PANC1_24h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_GSE105083_PANC1_24h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_GSE105083_PANC1_24h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -12633,12 +12632,12 @@ ggplot(MFE_GSE105083_PANC1_24h, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE105083_PANC1_24h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE105083_PANC1_24h_UP <- mean(MFE_GSE105083_PANC1_24h_UP$Specific_heat)
-Mean_heat_capacity_GSE105083_PANC1_24h_DOWN <- mean(MFE_GSE105083_PANC1_24h_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE105083_PANC1_24h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_PANC1_24h_DOWN$Specific_heat, MFE_GSE105083_PANC1_24h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_PANC1_24h_UP <- mean(MFE_GSE105083_PANC1_24h_UP$Cp_37C)
+Mean_heat_capacity_GSE105083_PANC1_24h_DOWN <- mean(MFE_GSE105083_PANC1_24h_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE105083_PANC1_24h_all_UP_vs_DOWN <- t.test(MFE_GSE105083_PANC1_24h_DOWN$Cp_37C, MFE_GSE105083_PANC1_24h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_PANC1_24h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE105083_PANC1_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_PANC1_24h_DOWN$Specific_heat, MFE_GSE105083_PANC1_24h_UP$Specific_heat)
+ks_test_GSE105083_PANC1_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE105083_PANC1_24h_DOWN$Cp_37C, MFE_GSE105083_PANC1_24h_UP$Cp_37C)
 print(ks_test_GSE105083_PANC1_24h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -12648,10 +12647,10 @@ print(ks_test_GSE105083_PANC1_24h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE105083_PANC1_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_UP$Specific_heat)
+GSE105083_PANC1_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE105083_PANC1_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE105083_PANC1_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE105083_PANC1_24h_heat_capacity_gain_UP_vs_DOWN <- GSE105083_PANC1_24h_high_MFE_TX_in_UP_heat_capacity - GSE105083_PANC1_24h_high_MFE_TX_in_DOWN_heat_capacity
@@ -12659,17 +12658,17 @@ cat("GSE105083_PANC1_24h net heat capacity UP vs DOWN high MFE TX:", GSE105083_P
 
 
 # Extract specific heat data
-GSE105083_PANC1_24h_Specific_heat_UP <- GSE105083_PANC1_24h_high_MFE_TX_in_UP$Specific_heat
-GSE105083_PANC1_24h_Specific_heat_DOWN <- GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Specific_heat
+GSE105083_PANC1_24h_Cp_37C_UP <- GSE105083_PANC1_24h_high_MFE_TX_in_UP$Cp_37C
+GSE105083_PANC1_24h_Cp_37C_DOWN <- GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE105083_PANC1_24h_Specific_heat_data <- data.frame(
-  GSE105083_PANC1_24h_Specific_heat = c(GSE105083_PANC1_24h_Specific_heat_UP, GSE105083_PANC1_24h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE105083_PANC1_24h_Specific_heat_UP)), rep("DOWN", length(GSE105083_PANC1_24h_Specific_heat_DOWN))))
+GSE105083_PANC1_24h_Cp_37C_data <- data.frame(
+  GSE105083_PANC1_24h_Cp_37C = c(GSE105083_PANC1_24h_Cp_37C_UP, GSE105083_PANC1_24h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE105083_PANC1_24h_Cp_37C_UP)), rep("DOWN", length(GSE105083_PANC1_24h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE105083_PANC1_24h_Specific_heat_data, aes(x = regulation, y = GSE105083_PANC1_24h_Specific_heat, fill = regulation)) +
+ggplot(GSE105083_PANC1_24h_Cp_37C_data, aes(x = regulation, y = GSE105083_PANC1_24h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE105083_PANC1_24h specific Heat of High MFE Transcripts",
        x = "",
@@ -12679,13 +12678,13 @@ ggplot(GSE105083_PANC1_24h_Specific_heat_data, aes(x = regulation, y = GSE105083
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE105083_PANC1_24h_high_MFE_TX_UP <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE105083_PANC1_24h_high_MFE_TX_DOWN <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE105083_PANC1_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_PANC1_24h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE105083_PANC1_24h_high_MFE_TX_UP <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE105083_PANC1_24h_high_MFE_TX_DOWN <- mean(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE105083_PANC1_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_PANC1_24h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE105083_PANC1_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE105083_PANC1_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE105083_PANC1_24h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE105083_PANC1_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE105083_PANC1_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE105083_PANC1_24h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE105083_PANC1_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -14109,7 +14108,7 @@ GSE129221_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE129221_
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE129221_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE129221_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM3702795, GSM3702796, GSM3702797, GSM3702798, GSM3702799, GSM3702800, GSM3702801, GSM3702802, GSM3702803, GSM3702804, GSM3702805, GSM3702806, Normalized_MFE, Temperature, Specific_heat)
+                GSM3702795, GSM3702796, GSM3702797, GSM3702798, GSM3702799, GSM3702800, GSM3702801, GSM3702802, GSM3702803, GSM3702804, GSM3702805, GSM3702806, Normalized_MFE, Cp_37C)
 # Remove all transcripts with > 100,000 counts. There are only a few and they could skew the calculations below
 GSE129221_norm_TX_counts_MFE_df <- GSE129221_norm_TX_counts_MFE_df %>%
   dplyr::filter(GSM3702795 < 100000 & GSM3702796 < 100000 & GSM3702797 < 100000 & GSM3702798 < 100000 & GSM3702799 < 100000 & GSM3702800 < 100000 & GSM3702801 < 100000 & GSM3702802 < 100000 & GSM3702803 < 100000 & GSM3702804 < 100000 & GSM3702805 < 100000 & GSM3702806 < 100000)
@@ -14123,7 +14122,7 @@ GSE129221_norm_TX_counts_MFE_df <- GSE129221_norm_TX_counts_MFE_df %>%
 # Convert from wide to long format
 GSE129221_PC9_norm_TX_counts_MFE_df <- GSE129221_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM3702795, GSM3702796, GSM3702797, GSM3702798, GSM3702799, GSM3702800, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM3702795, GSM3702796, GSM3702797, GSM3702798, GSM3702799, GSM3702800, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE129221_PC9$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -14226,7 +14225,7 @@ GSE129221_PC9_long_data <- GSE129221_PC9_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE129221_PC9_norm_TX_aggregated_data_avg_counts <- GSE129221_PC9_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -14337,7 +14336,7 @@ GSE129221_PC9_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE129221_PC9, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE129221_PC9, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -14350,7 +14349,7 @@ ggplot(MFE_res_GSE129221_PC9, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE129221_PC9, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE129221_PC9, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -14364,12 +14363,12 @@ ggplot(MFE_res_GSE129221_PC9, aes(x = factor(log2FoldChange > 0), y = Specific_h
   labs(y="Heat capacity (J/C)",x="",title="GSE129221_PC9_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE129221_PC9_UP <- mean(MFE_res_GSE129221_PC9_UP$Specific_heat)
-Mean_heat_capacity_GSE129221_PC9_DOWN <- mean(MFE_res_GSE129221_PC9_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE129221_PC9_all_UP_vs_DOWN <- t.test(MFE_res_GSE129221_PC9_DOWN$Specific_heat, MFE_res_GSE129221_PC9_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129221_PC9_UP <- mean(MFE_res_GSE129221_PC9_UP$Cp_37C)
+Mean_heat_capacity_GSE129221_PC9_DOWN <- mean(MFE_res_GSE129221_PC9_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE129221_PC9_all_UP_vs_DOWN <- t.test(MFE_res_GSE129221_PC9_DOWN$Cp_37C, MFE_res_GSE129221_PC9_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129221_PC9_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE129221_PC9_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129221_PC9_DOWN$Specific_heat, MFE_res_GSE129221_PC9_UP$Specific_heat)
+ks_test_GSE129221_PC9_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129221_PC9_DOWN$Cp_37C, MFE_res_GSE129221_PC9_UP$Cp_37C)
 print(ks_test_GSE129221_PC9_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -14379,10 +14378,10 @@ print(ks_test_GSE129221_PC9_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE129221_PC9_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129221_PC9_high_MFE_TX_in_UP$Specific_heat)
+GSE129221_PC9_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129221_PC9_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE129221_PC9_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129221_PC9_high_MFE_TX_in_DOWN$Specific_heat)
+GSE129221_PC9_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129221_PC9_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE129221_PC9_heat_capacity_gain_UP_vs_DOWN <- GSE129221_PC9_high_MFE_TX_in_UP_heat_capacity - GSE129221_PC9_high_MFE_TX_in_DOWN_heat_capacity
@@ -14390,17 +14389,17 @@ cat("GSE129221_PC9 net heat capacity UP vs DOWN high MFE TX:", GSE129221_PC9_hea
 
 
 # Extract specific heat data
-GSE129221_PC9_Specific_heat_UP <- GSE129221_PC9_high_MFE_TX_in_UP$Specific_heat
-GSE129221_PC9_Specific_heat_DOWN <- GSE129221_PC9_high_MFE_TX_in_DOWN$Specific_heat
+GSE129221_PC9_Cp_37C_UP <- GSE129221_PC9_high_MFE_TX_in_UP$Cp_37C
+GSE129221_PC9_Cp_37C_DOWN <- GSE129221_PC9_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE129221_PC9_Specific_heat_data <- data.frame(
-  GSE129221_PC9_Specific_heat = c(GSE129221_PC9_Specific_heat_UP, GSE129221_PC9_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE129221_PC9_Specific_heat_UP)), rep("DOWN", length(GSE129221_PC9_Specific_heat_DOWN))))
+GSE129221_PC9_Cp_37C_data <- data.frame(
+  GSE129221_PC9_Cp_37C = c(GSE129221_PC9_Cp_37C_UP, GSE129221_PC9_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE129221_PC9_Cp_37C_UP)), rep("DOWN", length(GSE129221_PC9_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE129221_PC9_Specific_heat_data, aes(x = regulation, y = GSE129221_PC9_Specific_heat, fill = regulation)) +
+ggplot(GSE129221_PC9_Cp_37C_data, aes(x = regulation, y = GSE129221_PC9_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE129221_PC9 specific Heat of High MFE Transcripts",
        x = "",
@@ -14410,13 +14409,13 @@ ggplot(GSE129221_PC9_Specific_heat_data, aes(x = regulation, y = GSE129221_PC9_S
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE129221_PC9_high_MFE_TX_UP <- mean(GSE129221_PC9_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE129221_PC9_high_MFE_TX_DOWN <- mean(GSE129221_PC9_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE129221_PC9_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129221_PC9_high_MFE_TX_in_DOWN$Specific_heat, GSE129221_PC9_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129221_PC9_high_MFE_TX_UP <- mean(GSE129221_PC9_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE129221_PC9_high_MFE_TX_DOWN <- mean(GSE129221_PC9_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE129221_PC9_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129221_PC9_high_MFE_TX_in_DOWN$Cp_37C, GSE129221_PC9_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129221_PC9_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE129221_PC9_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129221_PC9_high_MFE_TX_in_DOWN$Specific_heat, GSE129221_PC9_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE129221_PC9_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129221_PC9_high_MFE_TX_in_DOWN$Cp_37C, GSE129221_PC9_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE129221_PC9_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -14440,7 +14439,7 @@ print(ks_test_heat_capacity_GSE129221_PC9_all_high_MFE_TX_UP_vs_DOWN)
 # Convert from wide to long format
 GSE129221_PC9GR_norm_TX_counts_MFE_df <- GSE129221_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM3702801, GSM3702802, GSM3702803, GSM3702804, GSM3702805, GSM3702806, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM3702801, GSM3702802, GSM3702803, GSM3702804, GSM3702805, GSM3702806, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE129221_PC9GR$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -14548,7 +14547,7 @@ GSE129221_PC9GR_long_data <- GSE129221_PC9GR_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE129221_PC9GR_norm_TX_aggregated_data_avg_counts <- GSE129221_PC9GR_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -14733,7 +14732,7 @@ cat("Z-statistic for low MFE TX counts in Control vs apatinib:", z_stat_low, "\n
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE129221_PC9GR, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE129221_PC9GR, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -14746,7 +14745,7 @@ ggplot(MFE_res_GSE129221_PC9GR, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE129221_PC9GR, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE129221_PC9GR, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -14760,12 +14759,12 @@ ggplot(MFE_res_GSE129221_PC9GR, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE129221_PC9GR_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE129221_PC9GR_UP <- mean(MFE_res_GSE129221_PC9GR_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE129221_PC9GR_DOWN <- mean(MFE_res_GSE129221_PC9GR_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE129221_PC9GR_all_UP_vs_DOWN <- t.test(MFE_res_GSE129221_PC9GR_DOWN$Specific_heat, MFE_res_GSE129221_PC9GR_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129221_PC9GR_UP <- mean(MFE_res_GSE129221_PC9GR_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE129221_PC9GR_DOWN <- mean(MFE_res_GSE129221_PC9GR_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE129221_PC9GR_all_UP_vs_DOWN <- t.test(MFE_res_GSE129221_PC9GR_DOWN$Cp_37C, MFE_res_GSE129221_PC9GR_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129221_PC9GR_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE129221_PC9GR_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129221_PC9GR_DOWN$Specific_heat, MFE_res_GSE129221_PC9GR_UP$Specific_heat)
+ks_test_GSE129221_PC9GR_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129221_PC9GR_DOWN$Cp_37C, MFE_res_GSE129221_PC9GR_UP$Cp_37C)
 print(ks_test_GSE129221_PC9GR_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -14775,10 +14774,10 @@ print(ks_test_GSE129221_PC9GR_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE129221_PC9GR_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129221_PC9GR_high_MFE_TX_in_UP$Specific_heat)
+GSE129221_PC9GR_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129221_PC9GR_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE129221_PC9GR_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Specific_heat)
+GSE129221_PC9GR_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE129221_PC9GR_heat_capacity_gain_UP_vs_DOWN <- GSE129221_PC9GR_high_MFE_TX_in_UP_heat_capacity - GSE129221_PC9GR_high_MFE_TX_in_DOWN_heat_capacity
@@ -14786,17 +14785,17 @@ cat("GSE129221_PC9GR net heat capacity UP vs DOWN high MFE TX:", GSE129221_PC9GR
 
 
 # Extract specific heat data
-GSE129221_PC9GR_Specific_heat_UP <- GSE129221_PC9GR_high_MFE_TX_in_UP$Specific_heat
-GSE129221_PC9GR_Specific_heat_DOWN <- GSE129221_PC9GR_high_MFE_TX_in_DOWN$Specific_heat
+GSE129221_PC9GR_Cp_37C_UP <- GSE129221_PC9GR_high_MFE_TX_in_UP$Cp_37C
+GSE129221_PC9GR_Cp_37C_DOWN <- GSE129221_PC9GR_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE129221_PC9GR_Specific_heat_data <- data.frame(
-  GSE129221_PC9GR_Specific_heat = c(GSE129221_PC9GR_Specific_heat_UP, GSE129221_PC9GR_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE129221_PC9GR_Specific_heat_UP)), rep("DOWN", length(GSE129221_PC9GR_Specific_heat_DOWN))))
+GSE129221_PC9GR_Cp_37C_data <- data.frame(
+  GSE129221_PC9GR_Cp_37C = c(GSE129221_PC9GR_Cp_37C_UP, GSE129221_PC9GR_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE129221_PC9GR_Cp_37C_UP)), rep("DOWN", length(GSE129221_PC9GR_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE129221_PC9GR_Specific_heat_data, aes(x = regulation, y = GSE129221_PC9GR_Specific_heat, fill = regulation)) +
+ggplot(GSE129221_PC9GR_Cp_37C_data, aes(x = regulation, y = GSE129221_PC9GR_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE129221_PC9GR specific Heat of High MFE Transcripts",
        x = "",
@@ -14806,13 +14805,13 @@ ggplot(GSE129221_PC9GR_Specific_heat_data, aes(x = regulation, y = GSE129221_PC9
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE129221_PC9GR_high_MFE_TX_UP <- mean(GSE129221_PC9GR_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE129221_PC9GR_high_MFE_TX_DOWN <- mean(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE129221_PC9GR_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Specific_heat, GSE129221_PC9GR_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129221_PC9GR_high_MFE_TX_UP <- mean(GSE129221_PC9GR_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE129221_PC9GR_high_MFE_TX_DOWN <- mean(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE129221_PC9GR_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Cp_37C, GSE129221_PC9GR_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129221_PC9GR_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE129221_PC9GR_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Specific_heat, GSE129221_PC9GR_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE129221_PC9GR_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129221_PC9GR_high_MFE_TX_in_DOWN$Cp_37C, GSE129221_PC9GR_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE129221_PC9GR_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -15822,7 +15821,7 @@ GSE62056_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE62056_no
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE62056_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE62056_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM1519048, GSM1519049, GSM1519050, GSM1519051, GSM1519052, GSM1519053, GSM1519054, GSM1519055, Normalized_MFE, Temperature, Specific_heat)
+                GSM1519048, GSM1519049, GSM1519050, GSM1519051, GSM1519052, GSM1519053, GSM1519054, GSM1519055, Normalized_MFE, Cp_37C)
 
 
 
@@ -15834,7 +15833,7 @@ GSE62056_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE62056_no
 # Convert from wide to long format
 GSE62056_CPI360_norm_TX_counts_MFE_df <- GSE62056_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM1519048, GSM1519049, GSM1519050, GSM1519051, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM1519048, GSM1519049, GSM1519050, GSM1519051, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE62056_CPI360$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -15937,7 +15936,7 @@ ggplot(MFE_res_GSE62056_CPI360, aes(x = factor(log2FoldChange > 0), y = Normaliz
 # Convert from wide to long format
 GSE62056_EPZ6438_norm_TX_counts_MFE_df <- GSE62056_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM1519048, GSM1519049, GSM1519052, GSM1519053, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM1519048, GSM1519049, GSM1519052, GSM1519053, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE62056_EPZ6438$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -16030,7 +16029,7 @@ ggplot(MFE_res_GSE62056_EPZ6438, aes(x = factor(log2FoldChange > 0), y = Normali
 # Convert from wide to long format
 GSE62056_GSK126_norm_TX_counts_MFE_df <- GSE62056_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM1519048, GSM1519049, GSM1519054, GSM1519055, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM1519048, GSM1519049, GSM1519054, GSM1519055, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE62056_GSK126$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -16145,7 +16144,7 @@ GSE62056_CPI360_long_data <- GSE62056_CPI360_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE62056_CPI360_norm_TX_aggregated_data_avg_counts <- GSE62056_CPI360_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -16329,7 +16328,7 @@ cat("Net change counts low MFE TX drug vs control:", GSE62056_CPI360_CPI360_low_
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE62056_CPI360, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE62056_CPI360, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -16342,7 +16341,7 @@ ggplot(MFE_res_GSE62056_CPI360, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE62056_CPI360, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE62056_CPI360, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -16356,12 +16355,12 @@ ggplot(MFE_res_GSE62056_CPI360, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE62056_CPI360_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE62056_CPI360_UP <- mean(MFE_res_GSE62056_CPI360_UP$Specific_heat)
-Mean_heat_capacity_GSE62056_CPI360_DOWN <- mean(MFE_res_GSE62056_CPI360_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE62056_CPI360_all_UP_vs_DOWN <- t.test(MFE_res_GSE62056_CPI360_DOWN$Specific_heat, MFE_res_GSE62056_CPI360_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE62056_CPI360_UP <- mean(MFE_res_GSE62056_CPI360_UP$Cp_37C)
+Mean_heat_capacity_GSE62056_CPI360_DOWN <- mean(MFE_res_GSE62056_CPI360_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE62056_CPI360_all_UP_vs_DOWN <- t.test(MFE_res_GSE62056_CPI360_DOWN$Cp_37C, MFE_res_GSE62056_CPI360_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE62056_CPI360_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE62056_CPI360_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE62056_CPI360_DOWN$Specific_heat, MFE_res_GSE62056_CPI360_UP$Specific_heat)
+ks_test_GSE62056_CPI360_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE62056_CPI360_DOWN$Cp_37C, MFE_res_GSE62056_CPI360_UP$Cp_37C)
 print(ks_test_GSE62056_CPI360_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -16371,10 +16370,10 @@ print(ks_test_GSE62056_CPI360_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE62056_CPI360_high_MFE_TX_in_UP_heat_capacity <- mean(GSE62056_CPI360_high_MFE_TX_in_UP$Specific_heat)
+GSE62056_CPI360_high_MFE_TX_in_UP_heat_capacity <- mean(GSE62056_CPI360_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE62056_CPI360_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE62056_CPI360_high_MFE_TX_in_DOWN$Specific_heat)
+GSE62056_CPI360_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE62056_CPI360_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE62056_CPI360_heat_capacity_gain_UP_vs_DOWN <- GSE62056_CPI360_high_MFE_TX_in_UP_heat_capacity - GSE62056_CPI360_high_MFE_TX_in_DOWN_heat_capacity
@@ -16382,17 +16381,17 @@ cat("GSE62056_CPI360 net heat capacity UP vs DOWN high MFE TX:", GSE62056_CPI360
 
 
 # Extract specific heat data
-GSE62056_CPI360_Specific_heat_UP <- GSE62056_CPI360_high_MFE_TX_in_UP$Specific_heat
-GSE62056_CPI360_Specific_heat_DOWN <- GSE62056_CPI360_high_MFE_TX_in_DOWN$Specific_heat
+GSE62056_CPI360_Cp_37C_UP <- GSE62056_CPI360_high_MFE_TX_in_UP$Cp_37C
+GSE62056_CPI360_Cp_37C_DOWN <- GSE62056_CPI360_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE62056_CPI360_Specific_heat_data <- data.frame(
-  GSE62056_CPI360_Specific_heat = c(GSE62056_CPI360_Specific_heat_UP, GSE62056_CPI360_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE62056_CPI360_Specific_heat_UP)), rep("DOWN", length(GSE62056_CPI360_Specific_heat_DOWN))))
+GSE62056_CPI360_Cp_37C_data <- data.frame(
+  GSE62056_CPI360_Cp_37C = c(GSE62056_CPI360_Cp_37C_UP, GSE62056_CPI360_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE62056_CPI360_Cp_37C_UP)), rep("DOWN", length(GSE62056_CPI360_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE62056_CPI360_Specific_heat_data, aes(x = regulation, y = GSE62056_CPI360_Specific_heat, fill = regulation)) +
+ggplot(GSE62056_CPI360_Cp_37C_data, aes(x = regulation, y = GSE62056_CPI360_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE62056_CPI360 specific Heat of High MFE Transcripts",
        x = "",
@@ -16402,13 +16401,13 @@ ggplot(GSE62056_CPI360_Specific_heat_data, aes(x = regulation, y = GSE62056_CPI3
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE62056_CPI360_high_MFE_TX_UP <- mean(GSE62056_CPI360_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE62056_CPI360_high_MFE_TX_DOWN <- mean(GSE62056_CPI360_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE62056_CPI360_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE62056_CPI360_high_MFE_TX_in_DOWN$Specific_heat, GSE62056_CPI360_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE62056_CPI360_high_MFE_TX_UP <- mean(GSE62056_CPI360_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE62056_CPI360_high_MFE_TX_DOWN <- mean(GSE62056_CPI360_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE62056_CPI360_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE62056_CPI360_high_MFE_TX_in_DOWN$Cp_37C, GSE62056_CPI360_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE62056_CPI360_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE62056_CPI360_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE62056_CPI360_high_MFE_TX_in_DOWN$Specific_heat, GSE62056_CPI360_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE62056_CPI360_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE62056_CPI360_high_MFE_TX_in_DOWN$Cp_37C, GSE62056_CPI360_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE62056_CPI360_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -16444,7 +16443,7 @@ GSE62056_EPZ6438_long_data <- GSE62056_EPZ6438_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE62056_EPZ6438_norm_TX_aggregated_data_avg_counts <- GSE62056_EPZ6438_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -16633,7 +16632,7 @@ cat("Net change counts low MFE TX drug vs control:", GSE62056_EPZ6438_EPZ6438_lo
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE62056_EPZ6438, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE62056_EPZ6438, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -16646,7 +16645,7 @@ ggplot(MFE_res_GSE62056_EPZ6438, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE62056_EPZ6438, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE62056_EPZ6438, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -16660,12 +16659,12 @@ ggplot(MFE_res_GSE62056_EPZ6438, aes(x = factor(log2FoldChange > 0), y = Specifi
   labs(y="Heat capacity (J/C)",x="",title="GSE62056_EPZ6438_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE62056_EPZ6438_UP <- mean(MFE_res_GSE62056_EPZ6438_UP$Specific_heat)
-Mean_heat_capacity_GSE62056_EPZ6438_DOWN <- mean(MFE_res_GSE62056_EPZ6438_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE62056_EPZ6438_all_UP_vs_DOWN <- t.test(MFE_res_GSE62056_EPZ6438_DOWN$Specific_heat, MFE_res_GSE62056_EPZ6438_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE62056_EPZ6438_UP <- mean(MFE_res_GSE62056_EPZ6438_UP$Cp_37C)
+Mean_heat_capacity_GSE62056_EPZ6438_DOWN <- mean(MFE_res_GSE62056_EPZ6438_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE62056_EPZ6438_all_UP_vs_DOWN <- t.test(MFE_res_GSE62056_EPZ6438_DOWN$Cp_37C, MFE_res_GSE62056_EPZ6438_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE62056_EPZ6438_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE62056_EPZ6438_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE62056_EPZ6438_DOWN$Specific_heat, MFE_res_GSE62056_EPZ6438_UP$Specific_heat)
+ks_test_GSE62056_EPZ6438_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE62056_EPZ6438_DOWN$Cp_37C, MFE_res_GSE62056_EPZ6438_UP$Cp_37C)
 print(ks_test_GSE62056_EPZ6438_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -16675,10 +16674,10 @@ print(ks_test_GSE62056_EPZ6438_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE62056_EPZ6438_high_MFE_TX_in_UP_heat_capacity <- mean(GSE62056_EPZ6438_high_MFE_TX_in_UP$Specific_heat)
+GSE62056_EPZ6438_high_MFE_TX_in_UP_heat_capacity <- mean(GSE62056_EPZ6438_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE62056_EPZ6438_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Specific_heat)
+GSE62056_EPZ6438_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE62056_EPZ6438_heat_capacity_gain_UP_vs_DOWN <- GSE62056_EPZ6438_high_MFE_TX_in_UP_heat_capacity - GSE62056_EPZ6438_high_MFE_TX_in_DOWN_heat_capacity
@@ -16686,17 +16685,17 @@ cat("GSE62056_EPZ6438 net heat capacity UP vs DOWN high MFE TX:", GSE62056_EPZ64
 
 
 # Extract specific heat data
-GSE62056_EPZ6438_Specific_heat_UP <- GSE62056_EPZ6438_high_MFE_TX_in_UP$Specific_heat
-GSE62056_EPZ6438_Specific_heat_DOWN <- GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Specific_heat
+GSE62056_EPZ6438_Cp_37C_UP <- GSE62056_EPZ6438_high_MFE_TX_in_UP$Cp_37C
+GSE62056_EPZ6438_Cp_37C_DOWN <- GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE62056_EPZ6438_Specific_heat_data <- data.frame(
-  GSE62056_EPZ6438_Specific_heat = c(GSE62056_EPZ6438_Specific_heat_UP, GSE62056_EPZ6438_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE62056_EPZ6438_Specific_heat_UP)), rep("DOWN", length(GSE62056_EPZ6438_Specific_heat_DOWN))))
+GSE62056_EPZ6438_Cp_37C_data <- data.frame(
+  GSE62056_EPZ6438_Cp_37C = c(GSE62056_EPZ6438_Cp_37C_UP, GSE62056_EPZ6438_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE62056_EPZ6438_Cp_37C_UP)), rep("DOWN", length(GSE62056_EPZ6438_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE62056_EPZ6438_Specific_heat_data, aes(x = regulation, y = GSE62056_EPZ6438_Specific_heat, fill = regulation)) +
+ggplot(GSE62056_EPZ6438_Cp_37C_data, aes(x = regulation, y = GSE62056_EPZ6438_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE62056_EPZ6438 specific Heat of High MFE Transcripts",
        x = "",
@@ -16706,13 +16705,13 @@ ggplot(GSE62056_EPZ6438_Specific_heat_data, aes(x = regulation, y = GSE62056_EPZ
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE62056_EPZ6438_high_MFE_TX_UP <- mean(GSE62056_EPZ6438_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE62056_EPZ6438_high_MFE_TX_DOWN <- mean(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE62056_EPZ6438_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Specific_heat, GSE62056_EPZ6438_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE62056_EPZ6438_high_MFE_TX_UP <- mean(GSE62056_EPZ6438_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE62056_EPZ6438_high_MFE_TX_DOWN <- mean(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE62056_EPZ6438_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Cp_37C, GSE62056_EPZ6438_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE62056_EPZ6438_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE62056_EPZ6438_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Specific_heat, GSE62056_EPZ6438_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE62056_EPZ6438_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE62056_EPZ6438_high_MFE_TX_in_DOWN$Cp_37C, GSE62056_EPZ6438_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE62056_EPZ6438_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -16741,7 +16740,7 @@ GSE62056_GSK126_long_data <- GSE62056_GSK126_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE62056_GSK126_norm_TX_aggregated_data_avg_counts <- GSE62056_GSK126_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -16922,7 +16921,7 @@ cat("Net change counts low MFE TX drug vs control:", GSE62056_GSK126_low_MFE_TX_
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE62056_GSK126, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE62056_GSK126, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -16935,7 +16934,7 @@ ggplot(MFE_res_GSE62056_GSK126, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE62056_GSK126, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE62056_GSK126, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -16949,12 +16948,12 @@ ggplot(MFE_res_GSE62056_GSK126, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE62056_GSK126_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE62056_GSK126_UP <- mean(MFE_res_GSE62056_GSK126_UP$Specific_heat)
-Mean_heat_capacity_GSE62056_GSK126_DOWN <- mean(MFE_res_GSE62056_GSK126_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE62056_GSK126_all_UP_vs_DOWN <- t.test(MFE_res_GSE62056_GSK126_DOWN$Specific_heat, MFE_res_GSE62056_GSK126_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE62056_GSK126_UP <- mean(MFE_res_GSE62056_GSK126_UP$Cp_37C)
+Mean_heat_capacity_GSE62056_GSK126_DOWN <- mean(MFE_res_GSE62056_GSK126_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE62056_GSK126_all_UP_vs_DOWN <- t.test(MFE_res_GSE62056_GSK126_DOWN$Cp_37C, MFE_res_GSE62056_GSK126_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE62056_GSK126_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE62056_GSK126_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE62056_GSK126_DOWN$Specific_heat, MFE_res_GSE62056_GSK126_UP$Specific_heat)
+ks_test_GSE62056_GSK126_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE62056_GSK126_DOWN$Cp_37C, MFE_res_GSE62056_GSK126_UP$Cp_37C)
 print(ks_test_GSE62056_GSK126_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -16964,10 +16963,10 @@ print(ks_test_GSE62056_GSK126_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE62056_GSK126_high_MFE_TX_in_UP_heat_capacity <- mean(GSE62056_GSK126_high_MFE_TX_in_UP$Specific_heat)
+GSE62056_GSK126_high_MFE_TX_in_UP_heat_capacity <- mean(GSE62056_GSK126_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE62056_GSK126_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE62056_GSK126_high_MFE_TX_in_DOWN$Specific_heat)
+GSE62056_GSK126_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE62056_GSK126_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE62056_GSK126_heat_capacity_gain_UP_vs_DOWN <- GSE62056_GSK126_high_MFE_TX_in_UP_heat_capacity - GSE62056_GSK126_high_MFE_TX_in_DOWN_heat_capacity
@@ -16975,17 +16974,17 @@ cat("GSE62056_GSK126 net heat capacity UP vs DOWN high MFE TX:", GSE62056_GSK126
 
 
 # Extract specific heat data
-GSE62056_GSK126_Specific_heat_UP <- GSE62056_GSK126_high_MFE_TX_in_UP$Specific_heat
-GSE62056_GSK126_Specific_heat_DOWN <- GSE62056_GSK126_high_MFE_TX_in_DOWN$Specific_heat
+GSE62056_GSK126_Cp_37C_UP <- GSE62056_GSK126_high_MFE_TX_in_UP$Cp_37C
+GSE62056_GSK126_Cp_37C_DOWN <- GSE62056_GSK126_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE62056_GSK126_Specific_heat_data <- data.frame(
-  GSE62056_GSK126_Specific_heat = c(GSE62056_GSK126_Specific_heat_UP, GSE62056_GSK126_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE62056_GSK126_Specific_heat_UP)), rep("DOWN", length(GSE62056_GSK126_Specific_heat_DOWN))))
+GSE62056_GSK126_Cp_37C_data <- data.frame(
+  GSE62056_GSK126_Cp_37C = c(GSE62056_GSK126_Cp_37C_UP, GSE62056_GSK126_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE62056_GSK126_Cp_37C_UP)), rep("DOWN", length(GSE62056_GSK126_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE62056_GSK126_Specific_heat_data, aes(x = regulation, y = GSE62056_GSK126_Specific_heat, fill = regulation)) +
+ggplot(GSE62056_GSK126_Cp_37C_data, aes(x = regulation, y = GSE62056_GSK126_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE62056_GSK126 specific Heat of High MFE Transcripts",
        x = "",
@@ -16995,13 +16994,13 @@ ggplot(GSE62056_GSK126_Specific_heat_data, aes(x = regulation, y = GSE62056_GSK1
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE62056_GSK126_high_MFE_TX_UP <- mean(GSE62056_GSK126_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE62056_GSK126_high_MFE_TX_DOWN <- mean(GSE62056_GSK126_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE62056_GSK126_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE62056_GSK126_high_MFE_TX_in_DOWN$Specific_heat, GSE62056_GSK126_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE62056_GSK126_high_MFE_TX_UP <- mean(GSE62056_GSK126_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE62056_GSK126_high_MFE_TX_DOWN <- mean(GSE62056_GSK126_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE62056_GSK126_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE62056_GSK126_high_MFE_TX_in_DOWN$Cp_37C, GSE62056_GSK126_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE62056_GSK126_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE62056_GSK126_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE62056_GSK126_high_MFE_TX_in_DOWN$Specific_heat, GSE62056_GSK126_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE62056_GSK126_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE62056_GSK126_high_MFE_TX_in_DOWN$Cp_37C, GSE62056_GSK126_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE62056_GSK126_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -18598,7 +18597,7 @@ GSE135514_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE135514_
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM4013426, GSM4013427, GSM4013428, GSM4013430, GSM4013431, GSM4013432, GSM4013434, GSM4013435, GSM4013436, GSM4013438, GSM4013439, GSM4013440,
                 GSM4013442, GSM4013443, GSM4013444, GSM4013446, GSM4013447, GSM4013448, GSM4013450, GSM4013451, GSM4013452, GSM4013454, GSM4013455, GSM4013456,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 # There are a few transcripts with huge n. of counts. Set a threshold to 100,000
 GSE135514_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
   dplyr::filter(GSM4013426 < 100000 & GSM4013427 < 100000 & GSM4013428 < 100000 & GSM4013430 < 100000 & GSM4013431 < 100000 & GSM4013432 < 100000 & GSM4013434 < 100000 & GSM4013435 < 100000 & GSM4013436 < 100000 & GSM4013438 < 100000 & GSM4013439 < 100000 & GSM4013440 < 100000 & GSM4013442 < 100000 & GSM4013443 < 100000 & GSM4013444 < 100000 & GSM4013446 < 100000 & GSM4013447 < 100000 & GSM4013448 < 100000 & GSM4013450 < 100000 & GSM4013451 < 100000 & GSM4013452 < 100000 & GSM4013454 < 100000 & GSM4013455 < 100000 & GSM4013456 < 100000)
@@ -18612,7 +18611,7 @@ GSE135514_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
 # Convert from wide to long format
 GSE135514_Sal_24h_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4013426, GSM4013427, GSM4013428, GSM4013430, GSM4013431, GSM4013432, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4013426, GSM4013427, GSM4013428, GSM4013430, GSM4013431, GSM4013432, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE135514_Sal_24h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -18699,7 +18698,7 @@ ggplot(MFE_res_GSE135514_Sal_24h, aes(x = factor(log2FoldChange > 0), y = Normal
 # Convert from wide to long format
 GSE135514_Das_24h_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4013426, GSM4013427, GSM4013428, GSM4013434, GSM4013435, GSM4013436, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4013426, GSM4013427, GSM4013428, GSM4013434, GSM4013435, GSM4013436, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE135514_Das_24h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -18793,7 +18792,7 @@ print(Plot_MFE_GSE135514_Das_24h)
 # Convert from wide to long format
 GSE135514_Sal_Das_24h_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4013426, GSM4013427, GSM4013428, GSM4013438, GSM4013439, GSM4013440, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4013426, GSM4013427, GSM4013428, GSM4013438, GSM4013439, GSM4013440, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE135514_Sal_Das_24h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -18879,7 +18878,7 @@ ggplot(MFE_res_GSE135514_Sal_Das_24h, aes(x = factor(log2FoldChange > 0), y = No
 # Convert from wide to long format
 GSE135514_Sal_72h_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4013442, GSM4013443, GSM4013444, GSM4013446, GSM4013447, GSM4013448, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4013442, GSM4013443, GSM4013444, GSM4013446, GSM4013447, GSM4013448, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE135514_Sal_72h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -18966,7 +18965,7 @@ ggplot(MFE_res_GSE135514_Sal_72h, aes(x = factor(log2FoldChange > 0), y = Normal
 # Convert from wide to long format
 GSE135514_Das_72h_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4013442, GSM4013443, GSM4013444, GSM4013450, GSM4013451, GSM4013452, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4013442, GSM4013443, GSM4013444, GSM4013450, GSM4013451, GSM4013452, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE135514_Das_72h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -19057,7 +19056,7 @@ print(Plot_MFE_GSE135514_Das_72h)
 # Convert from wide to long format
 GSE135514_Sal_Das_72h_norm_TX_counts_MFE_df <- GSE135514_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM4013442, GSM4013443, GSM4013444, GSM4013454, GSM4013455, GSM4013456, Normalized_MFE, Temperature, Specific_heat) %>%
+                GSM4013442, GSM4013443, GSM4013444, GSM4013454, GSM4013455, GSM4013456, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE135514_Sal_Das_72h$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -19170,7 +19169,7 @@ GSE135514_Sal_24h_long_data <- GSE135514_Sal_24h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE135514_Sal_24h_norm_TX_aggregated_data_avg_counts <- GSE135514_Sal_24h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -19344,7 +19343,7 @@ cat("Net change in low MFE TX counts (Das_24h vs Control):", p_Sal_24h - p_contr
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE135514_Sal_24h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE135514_Sal_24h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -19357,7 +19356,7 @@ ggplot(MFE_res_GSE135514_Sal_24h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE135514_Sal_24h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE135514_Sal_24h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -19371,12 +19370,12 @@ ggplot(MFE_res_GSE135514_Sal_24h, aes(x = factor(log2FoldChange > 0), y = Specif
   labs(y="Heat capacity (J/C)",x="",title="GSE135514_Sal_24h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE135514_Sal_24h_UP <- mean(MFE_res_GSE135514_Sal_24h_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_24h_DOWN <- mean(MFE_res_GSE135514_Sal_24h_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_24h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_24h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_24h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_24h_UP <- mean(MFE_res_GSE135514_Sal_24h_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_24h_DOWN <- mean(MFE_res_GSE135514_Sal_24h_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_24h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_24h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_24h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_24h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE135514_Sal_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_24h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_24h_UP$Specific_heat)
+ks_test_GSE135514_Sal_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_24h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_24h_UP$Cp_37C)
 print(ks_test_GSE135514_Sal_24h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -19386,10 +19385,10 @@ print(ks_test_GSE135514_Sal_24h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE135514_Sal_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_24h_high_MFE_TX_in_UP$Specific_heat)
+GSE135514_Sal_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_24h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE135514_Sal_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE135514_Sal_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE135514_Sal_24h_heat_capacity_gain_UP_vs_DOWN <- GSE135514_Sal_24h_high_MFE_TX_in_UP_heat_capacity - GSE135514_Sal_24h_high_MFE_TX_in_DOWN_heat_capacity
@@ -19397,17 +19396,17 @@ cat("GSE135514_Sal_24h net heat capacity UP vs DOWN high MFE TX:", GSE135514_Sal
 
 
 # Extract specific heat data
-GSE135514_Sal_24h_Specific_heat_UP <- GSE135514_Sal_24h_high_MFE_TX_in_UP$Specific_heat
-GSE135514_Sal_24h_Specific_heat_DOWN <- GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Specific_heat
+GSE135514_Sal_24h_Cp_37C_UP <- GSE135514_Sal_24h_high_MFE_TX_in_UP$Cp_37C
+GSE135514_Sal_24h_Cp_37C_DOWN <- GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE135514_Sal_24h_Specific_heat_data <- data.frame(
-  GSE135514_Sal_24h_Specific_heat = c(GSE135514_Sal_24h_Specific_heat_UP, GSE135514_Sal_24h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE135514_Sal_24h_Specific_heat_UP)), rep("DOWN", length(GSE135514_Sal_24h_Specific_heat_DOWN))))
+GSE135514_Sal_24h_Cp_37C_data <- data.frame(
+  GSE135514_Sal_24h_Cp_37C = c(GSE135514_Sal_24h_Cp_37C_UP, GSE135514_Sal_24h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE135514_Sal_24h_Cp_37C_UP)), rep("DOWN", length(GSE135514_Sal_24h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE135514_Sal_24h_Specific_heat_data, aes(x = regulation, y = GSE135514_Sal_24h_Specific_heat, fill = regulation)) +
+ggplot(GSE135514_Sal_24h_Cp_37C_data, aes(x = regulation, y = GSE135514_Sal_24h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Sal_24h specific Heat of High MFE Transcripts",
        x = "",
@@ -19417,13 +19416,13 @@ ggplot(GSE135514_Sal_24h_Specific_heat_data, aes(x = regulation, y = GSE135514_S
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE135514_Sal_24h_high_MFE_TX_UP <- mean(GSE135514_Sal_24h_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_24h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_24h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_24h_high_MFE_TX_UP <- mean(GSE135514_Sal_24h_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_24h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_24h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE135514_Sal_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_24h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE135514_Sal_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_24h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE135514_Sal_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -19451,7 +19450,7 @@ GSE135514_Das_24h_long_data <- GSE135514_Das_24h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE135514_Das_24h_norm_TX_aggregated_data_avg_counts <- GSE135514_Das_24h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -19627,7 +19626,7 @@ cat("Net change in low MFE TX counts (Das_24h vs Control):", p_Das_24h - p_contr
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE135514_Das_24h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE135514_Das_24h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -19640,7 +19639,7 @@ ggplot(MFE_res_GSE135514_Das_24h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE135514_Das_24h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE135514_Das_24h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -19654,12 +19653,12 @@ ggplot(MFE_res_GSE135514_Das_24h, aes(x = factor(log2FoldChange > 0), y = Specif
   labs(y="Heat capacity (J/C)",x="",title="GSE135514_Das_24h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE135514_Das_24h_UP <- mean(MFE_res_GSE135514_Das_24h_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE135514_Das_24h_DOWN <- mean(MFE_res_GSE135514_Das_24h_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE135514_Das_24h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Das_24h_DOWN$Specific_heat, MFE_res_GSE135514_Das_24h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Das_24h_UP <- mean(MFE_res_GSE135514_Das_24h_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE135514_Das_24h_DOWN <- mean(MFE_res_GSE135514_Das_24h_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE135514_Das_24h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Das_24h_DOWN$Cp_37C, MFE_res_GSE135514_Das_24h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Das_24h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE135514_Das_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Das_24h_DOWN$Specific_heat, MFE_res_GSE135514_Das_24h_UP$Specific_heat)
+ks_test_GSE135514_Das_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Das_24h_DOWN$Cp_37C, MFE_res_GSE135514_Das_24h_UP$Cp_37C)
 print(ks_test_GSE135514_Das_24h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -19669,10 +19668,10 @@ print(ks_test_GSE135514_Das_24h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE135514_Das_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Das_24h_high_MFE_TX_in_UP$Specific_heat)
+GSE135514_Das_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Das_24h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE135514_Das_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE135514_Das_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE135514_Das_24h_heat_capacity_gain_UP_vs_DOWN <- GSE135514_Das_24h_high_MFE_TX_in_UP_heat_capacity - GSE135514_Das_24h_high_MFE_TX_in_DOWN_heat_capacity
@@ -19680,17 +19679,17 @@ cat("GSE135514_Das_24h net heat capacity UP vs DOWN high MFE TX:", GSE135514_Das
 
 
 # Extract specific heat data
-GSE135514_Das_24h_Specific_heat_UP <- GSE135514_Das_24h_high_MFE_TX_in_UP$Specific_heat
-GSE135514_Das_24h_Specific_heat_DOWN <- GSE135514_Das_24h_high_MFE_TX_in_DOWN$Specific_heat
+GSE135514_Das_24h_Cp_37C_UP <- GSE135514_Das_24h_high_MFE_TX_in_UP$Cp_37C
+GSE135514_Das_24h_Cp_37C_DOWN <- GSE135514_Das_24h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE135514_Das_24h_Specific_heat_data <- data.frame(
-  GSE135514_Das_24h_Specific_heat = c(GSE135514_Das_24h_Specific_heat_UP, GSE135514_Das_24h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE135514_Das_24h_Specific_heat_UP)), rep("DOWN", length(GSE135514_Das_24h_Specific_heat_DOWN))))
+GSE135514_Das_24h_Cp_37C_data <- data.frame(
+  GSE135514_Das_24h_Cp_37C = c(GSE135514_Das_24h_Cp_37C_UP, GSE135514_Das_24h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE135514_Das_24h_Cp_37C_UP)), rep("DOWN", length(GSE135514_Das_24h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE135514_Das_24h_Specific_heat_data, aes(x = regulation, y = GSE135514_Das_24h_Specific_heat, fill = regulation)) +
+ggplot(GSE135514_Das_24h_Cp_37C_data, aes(x = regulation, y = GSE135514_Das_24h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Das_24h specific Heat of High MFE Transcripts",
        x = "",
@@ -19700,13 +19699,13 @@ ggplot(GSE135514_Das_24h_Specific_heat_data, aes(x = regulation, y = GSE135514_D
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE135514_Das_24h_high_MFE_TX_UP <- mean(GSE135514_Das_24h_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE135514_Das_24h_high_MFE_TX_DOWN <- mean(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE135514_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Das_24h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Das_24h_high_MFE_TX_UP <- mean(GSE135514_Das_24h_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE135514_Das_24h_high_MFE_TX_DOWN <- mean(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE135514_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Das_24h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Das_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE135514_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Das_24h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE135514_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Das_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Das_24h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE135514_Das_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -19734,7 +19733,7 @@ GSE135514_Sal_Das_24h_long_data <- GSE135514_Sal_Das_24h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE135514_Sal_Das_24h_norm_TX_aggregated_data_avg_counts <- GSE135514_Sal_Das_24h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -19848,7 +19847,7 @@ GSE135514_Sal_Das_24h_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE135514_Sal_Das_24h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE135514_Sal_Das_24h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -19861,7 +19860,7 @@ ggplot(MFE_res_GSE135514_Sal_Das_24h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE135514_Sal_Das_24h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE135514_Sal_Das_24h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -19875,12 +19874,12 @@ ggplot(MFE_res_GSE135514_Sal_Das_24h, aes(x = factor(log2FoldChange > 0), y = Sp
   labs(y="Heat capacity (J/C)",x="",title="GSE135514_Sal_Das_24h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE135514_Sal_Das_24h_UP <- mean(MFE_res_GSE135514_Sal_Das_24h_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_Das_24h_DOWN <- mean(MFE_res_GSE135514_Sal_Das_24h_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_Das_24h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_Das_24h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_Das_24h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_Das_24h_UP <- mean(MFE_res_GSE135514_Sal_Das_24h_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_Das_24h_DOWN <- mean(MFE_res_GSE135514_Sal_Das_24h_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_Das_24h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_Das_24h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_Das_24h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_Das_24h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE135514_Sal_Das_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_Das_24h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_Das_24h_UP$Specific_heat)
+ks_test_GSE135514_Sal_Das_24h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_Das_24h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_Das_24h_UP$Cp_37C)
 print(ks_test_GSE135514_Sal_Das_24h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -19890,10 +19889,10 @@ print(ks_test_GSE135514_Sal_Das_24h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE135514_Sal_Das_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Specific_heat)
+GSE135514_Sal_Das_24h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE135514_Sal_Das_24h_heat_capacity_gain_UP_vs_DOWN <- GSE135514_Sal_Das_24h_high_MFE_TX_in_UP_heat_capacity - GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN_heat_capacity
@@ -19901,17 +19900,17 @@ cat("GSE135514_Sal_Das_24h net heat capacity UP vs DOWN high MFE TX:", GSE135514
 
 
 # Extract specific heat data
-GSE135514_Sal_Das_24h_Specific_heat_UP <- GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Specific_heat
-GSE135514_Sal_Das_24h_Specific_heat_DOWN <- GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Specific_heat
+GSE135514_Sal_Das_24h_Cp_37C_UP <- GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Cp_37C
+GSE135514_Sal_Das_24h_Cp_37C_DOWN <- GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE135514_Sal_Das_24h_Specific_heat_data <- data.frame(
-  GSE135514_Sal_Das_24h_Specific_heat = c(GSE135514_Sal_Das_24h_Specific_heat_UP, GSE135514_Sal_Das_24h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE135514_Sal_Das_24h_Specific_heat_UP)), rep("DOWN", length(GSE135514_Sal_Das_24h_Specific_heat_DOWN))))
+GSE135514_Sal_Das_24h_Cp_37C_data <- data.frame(
+  GSE135514_Sal_Das_24h_Cp_37C = c(GSE135514_Sal_Das_24h_Cp_37C_UP, GSE135514_Sal_Das_24h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE135514_Sal_Das_24h_Cp_37C_UP)), rep("DOWN", length(GSE135514_Sal_Das_24h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE135514_Sal_Das_24h_Specific_heat_data, aes(x = regulation, y = GSE135514_Sal_Das_24h_Specific_heat, fill = regulation)) +
+ggplot(GSE135514_Sal_Das_24h_Cp_37C_data, aes(x = regulation, y = GSE135514_Sal_Das_24h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Sal_Das_24h specific Heat of High MFE Transcripts",
        x = "",
@@ -19921,13 +19920,13 @@ ggplot(GSE135514_Sal_Das_24h_Specific_heat_data, aes(x = regulation, y = GSE1355
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE135514_Sal_Das_24h_high_MFE_TX_UP <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_Das_24h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_Das_24h_high_MFE_TX_UP <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_Das_24h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_Das_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE135514_Sal_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE135514_Sal_Das_24h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_Das_24h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_Das_24h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE135514_Sal_Das_24h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -19959,7 +19958,7 @@ GSE135514_Sal_72h_long_data <- GSE135514_Sal_72h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE135514_Sal_72h_norm_TX_aggregated_data_avg_counts <- GSE135514_Sal_72h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -20079,7 +20078,7 @@ GSE135514_Sal_72h_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE135514_Sal_72h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE135514_Sal_72h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -20092,7 +20091,7 @@ ggplot(MFE_res_GSE135514_Sal_72h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE135514_Sal_72h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE135514_Sal_72h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -20106,12 +20105,12 @@ ggplot(MFE_res_GSE135514_Sal_72h, aes(x = factor(log2FoldChange > 0), y = Specif
   labs(y="Heat capacity (J/C)",x="",title="GSE135514_Sal_72h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE135514_Sal_72h_UP <- mean(MFE_res_GSE135514_Sal_72h_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_72h_DOWN <- mean(MFE_res_GSE135514_Sal_72h_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_72h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_72h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_72h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_72h_UP <- mean(MFE_res_GSE135514_Sal_72h_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_72h_DOWN <- mean(MFE_res_GSE135514_Sal_72h_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_72h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_72h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_72h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_72h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE135514_Sal_72h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_72h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_72h_UP$Specific_heat)
+ks_test_GSE135514_Sal_72h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_72h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_72h_UP$Cp_37C)
 print(ks_test_GSE135514_Sal_72h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -20121,10 +20120,10 @@ print(ks_test_GSE135514_Sal_72h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE135514_Sal_72h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_72h_high_MFE_TX_in_UP$Specific_heat)
+GSE135514_Sal_72h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_72h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE135514_Sal_72h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE135514_Sal_72h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE135514_Sal_72h_heat_capacity_gain_UP_vs_DOWN <- GSE135514_Sal_72h_high_MFE_TX_in_UP_heat_capacity - GSE135514_Sal_72h_high_MFE_TX_in_DOWN_heat_capacity
@@ -20132,17 +20131,17 @@ cat("GSE135514_Sal_72h net heat capacity UP vs DOWN high MFE TX:", GSE135514_Sal
 
 
 # Extract specific heat data
-GSE135514_Sal_72h_Specific_heat_UP <- GSE135514_Sal_72h_high_MFE_TX_in_UP$Specific_heat
-GSE135514_Sal_72h_Specific_heat_DOWN <- GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Specific_heat
+GSE135514_Sal_72h_Cp_37C_UP <- GSE135514_Sal_72h_high_MFE_TX_in_UP$Cp_37C
+GSE135514_Sal_72h_Cp_37C_DOWN <- GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE135514_Sal_72h_Specific_heat_data <- data.frame(
-  GSE135514_Sal_72h_Specific_heat = c(GSE135514_Sal_72h_Specific_heat_UP, GSE135514_Sal_72h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE135514_Sal_72h_Specific_heat_UP)), rep("DOWN", length(GSE135514_Sal_72h_Specific_heat_DOWN))))
+GSE135514_Sal_72h_Cp_37C_data <- data.frame(
+  GSE135514_Sal_72h_Cp_37C = c(GSE135514_Sal_72h_Cp_37C_UP, GSE135514_Sal_72h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE135514_Sal_72h_Cp_37C_UP)), rep("DOWN", length(GSE135514_Sal_72h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE135514_Sal_72h_Specific_heat_data, aes(x = regulation, y = GSE135514_Sal_72h_Specific_heat, fill = regulation)) +
+ggplot(GSE135514_Sal_72h_Cp_37C_data, aes(x = regulation, y = GSE135514_Sal_72h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Sal_72h specific Heat of High MFE Transcripts",
        x = "",
@@ -20152,13 +20151,13 @@ ggplot(GSE135514_Sal_72h_Specific_heat_data, aes(x = regulation, y = GSE135514_S
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE135514_Sal_72h_high_MFE_TX_UP <- mean(GSE135514_Sal_72h_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_72h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_72h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_72h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_72h_high_MFE_TX_UP <- mean(GSE135514_Sal_72h_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_72h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_72h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_72h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_72h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE135514_Sal_72h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_72h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE135514_Sal_72h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_72h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_72h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE135514_Sal_72h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -20181,7 +20180,7 @@ GSE135514_Das_72h_long_data <- GSE135514_Das_72h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE135514_Das_72h_norm_TX_aggregated_data_avg_counts <- GSE135514_Das_72h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -20351,7 +20350,7 @@ cat("Net change in low MFE TX counts (Das_72h vs Control):", p_Das_72h_low - p_c
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE135514_Das_72h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE135514_Das_72h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -20364,7 +20363,7 @@ ggplot(MFE_res_GSE135514_Das_72h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE135514_Das_72h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE135514_Das_72h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -20378,12 +20377,12 @@ ggplot(MFE_res_GSE135514_Das_72h, aes(x = factor(log2FoldChange > 0), y = Specif
   labs(y="Heat capacity (J/C)",x="",title="GSE135514_Das_72h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE135514_Das_72h_UP <- mean(MFE_res_GSE135514_Das_72h_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE135514_Das_72h_DOWN <- mean(MFE_res_GSE135514_Das_72h_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE135514_Das_72h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Das_72h_DOWN$Specific_heat, MFE_res_GSE135514_Das_72h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Das_72h_UP <- mean(MFE_res_GSE135514_Das_72h_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE135514_Das_72h_DOWN <- mean(MFE_res_GSE135514_Das_72h_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE135514_Das_72h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Das_72h_DOWN$Cp_37C, MFE_res_GSE135514_Das_72h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Das_72h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE135514_Das_72h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Das_72h_DOWN$Specific_heat, MFE_res_GSE135514_Das_72h_UP$Specific_heat)
+ks_test_GSE135514_Das_72h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Das_72h_DOWN$Cp_37C, MFE_res_GSE135514_Das_72h_UP$Cp_37C)
 print(ks_test_GSE135514_Das_72h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -20393,10 +20392,10 @@ print(ks_test_GSE135514_Das_72h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE135514_Das_72h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Das_72h_high_MFE_TX_in_UP$Specific_heat)
+GSE135514_Das_72h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Das_72h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE135514_Das_72h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE135514_Das_72h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE135514_Das_72h_heat_capacity_gain_UP_vs_DOWN <- GSE135514_Das_72h_high_MFE_TX_in_UP_heat_capacity - GSE135514_Das_72h_high_MFE_TX_in_DOWN_heat_capacity
@@ -20404,17 +20403,17 @@ cat("GSE135514_Das_72h net heat capacity UP vs DOWN high MFE TX:", GSE135514_Das
 
 
 # Extract specific heat data
-GSE135514_Das_72h_Specific_heat_UP <- GSE135514_Das_72h_high_MFE_TX_in_UP$Specific_heat
-GSE135514_Das_72h_Specific_heat_DOWN <- GSE135514_Das_72h_high_MFE_TX_in_DOWN$Specific_heat
+GSE135514_Das_72h_Cp_37C_UP <- GSE135514_Das_72h_high_MFE_TX_in_UP$Cp_37C
+GSE135514_Das_72h_Cp_37C_DOWN <- GSE135514_Das_72h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE135514_Das_72h_Specific_heat_data <- data.frame(
-  GSE135514_Das_72h_Specific_heat = c(GSE135514_Das_72h_Specific_heat_UP, GSE135514_Das_72h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE135514_Das_72h_Specific_heat_UP)), rep("DOWN", length(GSE135514_Das_72h_Specific_heat_DOWN))))
+GSE135514_Das_72h_Cp_37C_data <- data.frame(
+  GSE135514_Das_72h_Cp_37C = c(GSE135514_Das_72h_Cp_37C_UP, GSE135514_Das_72h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE135514_Das_72h_Cp_37C_UP)), rep("DOWN", length(GSE135514_Das_72h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE135514_Das_72h_Specific_heat_data, aes(x = regulation, y = GSE135514_Das_72h_Specific_heat, fill = regulation)) +
+ggplot(GSE135514_Das_72h_Cp_37C_data, aes(x = regulation, y = GSE135514_Das_72h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Das_72h specific Heat of High MFE Transcripts",
        x = "",
@@ -20424,13 +20423,13 @@ ggplot(GSE135514_Das_72h_Specific_heat_data, aes(x = regulation, y = GSE135514_D
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE135514_Das_72h_high_MFE_TX_UP <- mean(GSE135514_Das_72h_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE135514_Das_72h_high_MFE_TX_DOWN <- mean(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE135514_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Das_72h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Das_72h_high_MFE_TX_UP <- mean(GSE135514_Das_72h_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE135514_Das_72h_high_MFE_TX_DOWN <- mean(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE135514_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Das_72h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Das_72h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE135514_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Das_72h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE135514_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Das_72h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Das_72h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE135514_Das_72h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -20459,7 +20458,7 @@ GSE135514_Sal_Das_72h_long_data <- GSE135514_Sal_Das_72h_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE135514_Sal_Das_72h_norm_TX_aggregated_data_avg_counts <- GSE135514_Sal_Das_72h_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -20568,7 +20567,7 @@ GSE135514_Sal_Das_72h_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE135514_Sal_Das_72h, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE135514_Sal_Das_72h, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -20581,7 +20580,7 @@ ggplot(MFE_res_GSE135514_Sal_Das_72h, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE135514_Sal_Das_72h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE135514_Sal_Das_72h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -20595,12 +20594,12 @@ ggplot(MFE_res_GSE135514_Sal_Das_72h, aes(x = factor(log2FoldChange > 0), y = Sp
   labs(y="Heat capacity (J/C)",x="",title="GSE135514_Sal_Das_72h_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE135514_Sal_Das_72h_UP <- mean(MFE_res_GSE135514_Sal_Das_72h_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_Das_72h_DOWN <- mean(MFE_res_GSE135514_Sal_Das_72h_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_Das_72h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_Das_72h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_Das_72h_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_Das_72h_UP <- mean(MFE_res_GSE135514_Sal_Das_72h_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_Das_72h_DOWN <- mean(MFE_res_GSE135514_Sal_Das_72h_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_Das_72h_all_UP_vs_DOWN <- t.test(MFE_res_GSE135514_Sal_Das_72h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_Das_72h_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_Das_72h_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE135514_Sal_Das_72h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_Das_72h_DOWN$Specific_heat, MFE_res_GSE135514_Sal_Das_72h_UP$Specific_heat)
+ks_test_GSE135514_Sal_Das_72h_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE135514_Sal_Das_72h_DOWN$Cp_37C, MFE_res_GSE135514_Sal_Das_72h_UP$Cp_37C)
 print(ks_test_GSE135514_Sal_Das_72h_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -20610,10 +20609,10 @@ print(ks_test_GSE135514_Sal_Das_72h_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE135514_Sal_Das_72h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Specific_heat)
+GSE135514_Sal_Das_72h_high_MFE_TX_in_UP_heat_capacity <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Specific_heat)
+GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE135514_Sal_Das_72h_heat_capacity_gain_UP_vs_DOWN <- GSE135514_Sal_Das_72h_high_MFE_TX_in_UP_heat_capacity - GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN_heat_capacity
@@ -20621,17 +20620,17 @@ cat("GSE135514_Sal_Das_72h net heat capacity UP vs DOWN high MFE TX:", GSE135514
 
 
 # Extract specific heat data
-GSE135514_Sal_Das_72h_Specific_heat_UP <- GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Specific_heat
-GSE135514_Sal_Das_72h_Specific_heat_DOWN <- GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Specific_heat
+GSE135514_Sal_Das_72h_Cp_37C_UP <- GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Cp_37C
+GSE135514_Sal_Das_72h_Cp_37C_DOWN <- GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE135514_Sal_Das_72h_Specific_heat_data <- data.frame(
-  GSE135514_Sal_Das_72h_Specific_heat = c(GSE135514_Sal_Das_72h_Specific_heat_UP, GSE135514_Sal_Das_72h_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE135514_Sal_Das_72h_Specific_heat_UP)), rep("DOWN", length(GSE135514_Sal_Das_72h_Specific_heat_DOWN))))
+GSE135514_Sal_Das_72h_Cp_37C_data <- data.frame(
+  GSE135514_Sal_Das_72h_Cp_37C = c(GSE135514_Sal_Das_72h_Cp_37C_UP, GSE135514_Sal_Das_72h_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE135514_Sal_Das_72h_Cp_37C_UP)), rep("DOWN", length(GSE135514_Sal_Das_72h_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE135514_Sal_Das_72h_Specific_heat_data, aes(x = regulation, y = GSE135514_Sal_Das_72h_Specific_heat, fill = regulation)) +
+ggplot(GSE135514_Sal_Das_72h_Cp_37C_data, aes(x = regulation, y = GSE135514_Sal_Das_72h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Sal_Das_72h specific Heat of High MFE Transcripts",
        x = "",
@@ -20641,13 +20640,13 @@ ggplot(GSE135514_Sal_Das_72h_Specific_heat_data, aes(x = regulation, y = GSE1355
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE135514_Sal_Das_72h_high_MFE_TX_UP <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE135514_Sal_Das_72h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE135514_Sal_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE135514_Sal_Das_72h_high_MFE_TX_UP <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE135514_Sal_Das_72h_high_MFE_TX_DOWN <- mean(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE135514_Sal_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE135514_Sal_Das_72h_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regulated and down-regulated genes
-ks_test_heat_capacity_GSE135514_Sal_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Specific_heat, GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE135514_Sal_Das_72h_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE135514_Sal_Das_72h_high_MFE_TX_in_DOWN$Cp_37C, GSE135514_Sal_Das_72h_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE135514_Sal_Das_72h_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -22197,7 +22196,7 @@ GSE143798_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE143798_
 GSE143798_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE143798_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM4274743, GSM4274744, GSM4274745, GSM4274746, GSM4274747, GSM4274748,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -22207,7 +22206,7 @@ GSE143798_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE143798_
 # GSE143798
 # Convert from wide to long format
 GSE143798_norm_TX_counts_MFE_df <- dplyr::select(GSE143798_norm_TX_counts_MFE_df, ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                                                 GSM4274743, GSM4274744, GSM4274745, GSM4274746, GSM4274747, GSM4274748, Normalized_MFE, Temperature, Specific_heat) %>%
+                                                 GSM4274743, GSM4274744, GSM4274745, GSM4274746, GSM4274747, GSM4274748, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE143798$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -22318,7 +22317,7 @@ GSE143798_long_data <- GSE143798_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE143798_norm_TX_aggregated_data_avg_counts <- GSE143798_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -22436,7 +22435,7 @@ GSE143798_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE143798, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE143798, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -22449,7 +22448,7 @@ ggplot(MFE_res_GSE143798, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE143798, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE143798, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -22463,12 +22462,12 @@ ggplot(MFE_res_GSE143798, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE143798_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE143798_UP <- mean(MFE_res_GSE143798_UP$Specific_heat)
-Mean_heat_capacity_GSE143798_DOWN <- mean(MFE_res_GSE143798_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE143798_all_UP_vs_DOWN <- t.test(MFE_res_GSE143798_DOWN$Specific_heat, MFE_res_GSE143798_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE143798_UP <- mean(MFE_res_GSE143798_UP$Cp_37C)
+Mean_heat_capacity_GSE143798_DOWN <- mean(MFE_res_GSE143798_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE143798_all_UP_vs_DOWN <- t.test(MFE_res_GSE143798_DOWN$Cp_37C, MFE_res_GSE143798_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE143798_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE143798_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE143798_DOWN$Specific_heat, MFE_res_GSE143798_UP$Specific_heat)
+ks_test_GSE143798_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE143798_DOWN$Cp_37C, MFE_res_GSE143798_UP$Cp_37C)
 print(ks_test_GSE143798_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -22478,10 +22477,10 @@ print(ks_test_GSE143798_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE143798_high_MFE_TX_in_UP_heat_capacity <- mean(GSE143798_high_MFE_TX_in_UP$Specific_heat)
+GSE143798_high_MFE_TX_in_UP_heat_capacity <- mean(GSE143798_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE143798_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE143798_high_MFE_TX_in_DOWN$Specific_heat)
+GSE143798_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE143798_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE143798_heat_capacity_gain_UP_vs_DOWN <- GSE143798_high_MFE_TX_in_UP_heat_capacity - GSE143798_high_MFE_TX_in_DOWN_heat_capacity
@@ -22489,17 +22488,17 @@ cat("GSE143798 net heat capacity UP vs DOWN high MFE TX:", GSE143798_heat_capaci
 
 
 # Extract specific heat data
-GSE143798_Specific_heat_UP <- GSE143798_high_MFE_TX_in_UP$Specific_heat
-GSE143798_Specific_heat_DOWN <- GSE143798_high_MFE_TX_in_DOWN$Specific_heat
+GSE143798_Cp_37C_UP <- GSE143798_high_MFE_TX_in_UP$Cp_37C
+GSE143798_Cp_37C_DOWN <- GSE143798_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE143798_Specific_heat_data <- data.frame(
-  GSE143798_Specific_heat = c(GSE143798_Specific_heat_UP, GSE143798_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE143798_Specific_heat_UP)), rep("DOWN", length(GSE143798_Specific_heat_DOWN))))
+GSE143798_Cp_37C_data <- data.frame(
+  GSE143798_Cp_37C = c(GSE143798_Cp_37C_UP, GSE143798_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE143798_Cp_37C_UP)), rep("DOWN", length(GSE143798_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE143798_Specific_heat_data, aes(x = regulation, y = GSE143798_Specific_heat, fill = regulation)) +
+ggplot(GSE143798_Cp_37C_data, aes(x = regulation, y = GSE143798_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE143798 specific Heat of High MFE Transcripts",
        x = "",
@@ -22509,13 +22508,13 @@ ggplot(GSE143798_Specific_heat_data, aes(x = regulation, y = GSE143798_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE143798_high_MFE_TX_UP <- mean(GSE143798_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE143798_high_MFE_TX_DOWN <- mean(GSE143798_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE143798_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE143798_high_MFE_TX_in_DOWN$Specific_heat, GSE143798_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE143798_high_MFE_TX_UP <- mean(GSE143798_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE143798_high_MFE_TX_DOWN <- mean(GSE143798_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE143798_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE143798_high_MFE_TX_in_DOWN$Cp_37C, GSE143798_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE143798_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE143798_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE143798_high_MFE_TX_in_DOWN$Specific_heat, GSE143798_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE143798_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE143798_high_MFE_TX_in_DOWN$Cp_37C, GSE143798_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE143798_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -23085,7 +23084,7 @@ GSE143462_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE143462_
 GSE143462_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE143462_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM4259875, GSM4259876, GSM4259877, GSM4259878, GSM4259879, GSM4259880,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -23094,7 +23093,7 @@ GSE143462_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE143462_
 # GSE143462
 # Convert from wide to long format
 GSE143462_norm_TX_counts_MFE_df <- dplyr::select(GSE143462_norm_TX_counts_MFE_df, ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                                                 GSM4259875, GSM4259876, GSM4259877, GSM4259878, GSM4259879, GSM4259880, Normalized_MFE, Temperature, Specific_heat) %>%
+                                                 GSM4259875, GSM4259876, GSM4259877, GSM4259878, GSM4259879, GSM4259880, Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE143462$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -23211,7 +23210,7 @@ GSE143462_long_data <- GSE143462_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE143462_norm_TX_aggregated_data_avg_counts <- GSE143462_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -23394,7 +23393,7 @@ cat("Z-statistic for low MFE TX counts in Control vs Omipalisib:", z_stat_low, "
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE143462, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE143462, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -23407,7 +23406,7 @@ ggplot(MFE_res_GSE143462, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE143462, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE143462, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -23421,12 +23420,12 @@ ggplot(MFE_res_GSE143462, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE143462_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE143462_UP <- mean(MFE_res_GSE143462_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE143462_DOWN <- mean(MFE_res_GSE143462_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE143462_all_UP_vs_DOWN <- t.test(MFE_res_GSE143462_DOWN$Specific_heat, MFE_res_GSE143462_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE143462_UP <- mean(MFE_res_GSE143462_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE143462_DOWN <- mean(MFE_res_GSE143462_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE143462_all_UP_vs_DOWN <- t.test(MFE_res_GSE143462_DOWN$Cp_37C, MFE_res_GSE143462_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE143462_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE143462_all_UP_vs_DOWN_heat_capacity <- ks.test( na.omit(MFE_res_GSE143462_DOWN$Specific_heat),  na.omit(MFE_res_GSE143462_UP$Specific_heat))
+ks_test_GSE143462_all_UP_vs_DOWN_heat_capacity <- ks.test( na.omit(MFE_res_GSE143462_DOWN$Cp_37C),  na.omit(MFE_res_GSE143462_UP$Cp_37C))
 print(ks_test_GSE143462_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -23436,10 +23435,10 @@ print(ks_test_GSE143462_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE143462_high_MFE_TX_in_UP_heat_capacity <- mean(GSE143462_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE143462_high_MFE_TX_in_UP_heat_capacity <- mean(GSE143462_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE143462_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE143462_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE143462_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE143462_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE143462_heat_capacity_gain_UP_vs_DOWN <- GSE143462_high_MFE_TX_in_UP_heat_capacity - GSE143462_high_MFE_TX_in_DOWN_heat_capacity
@@ -23447,17 +23446,17 @@ cat("GSE143462 net heat capacity UP vs DOWN high MFE TX:", GSE143462_heat_capaci
 
 
 # Extract specific heat data
-GSE143462_Specific_heat_UP <- GSE143462_high_MFE_TX_in_UP$Specific_heat
-GSE143462_Specific_heat_DOWN <- GSE143462_high_MFE_TX_in_DOWN$Specific_heat
+GSE143462_Cp_37C_UP <- GSE143462_high_MFE_TX_in_UP$Cp_37C
+GSE143462_Cp_37C_DOWN <- GSE143462_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE143462_Specific_heat_data <- data.frame(
-  GSE143462_Specific_heat = c(GSE143462_Specific_heat_UP, GSE143462_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE143462_Specific_heat_UP)), rep("DOWN", length(GSE143462_Specific_heat_DOWN))))
+GSE143462_Cp_37C_data <- data.frame(
+  GSE143462_Cp_37C = c(GSE143462_Cp_37C_UP, GSE143462_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE143462_Cp_37C_UP)), rep("DOWN", length(GSE143462_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE143462_Specific_heat_data, aes(x = regulation, y = GSE143462_Specific_heat, fill = regulation)) +
+ggplot(GSE143462_Cp_37C_data, aes(x = regulation, y = GSE143462_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE143462 specific Heat of High MFE Transcripts",
        x = "",
@@ -23467,15 +23466,15 @@ ggplot(GSE143462_Specific_heat_data, aes(x = regulation, y = GSE143462_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE143462_high_MFE_TX_UP <- mean(GSE143462_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE143462_high_MFE_TX_DOWN <- mean(GSE143462_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE143462_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE143462_high_MFE_TX_in_DOWN$Specific_heat, GSE143462_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE143462_high_MFE_TX_UP <- mean(GSE143462_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE143462_high_MFE_TX_DOWN <- mean(GSE143462_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE143462_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE143462_high_MFE_TX_in_DOWN$Cp_37C, GSE143462_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE143462_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
 ks_test_heat_capacity_GSE143462_all_high_MFE_TX_UP_vs_DOWN <- ks.test(
-  na.omit(GSE143462_high_MFE_TX_in_DOWN$Specific_heat),
-  na.omit(GSE143462_high_MFE_TX_in_UP$Specific_heat)
+  na.omit(GSE143462_high_MFE_TX_in_DOWN$Cp_37C),
+  na.omit(GSE143462_high_MFE_TX_in_UP$Cp_37C)
 )
 print(ks_test_heat_capacity_GSE143462_all_high_MFE_TX_UP_vs_DOWN)
 
@@ -24040,7 +24039,7 @@ GSE130161_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE130161_
 GSE130161_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE130161_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3733269, GSM3733270, GSM3733271, GSM3733272, GSM3733273, GSM3733274, GSM3733275, GSM3733276,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -24157,7 +24156,7 @@ GSE130161_long_data <- GSE130161_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE130161_norm_TX_aggregated_data_avg_counts <- GSE130161_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -24344,7 +24343,7 @@ cat("GSE130161 net change counts low MFE TX drug vs control:", GSE130161_6TG_low
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE130161, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE130161, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -24357,7 +24356,7 @@ ggplot(MFE_res_GSE130161, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE130161, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE130161, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -24371,12 +24370,12 @@ ggplot(MFE_res_GSE130161, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE130161_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE130161_UP <- mean(MFE_res_GSE130161_UP$Specific_heat)
-Mean_heat_capacity_GSE130161_DOWN <- mean(MFE_res_GSE130161_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE130161_all_UP_vs_DOWN <- t.test(MFE_res_GSE130161_DOWN$Specific_heat, MFE_res_GSE130161_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE130161_UP <- mean(MFE_res_GSE130161_UP$Cp_37C)
+Mean_heat_capacity_GSE130161_DOWN <- mean(MFE_res_GSE130161_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE130161_all_UP_vs_DOWN <- t.test(MFE_res_GSE130161_DOWN$Cp_37C, MFE_res_GSE130161_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE130161_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE130161_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE130161_DOWN$Specific_heat, MFE_res_GSE130161_UP$Specific_heat)
+ks_test_GSE130161_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE130161_DOWN$Cp_37C, MFE_res_GSE130161_UP$Cp_37C)
 print(ks_test_GSE130161_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -24386,10 +24385,10 @@ print(ks_test_GSE130161_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE130161_high_MFE_TX_in_UP_heat_capacity <- mean(GSE130161_high_MFE_TX_in_UP$Specific_heat)
+GSE130161_high_MFE_TX_in_UP_heat_capacity <- mean(GSE130161_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE130161_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE130161_high_MFE_TX_in_DOWN$Specific_heat)
+GSE130161_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE130161_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE130161_heat_capacity_gain_UP_vs_DOWN <- GSE130161_high_MFE_TX_in_UP_heat_capacity - GSE130161_high_MFE_TX_in_DOWN_heat_capacity
@@ -24397,17 +24396,17 @@ cat("GSE130161 net heat capacity UP vs DOWN high MFE TX:", GSE130161_heat_capaci
 
 
 # Extract specific heat data
-GSE130161_Specific_heat_UP <- GSE130161_high_MFE_TX_in_UP$Specific_heat
-GSE130161_Specific_heat_DOWN <- GSE130161_high_MFE_TX_in_DOWN$Specific_heat
+GSE130161_Cp_37C_UP <- GSE130161_high_MFE_TX_in_UP$Cp_37C
+GSE130161_Cp_37C_DOWN <- GSE130161_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE130161_Specific_heat_data <- data.frame(
-  GSE130161_Specific_heat = c(GSE130161_Specific_heat_UP, GSE130161_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE130161_Specific_heat_UP)), rep("DOWN", length(GSE130161_Specific_heat_DOWN))))
+GSE130161_Cp_37C_data <- data.frame(
+  GSE130161_Cp_37C = c(GSE130161_Cp_37C_UP, GSE130161_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE130161_Cp_37C_UP)), rep("DOWN", length(GSE130161_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE130161_Specific_heat_data, aes(x = regulation, y = GSE130161_Specific_heat, fill = regulation)) +
+ggplot(GSE130161_Cp_37C_data, aes(x = regulation, y = GSE130161_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE130161 specific Heat of High MFE Transcripts",
        x = "",
@@ -24417,13 +24416,13 @@ ggplot(GSE130161_Specific_heat_data, aes(x = regulation, y = GSE130161_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE130161_high_MFE_TX_UP <- mean(GSE130161_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE130161_high_MFE_TX_DOWN <- mean(GSE130161_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE130161_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE130161_high_MFE_TX_in_DOWN$Specific_heat, GSE130161_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE130161_high_MFE_TX_UP <- mean(GSE130161_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE130161_high_MFE_TX_DOWN <- mean(GSE130161_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE130161_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE130161_high_MFE_TX_in_DOWN$Cp_37C, GSE130161_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE130161_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE130161_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE130161_high_MFE_TX_in_DOWN$Specific_heat, GSE130161_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE130161_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE130161_high_MFE_TX_in_DOWN$Cp_37C, GSE130161_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE130161_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -24978,7 +24977,7 @@ GSE184125_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE184125_
 GSE184125_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE184125_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM5578278, GSM5578279, GSM5578280, GSM5578281, GSM5578282, GSM5578283,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -25100,7 +25099,7 @@ GSE184125_long_data <- GSE184125_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE184125_norm_TX_aggregated_data_avg_counts <- GSE184125_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -25245,7 +25244,7 @@ GSE184125_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE184125, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE184125, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -25258,7 +25257,7 @@ ggplot(MFE_res_GSE184125, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE184125, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE184125, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -25272,12 +25271,12 @@ ggplot(MFE_res_GSE184125, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE184125_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE184125_UP <- mean(MFE_res_GSE184125_UP$Specific_heat)
-Mean_heat_capacity_GSE184125_DOWN <- mean(MFE_res_GSE184125_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE184125_all_UP_vs_DOWN <- t.test(MFE_res_GSE184125_DOWN$Specific_heat, MFE_res_GSE184125_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE184125_UP <- mean(MFE_res_GSE184125_UP$Cp_37C)
+Mean_heat_capacity_GSE184125_DOWN <- mean(MFE_res_GSE184125_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE184125_all_UP_vs_DOWN <- t.test(MFE_res_GSE184125_DOWN$Cp_37C, MFE_res_GSE184125_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE184125_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE184125_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE184125_DOWN$Specific_heat, MFE_res_GSE184125_UP$Specific_heat)
+ks_test_GSE184125_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE184125_DOWN$Cp_37C, MFE_res_GSE184125_UP$Cp_37C)
 print(ks_test_GSE184125_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -25287,10 +25286,10 @@ print(ks_test_GSE184125_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE184125_high_MFE_TX_in_UP_heat_capacity <- mean(GSE184125_high_MFE_TX_in_UP$Specific_heat)
+GSE184125_high_MFE_TX_in_UP_heat_capacity <- mean(GSE184125_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE184125_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE184125_high_MFE_TX_in_DOWN$Specific_heat)
+GSE184125_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE184125_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE184125_heat_capacity_gain_UP_vs_DOWN <- GSE184125_high_MFE_TX_in_UP_heat_capacity - GSE184125_high_MFE_TX_in_DOWN_heat_capacity
@@ -25298,17 +25297,17 @@ cat("GSE184125 net heat capacity UP vs DOWN high MFE TX:", GSE184125_heat_capaci
 
 
 # Extract specific heat data
-GSE184125_Specific_heat_UP <- GSE184125_high_MFE_TX_in_UP$Specific_heat
-GSE184125_Specific_heat_DOWN <- GSE184125_high_MFE_TX_in_DOWN$Specific_heat
+GSE184125_Cp_37C_UP <- GSE184125_high_MFE_TX_in_UP$Cp_37C
+GSE184125_Cp_37C_DOWN <- GSE184125_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE184125_Specific_heat_data <- data.frame(
-  GSE184125_Specific_heat = c(GSE184125_Specific_heat_UP, GSE184125_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE184125_Specific_heat_UP)), rep("DOWN", length(GSE184125_Specific_heat_DOWN))))
+GSE184125_Cp_37C_data <- data.frame(
+  GSE184125_Cp_37C = c(GSE184125_Cp_37C_UP, GSE184125_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE184125_Cp_37C_UP)), rep("DOWN", length(GSE184125_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE184125_Specific_heat_data, aes(x = regulation, y = GSE184125_Specific_heat, fill = regulation)) +
+ggplot(GSE184125_Cp_37C_data, aes(x = regulation, y = GSE184125_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE184125 specific Heat of High MFE Transcripts",
        x = "",
@@ -25318,13 +25317,13 @@ ggplot(GSE184125_Specific_heat_data, aes(x = regulation, y = GSE184125_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE184125_high_MFE_TX_UP <- mean(GSE184125_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE184125_high_MFE_TX_DOWN <- mean(GSE184125_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE184125_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE184125_high_MFE_TX_in_DOWN$Specific_heat, GSE184125_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE184125_high_MFE_TX_UP <- mean(GSE184125_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE184125_high_MFE_TX_DOWN <- mean(GSE184125_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE184125_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE184125_high_MFE_TX_in_DOWN$Cp_37C, GSE184125_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE184125_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE184125_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE184125_high_MFE_TX_in_DOWN$Specific_heat, GSE184125_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE184125_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE184125_high_MFE_TX_in_DOWN$Cp_37C, GSE184125_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE184125_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -25879,7 +25878,7 @@ GSE185141_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE185141_
 GSE185141_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE185141_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM5606949, GSM5606950, GSM5606951, GSM5606952, GSM5606953, GSM5606954,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 # GSE185141
@@ -25892,7 +25891,7 @@ GSE185141_norm_TX_counts_MFE_df <- dplyr::select(GSE185141_norm_TX_counts_MFE_df
                                                  transcript_is_canonical, 
                                                  Transcript_length, 
                                                  GSM5606949, GSM5606950, GSM5606951, GSM5606952, GSM5606953, GSM5606954,
-                                                 Normalized_MFE, Temperature, Specific_heat) %>%
+                                                 Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE185141$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -26021,7 +26020,7 @@ GSE185141_long_data <- GSE185141_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE185141_norm_TX_aggregated_data_avg_counts <- GSE185141_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -26143,7 +26142,7 @@ GSE185141_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE185141, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE185141, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -26156,7 +26155,7 @@ ggplot(MFE_res_GSE185141, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE185141, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE185141, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -26170,12 +26169,12 @@ ggplot(MFE_res_GSE185141, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE185141_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE185141_UP <- mean(MFE_res_GSE185141_UP$Specific_heat)
-Mean_heat_capacity_GSE185141_DOWN <- mean(MFE_res_GSE185141_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE185141_all_UP_vs_DOWN <- t.test(MFE_res_GSE185141_DOWN$Specific_heat, MFE_res_GSE185141_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE185141_UP <- mean(MFE_res_GSE185141_UP$Cp_37C)
+Mean_heat_capacity_GSE185141_DOWN <- mean(MFE_res_GSE185141_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE185141_all_UP_vs_DOWN <- t.test(MFE_res_GSE185141_DOWN$Cp_37C, MFE_res_GSE185141_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE185141_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE185141_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE185141_DOWN$Specific_heat, MFE_res_GSE185141_UP$Specific_heat)
+ks_test_GSE185141_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE185141_DOWN$Cp_37C, MFE_res_GSE185141_UP$Cp_37C)
 print(ks_test_GSE185141_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -26185,10 +26184,10 @@ print(ks_test_GSE185141_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE185141_high_MFE_TX_in_UP_heat_capacity <- mean(GSE185141_high_MFE_TX_in_UP$Specific_heat)
+GSE185141_high_MFE_TX_in_UP_heat_capacity <- mean(GSE185141_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE185141_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE185141_high_MFE_TX_in_DOWN$Specific_heat)
+GSE185141_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE185141_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE185141_heat_capacity_gain_UP_vs_DOWN <- GSE185141_high_MFE_TX_in_UP_heat_capacity - GSE185141_high_MFE_TX_in_DOWN_heat_capacity
@@ -26196,17 +26195,17 @@ cat("GSE185141 net heat capacity UP vs DOWN high MFE TX:", GSE185141_heat_capaci
 
 
 # Extract specific heat data
-GSE185141_Specific_heat_UP <- GSE185141_high_MFE_TX_in_UP$Specific_heat
-GSE185141_Specific_heat_DOWN <- GSE185141_high_MFE_TX_in_DOWN$Specific_heat
+GSE185141_Cp_37C_UP <- GSE185141_high_MFE_TX_in_UP$Cp_37C
+GSE185141_Cp_37C_DOWN <- GSE185141_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE185141_Specific_heat_data <- data.frame(
-  GSE185141_Specific_heat = c(GSE185141_Specific_heat_UP, GSE185141_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE185141_Specific_heat_UP)), rep("DOWN", length(GSE185141_Specific_heat_DOWN))))
+GSE185141_Cp_37C_data <- data.frame(
+  GSE185141_Cp_37C = c(GSE185141_Cp_37C_UP, GSE185141_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE185141_Cp_37C_UP)), rep("DOWN", length(GSE185141_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE185141_Specific_heat_data, aes(x = regulation, y = GSE185141_Specific_heat, fill = regulation)) +
+ggplot(GSE185141_Cp_37C_data, aes(x = regulation, y = GSE185141_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE185141 specific Heat of High MFE Transcripts",
        x = "",
@@ -26216,13 +26215,13 @@ ggplot(GSE185141_Specific_heat_data, aes(x = regulation, y = GSE185141_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE185141_high_MFE_TX_UP <- mean(GSE185141_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE185141_high_MFE_TX_DOWN <- mean(GSE185141_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE185141_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE185141_high_MFE_TX_in_DOWN$Specific_heat, GSE185141_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE185141_high_MFE_TX_UP <- mean(GSE185141_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE185141_high_MFE_TX_DOWN <- mean(GSE185141_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE185141_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE185141_high_MFE_TX_in_DOWN$Cp_37C, GSE185141_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE185141_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE185141_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE185141_high_MFE_TX_in_DOWN$Specific_heat, GSE185141_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE185141_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE185141_high_MFE_TX_in_DOWN$Cp_37C, GSE185141_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE185141_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -26797,7 +26796,7 @@ GSE148096_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE148096_
 GSE148096_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE148096_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM4454048, GSM4454049, GSM4454050, GSM4454051, GSM4454052, GSM4454053,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE148096$ensembl_transcript_id) 
 
 
@@ -26925,7 +26924,7 @@ GSE148096_long_data <- GSE148096_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE148096_norm_TX_aggregated_data_avg_counts <- GSE148096_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -27123,7 +27122,7 @@ cat("GSE148096 net change counts low MFE TX drug vs control:", GSE148096_Erlotin
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE148096, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE148096, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -27136,7 +27135,7 @@ ggplot(MFE_res_GSE148096, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE148096, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE148096, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -27150,12 +27149,12 @@ ggplot(MFE_res_GSE148096, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE148096_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE148096_UP <- mean(MFE_res_GSE148096_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE148096_DOWN <- mean(MFE_res_GSE148096_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE148096_all_UP_vs_DOWN <- t.test(MFE_res_GSE148096_DOWN$Specific_heat, MFE_res_GSE148096_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE148096_UP <- mean(MFE_res_GSE148096_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE148096_DOWN <- mean(MFE_res_GSE148096_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE148096_all_UP_vs_DOWN <- t.test(MFE_res_GSE148096_DOWN$Cp_37C, MFE_res_GSE148096_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE148096_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE148096_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE148096_DOWN$Specific_heat, MFE_res_GSE148096_UP$Specific_heat)
+ks_test_GSE148096_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE148096_DOWN$Cp_37C, MFE_res_GSE148096_UP$Cp_37C)
 print(ks_test_GSE148096_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -27165,10 +27164,10 @@ print(ks_test_GSE148096_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE148096_high_MFE_TX_in_UP_heat_capacity <- mean(GSE148096_high_MFE_TX_in_UP$Specific_heat)
+GSE148096_high_MFE_TX_in_UP_heat_capacity <- mean(GSE148096_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE148096_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE148096_high_MFE_TX_in_DOWN$Specific_heat)
+GSE148096_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE148096_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE148096_heat_capacity_gain_UP_vs_DOWN <- GSE148096_high_MFE_TX_in_UP_heat_capacity - GSE148096_high_MFE_TX_in_DOWN_heat_capacity
@@ -27176,17 +27175,17 @@ cat("GSE148096 net heat capacity UP vs DOWN high MFE TX:", GSE148096_heat_capaci
 
 
 # Extract specific heat data
-GSE148096_Specific_heat_UP <- GSE148096_high_MFE_TX_in_UP$Specific_heat
-GSE148096_Specific_heat_DOWN <- GSE148096_high_MFE_TX_in_DOWN$Specific_heat
+GSE148096_Cp_37C_UP <- GSE148096_high_MFE_TX_in_UP$Cp_37C
+GSE148096_Cp_37C_DOWN <- GSE148096_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE148096_Specific_heat_data <- data.frame(
-  GSE148096_Specific_heat = c(GSE148096_Specific_heat_UP, GSE148096_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE148096_Specific_heat_UP)), rep("DOWN", length(GSE148096_Specific_heat_DOWN))))
+GSE148096_Cp_37C_data <- data.frame(
+  GSE148096_Cp_37C = c(GSE148096_Cp_37C_UP, GSE148096_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE148096_Cp_37C_UP)), rep("DOWN", length(GSE148096_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE148096_Specific_heat_data, aes(x = regulation, y = GSE148096_Specific_heat, fill = regulation)) +
+ggplot(GSE148096_Cp_37C_data, aes(x = regulation, y = GSE148096_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE148096 specific Heat of High MFE Transcripts",
        x = "",
@@ -27196,13 +27195,13 @@ ggplot(GSE148096_Specific_heat_data, aes(x = regulation, y = GSE148096_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE148096_high_MFE_TX_UP <- mean(GSE148096_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE148096_high_MFE_TX_DOWN <- mean(GSE148096_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE148096_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE148096_high_MFE_TX_in_DOWN$Specific_heat, GSE148096_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE148096_high_MFE_TX_UP <- mean(GSE148096_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE148096_high_MFE_TX_DOWN <- mean(GSE148096_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE148096_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE148096_high_MFE_TX_in_DOWN$Cp_37C, GSE148096_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE148096_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE148096_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE148096_high_MFE_TX_in_DOWN$Specific_heat, GSE148096_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE148096_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE148096_high_MFE_TX_in_DOWN$Cp_37C, GSE148096_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE148096_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -27763,7 +27762,7 @@ GSE178755_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE178755_
 GSE178755_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE178755_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM5396967, GSM5396968, GSM5396969, GSM5396970, GSM5396971, GSM5396972,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE178755$ensembl_transcript_id) 
 
 
@@ -27874,7 +27873,7 @@ GSE178755_long_data <- GSE178755_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE178755_norm_TX_aggregated_data_avg_counts <- GSE178755_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -28086,7 +28085,7 @@ cat("Z-statistic for low MFE TX counts in Control vs Erlotinib:", z_stat_low, "\
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE178755, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE178755, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -28099,7 +28098,7 @@ ggplot(MFE_res_GSE178755, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE178755, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE178755, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -28113,12 +28112,12 @@ ggplot(MFE_res_GSE178755, aes(x = factor(log2FoldChange > 0), y = Specific_heat)
   labs(y="Heat capacity (J/C)",x="",title="GSE178755_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE178755_UP <- mean(MFE_res_GSE178755_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE178755_DOWN <- mean(MFE_res_GSE178755_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE178755_all_UP_vs_DOWN <- t.test(MFE_res_GSE178755_DOWN$Specific_heat, MFE_res_GSE178755_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE178755_UP <- mean(MFE_res_GSE178755_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE178755_DOWN <- mean(MFE_res_GSE178755_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE178755_all_UP_vs_DOWN <- t.test(MFE_res_GSE178755_DOWN$Cp_37C, MFE_res_GSE178755_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE178755_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE178755_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE178755_DOWN$Specific_heat, MFE_res_GSE178755_UP$Specific_heat)
+ks_test_GSE178755_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE178755_DOWN$Cp_37C, MFE_res_GSE178755_UP$Cp_37C)
 print(ks_test_GSE178755_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -28128,10 +28127,10 @@ print(ks_test_GSE178755_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE178755_high_MFE_TX_in_UP_heat_capacity <- mean(GSE178755_high_MFE_TX_in_UP$Specific_heat)
+GSE178755_high_MFE_TX_in_UP_heat_capacity <- mean(GSE178755_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE178755_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE178755_high_MFE_TX_in_DOWN$Specific_heat)
+GSE178755_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE178755_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE178755_heat_capacity_gain_UP_vs_DOWN <- GSE178755_high_MFE_TX_in_UP_heat_capacity - GSE178755_high_MFE_TX_in_DOWN_heat_capacity
@@ -28139,17 +28138,17 @@ cat("GSE178755 net heat capacity UP vs DOWN high MFE TX:", GSE178755_heat_capaci
 
 
 # Extract specific heat data
-GSE178755_Specific_heat_UP <- GSE178755_high_MFE_TX_in_UP$Specific_heat
-GSE178755_Specific_heat_DOWN <- GSE178755_high_MFE_TX_in_DOWN$Specific_heat
+GSE178755_Cp_37C_UP <- GSE178755_high_MFE_TX_in_UP$Cp_37C
+GSE178755_Cp_37C_DOWN <- GSE178755_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE178755_Specific_heat_data <- data.frame(
-  GSE178755_Specific_heat = c(GSE178755_Specific_heat_UP, GSE178755_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE178755_Specific_heat_UP)), rep("DOWN", length(GSE178755_Specific_heat_DOWN))))
+GSE178755_Cp_37C_data <- data.frame(
+  GSE178755_Cp_37C = c(GSE178755_Cp_37C_UP, GSE178755_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE178755_Cp_37C_UP)), rep("DOWN", length(GSE178755_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE178755_Specific_heat_data, aes(x = regulation, y = GSE178755_Specific_heat, fill = regulation)) +
+ggplot(GSE178755_Cp_37C_data, aes(x = regulation, y = GSE178755_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE178755 specific Heat of High MFE Transcripts",
        x = "",
@@ -28159,13 +28158,13 @@ ggplot(GSE178755_Specific_heat_data, aes(x = regulation, y = GSE178755_Specific_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE178755_high_MFE_TX_UP <- mean(GSE178755_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE178755_high_MFE_TX_DOWN <- mean(GSE178755_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE178755_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE178755_high_MFE_TX_in_DOWN$Specific_heat, GSE178755_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE178755_high_MFE_TX_UP <- mean(GSE178755_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE178755_high_MFE_TX_DOWN <- mean(GSE178755_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE178755_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE178755_high_MFE_TX_in_DOWN$Cp_37C, GSE178755_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE178755_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE178755_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE178755_high_MFE_TX_in_DOWN$Specific_heat, GSE178755_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE178755_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE178755_high_MFE_TX_in_DOWN$Cp_37C, GSE178755_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE178755_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -29161,7 +29160,7 @@ GSE103021_H358_ARS_1620_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", 
 GSE103021_H358_ARS_1620_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE103021_H358_ARS_1620_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2752534, GSM2752535, GSM2752536, GSM2752537, GSM2752538, GSM2752539, GSM2752540,
-                Normalized_MFE, Temperature, Specific_heat)  %>%
+                Normalized_MFE, Cp_37C)  %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE103021_H358_ARS_1620$ensembl_transcript_id) 
 
 
@@ -29277,7 +29276,7 @@ GSE103021_H358_ARS_1620_long_data <- GSE103021_H358_ARS_1620_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE103021_H358_ARS_1620_norm_TX_aggregated_data_avg_counts <- GSE103021_H358_ARS_1620_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -29398,7 +29397,7 @@ GSE103021_H358_ARS_1620_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE103021_H358_ARS_1620, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE103021_H358_ARS_1620, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -29411,7 +29410,7 @@ ggplot(MFE_res_GSE103021_H358_ARS_1620, aes(y=Specific_heat, x=log2FoldChange)) 
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE103021_H358_ARS_1620, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE103021_H358_ARS_1620, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -29425,12 +29424,12 @@ ggplot(MFE_res_GSE103021_H358_ARS_1620, aes(x = factor(log2FoldChange > 0), y = 
   labs(y="Heat capacity (J/C)",x="",title="GSE103021_H358_ARS_1620_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE103021_H358_ARS_1620_UP <- mean(MFE_res_GSE103021_H358_ARS_1620_UP$Specific_heat)
-Mean_heat_capacity_GSE103021_H358_ARS_1620_DOWN <- mean(MFE_res_GSE103021_H358_ARS_1620_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE103021_H358_ARS_1620_all_UP_vs_DOWN <- t.test(MFE_res_GSE103021_H358_ARS_1620_DOWN$Specific_heat, MFE_res_GSE103021_H358_ARS_1620_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE103021_H358_ARS_1620_UP <- mean(MFE_res_GSE103021_H358_ARS_1620_UP$Cp_37C)
+Mean_heat_capacity_GSE103021_H358_ARS_1620_DOWN <- mean(MFE_res_GSE103021_H358_ARS_1620_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE103021_H358_ARS_1620_all_UP_vs_DOWN <- t.test(MFE_res_GSE103021_H358_ARS_1620_DOWN$Cp_37C, MFE_res_GSE103021_H358_ARS_1620_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE103021_H358_ARS_1620_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE103021_H358_ARS_1620_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE103021_H358_ARS_1620_DOWN$Specific_heat, MFE_res_GSE103021_H358_ARS_1620_UP$Specific_heat)
+ks_test_GSE103021_H358_ARS_1620_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE103021_H358_ARS_1620_DOWN$Cp_37C, MFE_res_GSE103021_H358_ARS_1620_UP$Cp_37C)
 print(ks_test_GSE103021_H358_ARS_1620_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -29440,10 +29439,10 @@ print(ks_test_GSE103021_H358_ARS_1620_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE103021_H358_ARS_1620_high_MFE_TX_in_UP_heat_capacity <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Specific_heat)
+GSE103021_H358_ARS_1620_high_MFE_TX_in_UP_heat_capacity <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Specific_heat)
+GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE103021_H358_ARS_1620_heat_capacity_gain_UP_vs_DOWN <- GSE103021_H358_ARS_1620_high_MFE_TX_in_UP_heat_capacity - GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN_heat_capacity
@@ -29451,17 +29450,17 @@ cat("GSE103021_H358_ARS_1620 net heat capacity UP vs DOWN high MFE TX:", GSE1030
 
 
 # Extract specific heat data
-GSE103021_H358_ARS_1620_Specific_heat_UP <- GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Specific_heat
-GSE103021_H358_ARS_1620_Specific_heat_DOWN <- GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Specific_heat
+GSE103021_H358_ARS_1620_Cp_37C_UP <- GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Cp_37C
+GSE103021_H358_ARS_1620_Cp_37C_DOWN <- GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE103021_H358_ARS_1620_Specific_heat_data <- data.frame(
-  GSE103021_H358_ARS_1620_Specific_heat = c(GSE103021_H358_ARS_1620_Specific_heat_UP, GSE103021_H358_ARS_1620_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE103021_H358_ARS_1620_Specific_heat_UP)), rep("DOWN", length(GSE103021_H358_ARS_1620_Specific_heat_DOWN))))
+GSE103021_H358_ARS_1620_Cp_37C_data <- data.frame(
+  GSE103021_H358_ARS_1620_Cp_37C = c(GSE103021_H358_ARS_1620_Cp_37C_UP, GSE103021_H358_ARS_1620_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE103021_H358_ARS_1620_Cp_37C_UP)), rep("DOWN", length(GSE103021_H358_ARS_1620_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE103021_H358_ARS_1620_Specific_heat_data, aes(x = regulation, y = GSE103021_H358_ARS_1620_Specific_heat, fill = regulation)) +
+ggplot(GSE103021_H358_ARS_1620_Cp_37C_data, aes(x = regulation, y = GSE103021_H358_ARS_1620_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE103021_H358_ARS_1620 specific Heat of High MFE Transcripts",
        x = "",
@@ -29471,13 +29470,13 @@ ggplot(GSE103021_H358_ARS_1620_Specific_heat_data, aes(x = regulation, y = GSE10
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE103021_H358_ARS_1620_high_MFE_TX_UP <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE103021_H358_ARS_1620_high_MFE_TX_DOWN <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE103021_H358_ARS_1620_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Specific_heat, GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE103021_H358_ARS_1620_high_MFE_TX_UP <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE103021_H358_ARS_1620_high_MFE_TX_DOWN <- mean(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE103021_H358_ARS_1620_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Cp_37C, GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE103021_H358_ARS_1620_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE103021_H358_ARS_1620_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Specific_heat, GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE103021_H358_ARS_1620_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE103021_H358_ARS_1620_high_MFE_TX_in_DOWN$Cp_37C, GSE103021_H358_ARS_1620_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE103021_H358_ARS_1620_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -29508,7 +29507,7 @@ GSE103021_ARS_1620_LU65_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", 
 GSE103021_ARS_1620_LU65_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE103021_ARS_1620_LU65_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2752547, GSM2752548, GSM2752549, GSM2752550, GSM2752551, GSM2752552,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE103021_H358_ARS_1620$ensembl_transcript_id) 
 
 
@@ -29634,7 +29633,7 @@ GSE103021_ARS_1620_LU65_long_data <- GSE103021_ARS_1620_LU65_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE103021_ARS_1620_LU65_norm_TX_aggregated_data_avg_counts <- GSE103021_ARS_1620_LU65_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -29822,7 +29821,7 @@ cat("P-value for the two-proportion z-test:", GSE103021_ARS_1620_LU65_z_test_cou
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -29835,7 +29834,7 @@ ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(y=Specific_heat, x=log2FoldChange)) 
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -29849,12 +29848,12 @@ ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(x = factor(log2FoldChange > 0), y = 
   labs(y="Heat capacity (J/C)",x="",title="GSE103021_ARS_1620_LU65_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE103021_ARS_1620_LU65_UP <- mean(MFE_res_GSE103021_ARS_1620_LU65_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE103021_ARS_1620_LU65_DOWN <- mean(MFE_res_GSE103021_ARS_1620_LU65_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN <- t.test(MFE_res_GSE103021_ARS_1620_LU65_DOWN$Specific_heat, MFE_res_GSE103021_ARS_1620_LU65_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE103021_ARS_1620_LU65_UP <- mean(MFE_res_GSE103021_ARS_1620_LU65_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE103021_ARS_1620_LU65_DOWN <- mean(MFE_res_GSE103021_ARS_1620_LU65_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN <- t.test(MFE_res_GSE103021_ARS_1620_LU65_DOWN$Cp_37C, MFE_res_GSE103021_ARS_1620_LU65_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE103021_ARS_1620_LU65_DOWN$Specific_heat, MFE_res_GSE103021_ARS_1620_LU65_UP$Specific_heat)
+ks_test_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE103021_ARS_1620_LU65_DOWN$Cp_37C, MFE_res_GSE103021_ARS_1620_LU65_UP$Cp_37C)
 print(ks_test_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -29864,10 +29863,10 @@ print(ks_test_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP_heat_capacity <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Specific_heat)
+GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP_heat_capacity <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Specific_heat)
+GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE103021_ARS_1620_LU65_heat_capacity_gain_UP_vs_DOWN <- GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP_heat_capacity - GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN_heat_capacity
@@ -29875,17 +29874,17 @@ cat("GSE103021_ARS_1620_LU65 net heat capacity UP vs DOWN high MFE TX:", GSE1030
 
 
 # Extract specific heat data
-GSE103021_ARS_1620_LU65_Specific_heat_UP <- GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Specific_heat
-GSE103021_ARS_1620_LU65_Specific_heat_DOWN <- GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Specific_heat
+GSE103021_ARS_1620_LU65_Cp_37C_UP <- GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Cp_37C
+GSE103021_ARS_1620_LU65_Cp_37C_DOWN <- GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE103021_ARS_1620_LU65_Specific_heat_data <- data.frame(
-  GSE103021_ARS_1620_LU65_Specific_heat = c(GSE103021_ARS_1620_LU65_Specific_heat_UP, GSE103021_ARS_1620_LU65_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE103021_ARS_1620_LU65_Specific_heat_UP)), rep("DOWN", length(GSE103021_ARS_1620_LU65_Specific_heat_DOWN))))
+GSE103021_ARS_1620_LU65_Cp_37C_data <- data.frame(
+  GSE103021_ARS_1620_LU65_Cp_37C = c(GSE103021_ARS_1620_LU65_Cp_37C_UP, GSE103021_ARS_1620_LU65_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE103021_ARS_1620_LU65_Cp_37C_UP)), rep("DOWN", length(GSE103021_ARS_1620_LU65_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE103021_ARS_1620_LU65_Specific_heat_data, aes(x = regulation, y = GSE103021_ARS_1620_LU65_Specific_heat, fill = regulation)) +
+ggplot(GSE103021_ARS_1620_LU65_Cp_37C_data, aes(x = regulation, y = GSE103021_ARS_1620_LU65_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE103021_ARS_1620_LU65 specific Heat of High MFE Transcripts",
        x = "",
@@ -29895,13 +29894,13 @@ ggplot(GSE103021_ARS_1620_LU65_Specific_heat_data, aes(x = regulation, y = GSE10
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE103021_ARS_1620_LU65_high_MFE_TX_UP <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE103021_ARS_1620_LU65_high_MFE_TX_DOWN <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE103021_ARS_1620_LU65_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Specific_heat, GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE103021_ARS_1620_LU65_high_MFE_TX_UP <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE103021_ARS_1620_LU65_high_MFE_TX_DOWN <- mean(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE103021_ARS_1620_LU65_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Cp_37C, GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE103021_ARS_1620_LU65_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE103021_ARS_1620_LU65_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Specific_heat, GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE103021_ARS_1620_LU65_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE103021_ARS_1620_LU65_high_MFE_TX_in_DOWN$Cp_37C, GSE103021_ARS_1620_LU65_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE103021_ARS_1620_LU65_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -29933,7 +29932,7 @@ GSE103021_trametinib_LU65_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*"
 GSE103021_trametinib_LU65_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE103021_trametinib_LU65_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2752547, GSM2752548, GSM2752549, GSM2752553, GSM2752554,
-                Normalized_MFE, Temperature, Specific_heat)  %>%
+                Normalized_MFE, Cp_37C)  %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE103021_H358_ARS_1620$ensembl_transcript_id) 
 
 
@@ -30044,7 +30043,7 @@ GSE103021_trametinib_LU65_long_data <- GSE103021_trametinib_LU65_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE103021_trametinib_LU65_norm_TX_aggregated_data_avg_counts <- GSE103021_trametinib_LU65_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -30168,7 +30167,7 @@ GSE103021_trametinib_LU65_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE103021_trametinib_LU65, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE103021_trametinib_LU65, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -30181,7 +30180,7 @@ ggplot(MFE_res_GSE103021_trametinib_LU65, aes(y=Specific_heat, x=log2FoldChange)
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE103021_trametinib_LU65, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE103021_trametinib_LU65, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -30195,12 +30194,12 @@ ggplot(MFE_res_GSE103021_trametinib_LU65, aes(x = factor(log2FoldChange > 0), y 
   labs(y="Heat capacity (J/C)",x="",title="GSE103021_trametinib_LU65_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE103021_trametinib_LU65_UP <- mean(MFE_res_GSE103021_trametinib_LU65_UP$Specific_heat)
-Mean_heat_capacity_GSE103021_trametinib_LU65_DOWN <- mean(MFE_res_GSE103021_trametinib_LU65_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE103021_trametinib_LU65_all_UP_vs_DOWN <- t.test(MFE_res_GSE103021_trametinib_LU65_DOWN$Specific_heat, MFE_res_GSE103021_trametinib_LU65_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE103021_trametinib_LU65_UP <- mean(MFE_res_GSE103021_trametinib_LU65_UP$Cp_37C)
+Mean_heat_capacity_GSE103021_trametinib_LU65_DOWN <- mean(MFE_res_GSE103021_trametinib_LU65_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE103021_trametinib_LU65_all_UP_vs_DOWN <- t.test(MFE_res_GSE103021_trametinib_LU65_DOWN$Cp_37C, MFE_res_GSE103021_trametinib_LU65_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE103021_trametinib_LU65_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE103021_trametinib_LU65_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE103021_trametinib_LU65_DOWN$Specific_heat, MFE_res_GSE103021_trametinib_LU65_UP$Specific_heat)
+ks_test_GSE103021_trametinib_LU65_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE103021_trametinib_LU65_DOWN$Cp_37C, MFE_res_GSE103021_trametinib_LU65_UP$Cp_37C)
 print(ks_test_GSE103021_trametinib_LU65_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -30210,10 +30209,10 @@ print(ks_test_GSE103021_trametinib_LU65_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE103021_trametinib_LU65_high_MFE_TX_in_UP_heat_capacity <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Specific_heat)
+GSE103021_trametinib_LU65_high_MFE_TX_in_UP_heat_capacity <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Specific_heat)
+GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE103021_trametinib_LU65_heat_capacity_gain_UP_vs_DOWN <- GSE103021_trametinib_LU65_high_MFE_TX_in_UP_heat_capacity - GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN_heat_capacity
@@ -30221,17 +30220,17 @@ cat("GSE103021_trametinib_LU65 net heat capacity UP vs DOWN high MFE TX:", GSE10
 
 
 # Extract specific heat data
-GSE103021_trametinib_LU65_Specific_heat_UP <- GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Specific_heat
-GSE103021_trametinib_LU65_Specific_heat_DOWN <- GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Specific_heat
+GSE103021_trametinib_LU65_Cp_37C_UP <- GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Cp_37C
+GSE103021_trametinib_LU65_Cp_37C_DOWN <- GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE103021_trametinib_LU65_Specific_heat_data <- data.frame(
-  GSE103021_trametinib_LU65_Specific_heat = c(GSE103021_trametinib_LU65_Specific_heat_UP, GSE103021_trametinib_LU65_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE103021_trametinib_LU65_Specific_heat_UP)), rep("DOWN", length(GSE103021_trametinib_LU65_Specific_heat_DOWN))))
+GSE103021_trametinib_LU65_Cp_37C_data <- data.frame(
+  GSE103021_trametinib_LU65_Cp_37C = c(GSE103021_trametinib_LU65_Cp_37C_UP, GSE103021_trametinib_LU65_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE103021_trametinib_LU65_Cp_37C_UP)), rep("DOWN", length(GSE103021_trametinib_LU65_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE103021_trametinib_LU65_Specific_heat_data, aes(x = regulation, y = GSE103021_trametinib_LU65_Specific_heat, fill = regulation)) +
+ggplot(GSE103021_trametinib_LU65_Cp_37C_data, aes(x = regulation, y = GSE103021_trametinib_LU65_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE103021_trametinib_LU65 specific Heat of High MFE Transcripts",
        x = "",
@@ -30241,13 +30240,13 @@ ggplot(GSE103021_trametinib_LU65_Specific_heat_data, aes(x = regulation, y = GSE
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE103021_trametinib_LU65_high_MFE_TX_UP <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE103021_trametinib_LU65_high_MFE_TX_DOWN <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE103021_trametinib_LU65_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Specific_heat, GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE103021_trametinib_LU65_high_MFE_TX_UP <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE103021_trametinib_LU65_high_MFE_TX_DOWN <- mean(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE103021_trametinib_LU65_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Cp_37C, GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE103021_trametinib_LU65_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE103021_trametinib_LU65_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Specific_heat, GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE103021_trametinib_LU65_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE103021_trametinib_LU65_high_MFE_TX_in_DOWN$Cp_37C, GSE103021_trametinib_LU65_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE103021_trametinib_LU65_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -31626,7 +31625,7 @@ GSE118548_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE118548_
 GSE118548_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE118548_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3332281, GSM3332282, GSM3332283, GSM3332284, GSM3332285, GSM3332286, GSM3332287, GSM3332288, GSM3332289, GSM3332290, GSM3332291, GSM3332292, 
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -31637,7 +31636,7 @@ GSE118548_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE118548_
 GSE118548_JQ1_norm_TX_counts_MFE_df <- GSE118548_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3332281, GSM3332282, GSM3332283, GSM3332287, GSM3332288, GSM3332289, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE118548_JQ1$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -31743,7 +31742,7 @@ print(Plot_MFE_GSE118548_JQ1)
 GSE118548_Trametinib_norm_TX_counts_MFE_df <- GSE118548_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3332281, GSM3332282, GSM3332283, GSM3332284, GSM3332285, GSM3332286, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE118548_Trametinib$ensembl_transcript_id) 
 
 
@@ -31840,7 +31839,7 @@ print(Plot_MFE_GSE118548_tra)
 GSE118548_Trametinib_JQ1_norm_TX_counts_MFE_df <- GSE118548_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3332281, GSM3332282, GSM3332283, GSM3332290, GSM3332291, GSM3332292, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE118548_Trametinib_JQ1$ensembl_transcript_id) 
 
 
@@ -31964,7 +31963,7 @@ GSE118548_JQ1_long_data <- GSE118548_JQ1_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE118548_JQ1_norm_TX_aggregated_data_avg_counts <- GSE118548_JQ1_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -32165,7 +32164,7 @@ cat("GSE118548_JQ1 net change counts low MFE TX drug vs control:", GSE118548_JQ1
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE118548_JQ1, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE118548_JQ1, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -32178,7 +32177,7 @@ ggplot(MFE_res_GSE118548_JQ1, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE118548_JQ1, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE118548_JQ1, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -32192,12 +32191,12 @@ ggplot(MFE_res_GSE118548_JQ1, aes(x = factor(log2FoldChange > 0), y = Specific_h
   labs(y="Heat capacity (J/C)",x="",title="GSE118548_JQ1_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE118548_JQ1_UP <- mean(MFE_res_GSE118548_JQ1_UP$Specific_heat)
-Mean_heat_capacity_GSE118548_JQ1_DOWN <- mean(MFE_res_GSE118548_JQ1_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE118548_JQ1_all_UP_vs_DOWN <- t.test(MFE_res_GSE118548_JQ1_DOWN$Specific_heat, MFE_res_GSE118548_JQ1_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE118548_JQ1_UP <- mean(MFE_res_GSE118548_JQ1_UP$Cp_37C)
+Mean_heat_capacity_GSE118548_JQ1_DOWN <- mean(MFE_res_GSE118548_JQ1_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE118548_JQ1_all_UP_vs_DOWN <- t.test(MFE_res_GSE118548_JQ1_DOWN$Cp_37C, MFE_res_GSE118548_JQ1_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE118548_JQ1_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE118548_JQ1_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE118548_JQ1_DOWN$Specific_heat, MFE_res_GSE118548_JQ1_UP$Specific_heat)
+ks_test_GSE118548_JQ1_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE118548_JQ1_DOWN$Cp_37C, MFE_res_GSE118548_JQ1_UP$Cp_37C)
 print(ks_test_GSE118548_JQ1_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -32207,10 +32206,10 @@ print(ks_test_GSE118548_JQ1_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE118548_JQ1_high_MFE_TX_in_UP_heat_capacity <- mean(GSE118548_JQ1_high_MFE_TX_in_UP$Specific_heat)
+GSE118548_JQ1_high_MFE_TX_in_UP_heat_capacity <- mean(GSE118548_JQ1_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE118548_JQ1_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE118548_JQ1_high_MFE_TX_in_DOWN$Specific_heat)
+GSE118548_JQ1_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE118548_JQ1_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE118548_JQ1_heat_capacity_gain_UP_vs_DOWN <- GSE118548_JQ1_high_MFE_TX_in_UP_heat_capacity - GSE118548_JQ1_high_MFE_TX_in_DOWN_heat_capacity
@@ -32218,17 +32217,17 @@ cat("GSE118548_JQ1 net heat capacity UP vs DOWN high MFE TX:", GSE118548_JQ1_hea
 
 
 # Extract specific heat data
-GSE118548_JQ1_Specific_heat_UP <- GSE118548_JQ1_high_MFE_TX_in_UP$Specific_heat
-GSE118548_JQ1_Specific_heat_DOWN <- GSE118548_JQ1_high_MFE_TX_in_DOWN$Specific_heat
+GSE118548_JQ1_Cp_37C_UP <- GSE118548_JQ1_high_MFE_TX_in_UP$Cp_37C
+GSE118548_JQ1_Cp_37C_DOWN <- GSE118548_JQ1_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE118548_JQ1_Specific_heat_data <- data.frame(
-  GSE118548_JQ1_Specific_heat = c(GSE118548_JQ1_Specific_heat_UP, GSE118548_JQ1_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE118548_JQ1_Specific_heat_UP)), rep("DOWN", length(GSE118548_JQ1_Specific_heat_DOWN))))
+GSE118548_JQ1_Cp_37C_data <- data.frame(
+  GSE118548_JQ1_Cp_37C = c(GSE118548_JQ1_Cp_37C_UP, GSE118548_JQ1_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE118548_JQ1_Cp_37C_UP)), rep("DOWN", length(GSE118548_JQ1_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE118548_JQ1_Specific_heat_data, aes(x = regulation, y = GSE118548_JQ1_Specific_heat, fill = regulation)) +
+ggplot(GSE118548_JQ1_Cp_37C_data, aes(x = regulation, y = GSE118548_JQ1_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE118548_JQ1 specific Heat of High MFE Transcripts",
        x = "",
@@ -32238,13 +32237,13 @@ ggplot(GSE118548_JQ1_Specific_heat_data, aes(x = regulation, y = GSE118548_JQ1_S
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE118548_JQ1_high_MFE_TX_UP <- mean(GSE118548_JQ1_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE118548_JQ1_high_MFE_TX_DOWN <- mean(GSE118548_JQ1_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE118548_JQ1_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE118548_JQ1_high_MFE_TX_in_DOWN$Specific_heat, GSE118548_JQ1_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE118548_JQ1_high_MFE_TX_UP <- mean(GSE118548_JQ1_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE118548_JQ1_high_MFE_TX_DOWN <- mean(GSE118548_JQ1_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE118548_JQ1_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE118548_JQ1_high_MFE_TX_in_DOWN$Cp_37C, GSE118548_JQ1_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE118548_JQ1_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE118548_JQ1_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE118548_JQ1_high_MFE_TX_in_DOWN$Specific_heat, GSE118548_JQ1_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE118548_JQ1_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE118548_JQ1_high_MFE_TX_in_DOWN$Cp_37C, GSE118548_JQ1_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE118548_JQ1_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -32279,7 +32278,7 @@ GSE118548_Trametinib_long_data <- GSE118548_Trametinib_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE118548_Trametinib_norm_TX_aggregated_data_avg_counts <- GSE118548_Trametinib_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -32485,7 +32484,7 @@ cat("GSE118548_Trametinib net change counts low MFE TX drug vs control:", GSE118
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE118548_Trametinib, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE118548_Trametinib, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -32498,7 +32497,7 @@ ggplot(MFE_res_GSE118548_Trametinib, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE118548_Trametinib, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE118548_Trametinib, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -32512,12 +32511,12 @@ ggplot(MFE_res_GSE118548_Trametinib, aes(x = factor(log2FoldChange > 0), y = Spe
   labs(y="Heat capacity (J/C)",x="",title="GSE118548_Trametinib_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE118548_Trametinib_UP <- mean(MFE_res_GSE118548_Trametinib_UP$Specific_heat)
-Mean_heat_capacity_GSE118548_Trametinib_DOWN <- mean(MFE_res_GSE118548_Trametinib_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE118548_Trametinib_all_UP_vs_DOWN <- t.test(MFE_res_GSE118548_Trametinib_DOWN$Specific_heat, MFE_res_GSE118548_Trametinib_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE118548_Trametinib_UP <- mean(MFE_res_GSE118548_Trametinib_UP$Cp_37C)
+Mean_heat_capacity_GSE118548_Trametinib_DOWN <- mean(MFE_res_GSE118548_Trametinib_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE118548_Trametinib_all_UP_vs_DOWN <- t.test(MFE_res_GSE118548_Trametinib_DOWN$Cp_37C, MFE_res_GSE118548_Trametinib_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE118548_Trametinib_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE118548_Trametinib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE118548_Trametinib_DOWN$Specific_heat, MFE_res_GSE118548_Trametinib_UP$Specific_heat)
+ks_test_GSE118548_Trametinib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE118548_Trametinib_DOWN$Cp_37C, MFE_res_GSE118548_Trametinib_UP$Cp_37C)
 print(ks_test_GSE118548_Trametinib_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -32527,10 +32526,10 @@ print(ks_test_GSE118548_Trametinib_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE118548_Trametinib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE118548_Trametinib_high_MFE_TX_in_UP$Specific_heat)
+GSE118548_Trametinib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE118548_Trametinib_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE118548_Trametinib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Specific_heat)
+GSE118548_Trametinib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE118548_Trametinib_heat_capacity_gain_UP_vs_DOWN <- GSE118548_Trametinib_high_MFE_TX_in_UP_heat_capacity - GSE118548_Trametinib_high_MFE_TX_in_DOWN_heat_capacity
@@ -32538,17 +32537,17 @@ cat("GSE118548_Trametinib net heat capacity UP vs DOWN high MFE TX:", GSE118548_
 
 
 # Extract specific heat data
-GSE118548_Trametinib_Specific_heat_UP <- GSE118548_Trametinib_high_MFE_TX_in_UP$Specific_heat
-GSE118548_Trametinib_Specific_heat_DOWN <- GSE118548_Trametinib_high_MFE_TX_in_DOWN$Specific_heat
+GSE118548_Trametinib_Cp_37C_UP <- GSE118548_Trametinib_high_MFE_TX_in_UP$Cp_37C
+GSE118548_Trametinib_Cp_37C_DOWN <- GSE118548_Trametinib_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE118548_Trametinib_Specific_heat_data <- data.frame(
-  GSE118548_Trametinib_Specific_heat = c(GSE118548_Trametinib_Specific_heat_UP, GSE118548_Trametinib_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE118548_Trametinib_Specific_heat_UP)), rep("DOWN", length(GSE118548_Trametinib_Specific_heat_DOWN))))
+GSE118548_Trametinib_Cp_37C_data <- data.frame(
+  GSE118548_Trametinib_Cp_37C = c(GSE118548_Trametinib_Cp_37C_UP, GSE118548_Trametinib_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE118548_Trametinib_Cp_37C_UP)), rep("DOWN", length(GSE118548_Trametinib_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE118548_Trametinib_Specific_heat_data, aes(x = regulation, y = GSE118548_Trametinib_Specific_heat, fill = regulation)) +
+ggplot(GSE118548_Trametinib_Cp_37C_data, aes(x = regulation, y = GSE118548_Trametinib_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE118548_Trametinib specific Heat of High MFE Transcripts",
        x = "",
@@ -32558,13 +32557,13 @@ ggplot(GSE118548_Trametinib_Specific_heat_data, aes(x = regulation, y = GSE11854
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE118548_Trametinib_high_MFE_TX_UP <- mean(GSE118548_Trametinib_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE118548_Trametinib_high_MFE_TX_DOWN <- mean(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE118548_Trametinib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Specific_heat, GSE118548_Trametinib_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE118548_Trametinib_high_MFE_TX_UP <- mean(GSE118548_Trametinib_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE118548_Trametinib_high_MFE_TX_DOWN <- mean(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE118548_Trametinib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Cp_37C, GSE118548_Trametinib_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE118548_Trametinib_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE118548_Trametinib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Specific_heat, GSE118548_Trametinib_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE118548_Trametinib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE118548_Trametinib_high_MFE_TX_in_DOWN$Cp_37C, GSE118548_Trametinib_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE118548_Trametinib_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -32595,7 +32594,7 @@ GSE118548_Trametinib_JQ1_long_data <- GSE118548_Trametinib_JQ1_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE118548_Trametinib_JQ1_norm_TX_aggregated_data_avg_counts <- GSE118548_Trametinib_JQ1_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -32721,7 +32720,7 @@ GSE118548_Trametinib_JQ1_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE118548_Trametinib_JQ1, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE118548_Trametinib_JQ1, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -32734,7 +32733,7 @@ ggplot(MFE_res_GSE118548_Trametinib_JQ1, aes(y=Specific_heat, x=log2FoldChange))
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE118548_Trametinib_JQ1, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE118548_Trametinib_JQ1, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -32748,12 +32747,12 @@ ggplot(MFE_res_GSE118548_Trametinib_JQ1, aes(x = factor(log2FoldChange > 0), y =
   labs(y="Heat capacity (J/C)",x="",title="GSE118548_Trametinib_JQ1_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE118548_Trametinib_JQ1_UP <- mean(MFE_res_GSE118548_Trametinib_JQ1_UP$Specific_heat)
-Mean_heat_capacity_GSE118548_Trametinib_JQ1_DOWN <- mean(MFE_res_GSE118548_Trametinib_JQ1_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE118548_Trametinib_JQ1_all_UP_vs_DOWN <- t.test(MFE_res_GSE118548_Trametinib_JQ1_DOWN$Specific_heat, MFE_res_GSE118548_Trametinib_JQ1_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE118548_Trametinib_JQ1_UP <- mean(MFE_res_GSE118548_Trametinib_JQ1_UP$Cp_37C)
+Mean_heat_capacity_GSE118548_Trametinib_JQ1_DOWN <- mean(MFE_res_GSE118548_Trametinib_JQ1_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE118548_Trametinib_JQ1_all_UP_vs_DOWN <- t.test(MFE_res_GSE118548_Trametinib_JQ1_DOWN$Cp_37C, MFE_res_GSE118548_Trametinib_JQ1_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE118548_Trametinib_JQ1_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE118548_Trametinib_JQ1_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE118548_Trametinib_JQ1_DOWN$Specific_heat, MFE_res_GSE118548_Trametinib_JQ1_UP$Specific_heat)
+ks_test_GSE118548_Trametinib_JQ1_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE118548_Trametinib_JQ1_DOWN$Cp_37C, MFE_res_GSE118548_Trametinib_JQ1_UP$Cp_37C)
 print(ks_test_GSE118548_Trametinib_JQ1_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -32763,10 +32762,10 @@ print(ks_test_GSE118548_Trametinib_JQ1_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP_heat_capacity <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Specific_heat)
+GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP_heat_capacity <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Specific_heat)
+GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE118548_Trametinib_JQ1_heat_capacity_gain_UP_vs_DOWN <- GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP_heat_capacity - GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN_heat_capacity
@@ -32774,17 +32773,17 @@ cat("GSE118548_Trametinib_JQ1 net heat capacity UP vs DOWN high MFE TX:", GSE118
 
 
 # Extract specific heat data
-GSE118548_Trametinib_JQ1_Specific_heat_UP <- GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Specific_heat
-GSE118548_Trametinib_JQ1_Specific_heat_DOWN <- GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Specific_heat
+GSE118548_Trametinib_JQ1_Cp_37C_UP <- GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Cp_37C
+GSE118548_Trametinib_JQ1_Cp_37C_DOWN <- GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE118548_Trametinib_JQ1_Specific_heat_data <- data.frame(
-  GSE118548_Trametinib_JQ1_Specific_heat = c(GSE118548_Trametinib_JQ1_Specific_heat_UP, GSE118548_Trametinib_JQ1_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE118548_Trametinib_JQ1_Specific_heat_UP)), rep("DOWN", length(GSE118548_Trametinib_JQ1_Specific_heat_DOWN))))
+GSE118548_Trametinib_JQ1_Cp_37C_data <- data.frame(
+  GSE118548_Trametinib_JQ1_Cp_37C = c(GSE118548_Trametinib_JQ1_Cp_37C_UP, GSE118548_Trametinib_JQ1_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE118548_Trametinib_JQ1_Cp_37C_UP)), rep("DOWN", length(GSE118548_Trametinib_JQ1_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE118548_Trametinib_JQ1_Specific_heat_data, aes(x = regulation, y = GSE118548_Trametinib_JQ1_Specific_heat, fill = regulation)) +
+ggplot(GSE118548_Trametinib_JQ1_Cp_37C_data, aes(x = regulation, y = GSE118548_Trametinib_JQ1_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE118548_Trametinib_JQ1 specific Heat of High MFE Transcripts",
        x = "",
@@ -32794,13 +32793,13 @@ ggplot(GSE118548_Trametinib_JQ1_Specific_heat_data, aes(x = regulation, y = GSE1
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE118548_Trametinib_JQ1_high_MFE_TX_UP <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE118548_Trametinib_JQ1_high_MFE_TX_DOWN <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE118548_Trametinib_JQ1_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Specific_heat, GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE118548_Trametinib_JQ1_high_MFE_TX_UP <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE118548_Trametinib_JQ1_high_MFE_TX_DOWN <- mean(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE118548_Trametinib_JQ1_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Cp_37C, GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE118548_Trametinib_JQ1_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE118548_Trametinib_JQ1_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Specific_heat, GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE118548_Trametinib_JQ1_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE118548_Trametinib_JQ1_high_MFE_TX_in_DOWN$Cp_37C, GSE118548_Trametinib_JQ1_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE118548_Trametinib_JQ1_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -34043,7 +34042,7 @@ GSE177054_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE177054_
 # Join the counts with the Table_ANNOTATED containing MFE values and heat capacity values
 GSE177054_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE177054_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
-                GSM5373566, GSM5373567, GSM5373568, GSM5373569, GSM5373570, GSM5373571, GSM5373572, GSM5373573, GSM5373574, Normalized_MFE, Temperature, Specific_heat)
+                GSM5373566, GSM5373567, GSM5373568, GSM5373569, GSM5373570, GSM5373571, GSM5373572, GSM5373573, GSM5373574, Normalized_MFE, Cp_37C)
 
 
 
@@ -34057,7 +34056,7 @@ GSE177054_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE177054_
 GSE177054_Ribociclib_norm_TX_counts_MFE_df <- GSE177054_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM5373566, GSM5373567, GSM5373568, GSM5373569, GSM5373570, GSM5373571, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE177054_Ribociclib$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -34150,7 +34149,7 @@ ggplot(MFE_res_GSE177054_Ribociclib, aes(x = factor(log2FoldChange > 0), y = Nor
 GSE177054_Ribociclib_D4476_norm_TX_counts_MFE_df <- GSE177054_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM5373566, GSM5373567, GSM5373568, GSM5373572, GSM5373573, GSM5373574, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE177054_Ribociclib_D4476$ensembl_transcript_id)
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -34259,7 +34258,7 @@ GSE177054_Ribociclib_long_data <- GSE177054_Ribociclib_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE177054_Ribociclib_norm_TX_aggregated_data_avg_counts <- GSE177054_Ribociclib_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -34374,7 +34373,7 @@ GSE177054_Ribociclib_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE177054_Ribociclib, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE177054_Ribociclib, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -34387,7 +34386,7 @@ ggplot(MFE_res_GSE177054_Ribociclib, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE177054_Ribociclib, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE177054_Ribociclib, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -34401,12 +34400,12 @@ ggplot(MFE_res_GSE177054_Ribociclib, aes(x = factor(log2FoldChange > 0), y = Spe
   labs(y="Heat capacity (J/C)",x="",title="GSE177054_Ribociclib_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE177054_Ribociclib_UP <- mean(MFE_res_GSE177054_Ribociclib_UP$Specific_heat)
-Mean_heat_capacity_GSE177054_Ribociclib_DOWN <- mean(MFE_res_GSE177054_Ribociclib_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE177054_Ribociclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE177054_Ribociclib_DOWN$Specific_heat, MFE_res_GSE177054_Ribociclib_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE177054_Ribociclib_UP <- mean(MFE_res_GSE177054_Ribociclib_UP$Cp_37C)
+Mean_heat_capacity_GSE177054_Ribociclib_DOWN <- mean(MFE_res_GSE177054_Ribociclib_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE177054_Ribociclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE177054_Ribociclib_DOWN$Cp_37C, MFE_res_GSE177054_Ribociclib_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE177054_Ribociclib_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE177054_Ribociclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE177054_Ribociclib_DOWN$Specific_heat, MFE_res_GSE177054_Ribociclib_UP$Specific_heat)
+ks_test_GSE177054_Ribociclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE177054_Ribociclib_DOWN$Cp_37C, MFE_res_GSE177054_Ribociclib_UP$Cp_37C)
 print(ks_test_GSE177054_Ribociclib_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -34416,10 +34415,10 @@ print(ks_test_GSE177054_Ribociclib_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE177054_Ribociclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE177054_Ribociclib_high_MFE_TX_in_UP$Specific_heat)
+GSE177054_Ribociclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE177054_Ribociclib_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE177054_Ribociclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Specific_heat)
+GSE177054_Ribociclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE177054_Ribociclib_heat_capacity_gain_UP_vs_DOWN <- GSE177054_Ribociclib_high_MFE_TX_in_UP_heat_capacity - GSE177054_Ribociclib_high_MFE_TX_in_DOWN_heat_capacity
@@ -34427,17 +34426,17 @@ cat("GSE177054_Ribociclib net heat capacity UP vs DOWN high MFE TX:", GSE177054_
 
 
 # Extract specific heat data
-GSE177054_Ribociclib_Specific_heat_UP <- GSE177054_Ribociclib_high_MFE_TX_in_UP$Specific_heat
-GSE177054_Ribociclib_Specific_heat_DOWN <- GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Specific_heat
+GSE177054_Ribociclib_Cp_37C_UP <- GSE177054_Ribociclib_high_MFE_TX_in_UP$Cp_37C
+GSE177054_Ribociclib_Cp_37C_DOWN <- GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE177054_Ribociclib_Specific_heat_data <- data.frame(
-  GSE177054_Ribociclib_Specific_heat = c(GSE177054_Ribociclib_Specific_heat_UP, GSE177054_Ribociclib_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE177054_Ribociclib_Specific_heat_UP)), rep("DOWN", length(GSE177054_Ribociclib_Specific_heat_DOWN))))
+GSE177054_Ribociclib_Cp_37C_data <- data.frame(
+  GSE177054_Ribociclib_Cp_37C = c(GSE177054_Ribociclib_Cp_37C_UP, GSE177054_Ribociclib_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE177054_Ribociclib_Cp_37C_UP)), rep("DOWN", length(GSE177054_Ribociclib_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE177054_Ribociclib_Specific_heat_data, aes(x = regulation, y = GSE177054_Ribociclib_Specific_heat, fill = regulation)) +
+ggplot(GSE177054_Ribociclib_Cp_37C_data, aes(x = regulation, y = GSE177054_Ribociclib_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE177054_Ribociclib specific Heat of High MFE Transcripts",
        x = "",
@@ -34447,13 +34446,13 @@ ggplot(GSE177054_Ribociclib_Specific_heat_data, aes(x = regulation, y = GSE17705
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE177054_Ribociclib_high_MFE_TX_UP <- mean(GSE177054_Ribociclib_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE177054_Ribociclib_high_MFE_TX_DOWN <- mean(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE177054_Ribociclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Specific_heat, GSE177054_Ribociclib_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE177054_Ribociclib_high_MFE_TX_UP <- mean(GSE177054_Ribociclib_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE177054_Ribociclib_high_MFE_TX_DOWN <- mean(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE177054_Ribociclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Cp_37C, GSE177054_Ribociclib_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE177054_Ribociclib_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE177054_Ribociclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Specific_heat, GSE177054_Ribociclib_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE177054_Ribociclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE177054_Ribociclib_high_MFE_TX_in_DOWN$Cp_37C, GSE177054_Ribociclib_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE177054_Ribociclib_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -34489,7 +34488,7 @@ GSE177054_Ribociclib_D4476_long_data <- GSE177054_Ribociclib_D4476_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE177054_Ribociclib_D4476_norm_TX_aggregated_data_avg_counts <- GSE177054_Ribociclib_D4476_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -34614,7 +34613,7 @@ GSE177054_Ribociclib_D4476_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE177054_Ribociclib_D4476, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE177054_Ribociclib_D4476, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -34627,7 +34626,7 @@ ggplot(MFE_res_GSE177054_Ribociclib_D4476, aes(y=Specific_heat, x=log2FoldChange
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE177054_Ribociclib_D4476, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE177054_Ribociclib_D4476, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -34641,12 +34640,12 @@ ggplot(MFE_res_GSE177054_Ribociclib_D4476, aes(x = factor(log2FoldChange > 0), y
   labs(y="Heat capacity (J/C)",x="",title="GSE177054_Ribociclib_D4476_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE177054_Ribociclib_D4476_UP <- mean(MFE_res_GSE177054_Ribociclib_D4476_UP$Specific_heat)
-Mean_heat_capacity_GSE177054_Ribociclib_D4476_DOWN <- mean(MFE_res_GSE177054_Ribociclib_D4476_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE177054_Ribociclib_D4476_all_UP_vs_DOWN <- t.test(MFE_res_GSE177054_Ribociclib_D4476_DOWN$Specific_heat, MFE_res_GSE177054_Ribociclib_D4476_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE177054_Ribociclib_D4476_UP <- mean(MFE_res_GSE177054_Ribociclib_D4476_UP$Cp_37C)
+Mean_heat_capacity_GSE177054_Ribociclib_D4476_DOWN <- mean(MFE_res_GSE177054_Ribociclib_D4476_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE177054_Ribociclib_D4476_all_UP_vs_DOWN <- t.test(MFE_res_GSE177054_Ribociclib_D4476_DOWN$Cp_37C, MFE_res_GSE177054_Ribociclib_D4476_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE177054_Ribociclib_D4476_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE177054_Ribociclib_D4476_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE177054_Ribociclib_D4476_DOWN$Specific_heat, MFE_res_GSE177054_Ribociclib_D4476_UP$Specific_heat)
+ks_test_GSE177054_Ribociclib_D4476_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE177054_Ribociclib_D4476_DOWN$Cp_37C, MFE_res_GSE177054_Ribociclib_D4476_UP$Cp_37C)
 print(ks_test_GSE177054_Ribociclib_D4476_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -34656,10 +34655,10 @@ print(ks_test_GSE177054_Ribociclib_D4476_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP_heat_capacity <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Specific_heat)
+GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP_heat_capacity <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Specific_heat)
+GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE177054_Ribociclib_D4476_heat_capacity_gain_UP_vs_DOWN <- GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP_heat_capacity - GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN_heat_capacity
@@ -34667,17 +34666,17 @@ cat("GSE177054_Ribociclib_D4476 net heat capacity UP vs DOWN high MFE TX:", GSE1
 
 
 # Extract specific heat data
-GSE177054_Ribociclib_D4476_Specific_heat_UP <- GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Specific_heat
-GSE177054_Ribociclib_D4476_Specific_heat_DOWN <- GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Specific_heat
+GSE177054_Ribociclib_D4476_Cp_37C_UP <- GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Cp_37C
+GSE177054_Ribociclib_D4476_Cp_37C_DOWN <- GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE177054_Ribociclib_D4476_Specific_heat_data <- data.frame(
-  GSE177054_Ribociclib_D4476_Specific_heat = c(GSE177054_Ribociclib_D4476_Specific_heat_UP, GSE177054_Ribociclib_D4476_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE177054_Ribociclib_D4476_Specific_heat_UP)), rep("DOWN", length(GSE177054_Ribociclib_D4476_Specific_heat_DOWN))))
+GSE177054_Ribociclib_D4476_Cp_37C_data <- data.frame(
+  GSE177054_Ribociclib_D4476_Cp_37C = c(GSE177054_Ribociclib_D4476_Cp_37C_UP, GSE177054_Ribociclib_D4476_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE177054_Ribociclib_D4476_Cp_37C_UP)), rep("DOWN", length(GSE177054_Ribociclib_D4476_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE177054_Ribociclib_D4476_Specific_heat_data, aes(x = regulation, y = GSE177054_Ribociclib_D4476_Specific_heat, fill = regulation)) +
+ggplot(GSE177054_Ribociclib_D4476_Cp_37C_data, aes(x = regulation, y = GSE177054_Ribociclib_D4476_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE177054_Ribociclib_D4476 specific Heat of High MFE Transcripts",
        x = "",
@@ -34687,13 +34686,13 @@ ggplot(GSE177054_Ribociclib_D4476_Specific_heat_data, aes(x = regulation, y = GS
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE177054_Ribociclib_D4476_high_MFE_TX_UP <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE177054_Ribociclib_D4476_high_MFE_TX_DOWN <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE177054_Ribociclib_D4476_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Specific_heat, GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE177054_Ribociclib_D4476_high_MFE_TX_UP <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE177054_Ribociclib_D4476_high_MFE_TX_DOWN <- mean(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE177054_Ribociclib_D4476_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Cp_37C, GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE177054_Ribociclib_D4476_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE177054_Ribociclib_D4476_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Specific_heat, GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE177054_Ribociclib_D4476_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE177054_Ribociclib_D4476_high_MFE_TX_in_DOWN$Cp_37C, GSE177054_Ribociclib_D4476_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE177054_Ribociclib_D4476_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -35796,7 +35795,7 @@ GSE99060_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE99060_df, by="ensembl_t
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2631688, GSM2631689, GSM2631690, GSM2631691, GSM2631692, GSM2631693, GSM2631694, GSM2631695, GSM2631696, GSM2631697, GSM2631698, GSM2631699,
                 GSM2631700, GSM2631701, GSM2631702, GSM2631703, GSM2631704, GSM2631705,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -35808,7 +35807,7 @@ GSE99060_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE99060_df, by="ensembl_t
 GSE99060_MDA_MB_361_abemaciclib_norm_TX_counts_MFE_df <- GSE99060_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2631688, GSM2631689, GSM2631690, GSM2631691, GSM2631692, GSM2631693, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE99060_MDA_MB_361_abemaciclib$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -35897,7 +35896,7 @@ ggplot(MFE_res_GSE99060_MDA_MB_361_abemaciclib, aes(x = factor(log2FoldChange > 
 GSE99060_MDA_MB_453_abemaciclib_norm_TX_counts_MFE_df <- GSE99060_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2631694, GSM2631695, GSM2631696, GSM2631697, GSM2631698, GSM2631699, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE99060_MDA_MB_453_abemaciclib$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -35986,7 +35985,7 @@ ggplot(MFE_res_GSE99060_MDA_MB_453_abemaciclib, aes(x = factor(log2FoldChange > 
 GSE99060_MCF7_abemaciclib_norm_TX_counts_MFE_df <- GSE99060_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2631700, GSM2631701, GSM2631702, GSM2631703, GSM2631704, GSM2631705, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE99060_MCF7_abemaciclib$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -36095,7 +36094,7 @@ GSE99060_MDA_MB_361_abemaciclib_long_data <- GSE99060_MDA_MB_361_abemaciclib_lon
 
 # Aggregate the replicates for each condition
 GSE99060_MDA_MB_361_abemaciclib_norm_TX_aggregated_data_avg_counts <- GSE99060_MDA_MB_361_abemaciclib_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -36203,7 +36202,7 @@ GSE99060_MDA_MB_361_abemaciclib_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE99060_MDA_MB_361_abemaciclib, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE99060_MDA_MB_361_abemaciclib, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -36216,7 +36215,7 @@ ggplot(MFE_res_GSE99060_MDA_MB_361_abemaciclib, aes(y=Specific_heat, x=log2FoldC
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE99060_MDA_MB_361_abemaciclib, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE99060_MDA_MB_361_abemaciclib, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -36230,12 +36229,12 @@ ggplot(MFE_res_GSE99060_MDA_MB_361_abemaciclib, aes(x = factor(log2FoldChange > 
   labs(y="Heat capacity (J/C)",x="",title="GSE99060_MDA_MB_361_abemaciclib_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_UP <- mean(MFE_res_GSE99060_MDA_MB_361_abemaciclib_UP$Specific_heat)
-Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_DOWN <- mean(MFE_res_GSE99060_MDA_MB_361_abemaciclib_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE99060_MDA_MB_361_abemaciclib_DOWN$Specific_heat, MFE_res_GSE99060_MDA_MB_361_abemaciclib_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_UP <- mean(MFE_res_GSE99060_MDA_MB_361_abemaciclib_UP$Cp_37C)
+Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_DOWN <- mean(MFE_res_GSE99060_MDA_MB_361_abemaciclib_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE99060_MDA_MB_361_abemaciclib_DOWN$Cp_37C, MFE_res_GSE99060_MDA_MB_361_abemaciclib_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE99060_MDA_MB_361_abemaciclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE99060_MDA_MB_361_abemaciclib_DOWN$Specific_heat, MFE_res_GSE99060_MDA_MB_361_abemaciclib_UP$Specific_heat)
+ks_test_GSE99060_MDA_MB_361_abemaciclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE99060_MDA_MB_361_abemaciclib_DOWN$Cp_37C, MFE_res_GSE99060_MDA_MB_361_abemaciclib_UP$Cp_37C)
 print(ks_test_GSE99060_MDA_MB_361_abemaciclib_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -36245,10 +36244,10 @@ print(ks_test_GSE99060_MDA_MB_361_abemaciclib_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
+GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat)
+GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE99060_MDA_MB_361_abemaciclib_heat_capacity_gain_UP_vs_DOWN <- GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP_heat_capacity - GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity
@@ -36256,17 +36255,17 @@ cat("GSE99060_MDA_MB_361_abemaciclib net heat capacity UP vs DOWN high MFE TX:",
 
 
 # Extract specific heat data
-GSE99060_MDA_MB_361_abemaciclib_Specific_heat_UP <- GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Specific_heat
-GSE99060_MDA_MB_361_abemaciclib_Specific_heat_DOWN <- GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat
+GSE99060_MDA_MB_361_abemaciclib_Cp_37C_UP <- GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Cp_37C
+GSE99060_MDA_MB_361_abemaciclib_Cp_37C_DOWN <- GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE99060_MDA_MB_361_abemaciclib_Specific_heat_data <- data.frame(
-  GSE99060_MDA_MB_361_abemaciclib_Specific_heat = c(GSE99060_MDA_MB_361_abemaciclib_Specific_heat_UP, GSE99060_MDA_MB_361_abemaciclib_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE99060_MDA_MB_361_abemaciclib_Specific_heat_UP)), rep("DOWN", length(GSE99060_MDA_MB_361_abemaciclib_Specific_heat_DOWN))))
+GSE99060_MDA_MB_361_abemaciclib_Cp_37C_data <- data.frame(
+  GSE99060_MDA_MB_361_abemaciclib_Cp_37C = c(GSE99060_MDA_MB_361_abemaciclib_Cp_37C_UP, GSE99060_MDA_MB_361_abemaciclib_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE99060_MDA_MB_361_abemaciclib_Cp_37C_UP)), rep("DOWN", length(GSE99060_MDA_MB_361_abemaciclib_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE99060_MDA_MB_361_abemaciclib_Specific_heat_data, aes(x = regulation, y = GSE99060_MDA_MB_361_abemaciclib_Specific_heat, fill = regulation)) +
+ggplot(GSE99060_MDA_MB_361_abemaciclib_Cp_37C_data, aes(x = regulation, y = GSE99060_MDA_MB_361_abemaciclib_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE99060_MDA_MB_361_abemaciclib specific Heat of High MFE Transcripts",
        x = "",
@@ -36276,13 +36275,13 @@ ggplot(GSE99060_MDA_MB_361_abemaciclib_Specific_heat_data, aes(x = regulation, y
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_UP <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_DOWN <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat, GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_UP <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_DOWN <- mean(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C, GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat, GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C, GSE99060_MDA_MB_361_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE99060_MDA_MB_361_abemaciclib_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -36319,7 +36318,7 @@ GSE99060_MDA_MB_453_abemaciclib_long_data <- GSE99060_MDA_MB_453_abemaciclib_lon
 
 # Aggregate the replicates for each condition
 GSE99060_MDA_MB_453_abemaciclib_norm_TX_aggregated_data_avg_counts <- GSE99060_MDA_MB_453_abemaciclib_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -36428,7 +36427,7 @@ GSE99060_MDA_MB_453_abemaciclib_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE99060_MDA_MB_453_abemaciclib, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE99060_MDA_MB_453_abemaciclib, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -36441,7 +36440,7 @@ ggplot(MFE_res_GSE99060_MDA_MB_453_abemaciclib, aes(y=Specific_heat, x=log2FoldC
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE99060_MDA_MB_453_abemaciclib, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE99060_MDA_MB_453_abemaciclib, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -36455,12 +36454,12 @@ ggplot(MFE_res_GSE99060_MDA_MB_453_abemaciclib, aes(x = factor(log2FoldChange > 
   labs(y="Heat capacity (J/C)",x="",title="GSE99060_MDA_MB_453_abemaciclib_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_UP <- mean(MFE_res_GSE99060_MDA_MB_453_abemaciclib_UP$Specific_heat)
-Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_DOWN <- mean(MFE_res_GSE99060_MDA_MB_453_abemaciclib_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE99060_MDA_MB_453_abemaciclib_DOWN$Specific_heat, MFE_res_GSE99060_MDA_MB_453_abemaciclib_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_UP <- mean(MFE_res_GSE99060_MDA_MB_453_abemaciclib_UP$Cp_37C)
+Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_DOWN <- mean(MFE_res_GSE99060_MDA_MB_453_abemaciclib_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE99060_MDA_MB_453_abemaciclib_DOWN$Cp_37C, MFE_res_GSE99060_MDA_MB_453_abemaciclib_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE99060_MDA_MB_453_abemaciclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE99060_MDA_MB_453_abemaciclib_DOWN$Specific_heat, MFE_res_GSE99060_MDA_MB_453_abemaciclib_UP$Specific_heat)
+ks_test_GSE99060_MDA_MB_453_abemaciclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE99060_MDA_MB_453_abemaciclib_DOWN$Cp_37C, MFE_res_GSE99060_MDA_MB_453_abemaciclib_UP$Cp_37C)
 print(ks_test_GSE99060_MDA_MB_453_abemaciclib_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -36470,10 +36469,10 @@ print(ks_test_GSE99060_MDA_MB_453_abemaciclib_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
+GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat)
+GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE99060_MDA_MB_453_abemaciclib_heat_capacity_gain_UP_vs_DOWN <- GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP_heat_capacity - GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity
@@ -36481,17 +36480,17 @@ cat("GSE99060_MDA_MB_453_abemaciclib net heat capacity UP vs DOWN high MFE TX:",
 
 
 # Extract specific heat data
-GSE99060_MDA_MB_453_abemaciclib_Specific_heat_UP <- GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Specific_heat
-GSE99060_MDA_MB_453_abemaciclib_Specific_heat_DOWN <- GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat
+GSE99060_MDA_MB_453_abemaciclib_Cp_37C_UP <- GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Cp_37C
+GSE99060_MDA_MB_453_abemaciclib_Cp_37C_DOWN <- GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE99060_MDA_MB_453_abemaciclib_Specific_heat_data <- data.frame(
-  GSE99060_MDA_MB_453_abemaciclib_Specific_heat = c(GSE99060_MDA_MB_453_abemaciclib_Specific_heat_UP, GSE99060_MDA_MB_453_abemaciclib_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE99060_MDA_MB_453_abemaciclib_Specific_heat_UP)), rep("DOWN", length(GSE99060_MDA_MB_453_abemaciclib_Specific_heat_DOWN))))
+GSE99060_MDA_MB_453_abemaciclib_Cp_37C_data <- data.frame(
+  GSE99060_MDA_MB_453_abemaciclib_Cp_37C = c(GSE99060_MDA_MB_453_abemaciclib_Cp_37C_UP, GSE99060_MDA_MB_453_abemaciclib_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE99060_MDA_MB_453_abemaciclib_Cp_37C_UP)), rep("DOWN", length(GSE99060_MDA_MB_453_abemaciclib_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE99060_MDA_MB_453_abemaciclib_Specific_heat_data, aes(x = regulation, y = GSE99060_MDA_MB_453_abemaciclib_Specific_heat, fill = regulation)) +
+ggplot(GSE99060_MDA_MB_453_abemaciclib_Cp_37C_data, aes(x = regulation, y = GSE99060_MDA_MB_453_abemaciclib_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE99060_MDA_MB_453_abemaciclib specific Heat of High MFE Transcripts",
        x = "",
@@ -36501,13 +36500,13 @@ ggplot(GSE99060_MDA_MB_453_abemaciclib_Specific_heat_data, aes(x = regulation, y
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_UP <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_DOWN <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat, GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_UP <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_DOWN <- mean(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C, GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat, GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C, GSE99060_MDA_MB_453_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE99060_MDA_MB_453_abemaciclib_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -36542,7 +36541,7 @@ GSE99060_MCF7_abemaciclib_long_data <- GSE99060_MCF7_abemaciclib_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE99060_MCF7_abemaciclib_norm_TX_aggregated_data_avg_counts <- GSE99060_MCF7_abemaciclib_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -36651,7 +36650,7 @@ GSE99060_MCF7_abemaciclib_combined_plots
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE99060_MCF7_abemaciclib, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE99060_MCF7_abemaciclib, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -36664,7 +36663,7 @@ ggplot(MFE_res_GSE99060_MCF7_abemaciclib, aes(y=Specific_heat, x=log2FoldChange)
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE99060_MCF7_abemaciclib, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE99060_MCF7_abemaciclib, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -36678,12 +36677,12 @@ ggplot(MFE_res_GSE99060_MCF7_abemaciclib, aes(x = factor(log2FoldChange > 0), y 
   labs(y="Heat capacity (J/C)",x="",title="GSE99060_MCF7_abemaciclib_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE99060_MCF7_abemaciclib_UP <- mean(MFE_res_GSE99060_MCF7_abemaciclib_UP$Specific_heat)
-Mean_heat_capacity_GSE99060_MCF7_abemaciclib_DOWN <- mean(MFE_res_GSE99060_MCF7_abemaciclib_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE99060_MCF7_abemaciclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE99060_MCF7_abemaciclib_DOWN$Specific_heat, MFE_res_GSE99060_MCF7_abemaciclib_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE99060_MCF7_abemaciclib_UP <- mean(MFE_res_GSE99060_MCF7_abemaciclib_UP$Cp_37C)
+Mean_heat_capacity_GSE99060_MCF7_abemaciclib_DOWN <- mean(MFE_res_GSE99060_MCF7_abemaciclib_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE99060_MCF7_abemaciclib_all_UP_vs_DOWN <- t.test(MFE_res_GSE99060_MCF7_abemaciclib_DOWN$Cp_37C, MFE_res_GSE99060_MCF7_abemaciclib_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE99060_MCF7_abemaciclib_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE99060_MCF7_abemaciclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE99060_MCF7_abemaciclib_DOWN$Specific_heat, MFE_res_GSE99060_MCF7_abemaciclib_UP$Specific_heat)
+ks_test_GSE99060_MCF7_abemaciclib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE99060_MCF7_abemaciclib_DOWN$Cp_37C, MFE_res_GSE99060_MCF7_abemaciclib_UP$Cp_37C)
 print(ks_test_GSE99060_MCF7_abemaciclib_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -36693,10 +36692,10 @@ print(ks_test_GSE99060_MCF7_abemaciclib_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
+GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat)
+GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE99060_MCF7_abemaciclib_heat_capacity_gain_UP_vs_DOWN <- GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP_heat_capacity - GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN_heat_capacity
@@ -36704,17 +36703,17 @@ cat("GSE99060_MCF7_abemaciclib net heat capacity UP vs DOWN high MFE TX:", GSE99
 
 
 # Extract specific heat data
-GSE99060_MCF7_abemaciclib_Specific_heat_UP <- GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Specific_heat
-GSE99060_MCF7_abemaciclib_Specific_heat_DOWN <- GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat
+GSE99060_MCF7_abemaciclib_Cp_37C_UP <- GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Cp_37C
+GSE99060_MCF7_abemaciclib_Cp_37C_DOWN <- GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE99060_MCF7_abemaciclib_Specific_heat_data <- data.frame(
-  GSE99060_MCF7_abemaciclib_Specific_heat = c(GSE99060_MCF7_abemaciclib_Specific_heat_UP, GSE99060_MCF7_abemaciclib_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE99060_MCF7_abemaciclib_Specific_heat_UP)), rep("DOWN", length(GSE99060_MCF7_abemaciclib_Specific_heat_DOWN))))
+GSE99060_MCF7_abemaciclib_Cp_37C_data <- data.frame(
+  GSE99060_MCF7_abemaciclib_Cp_37C = c(GSE99060_MCF7_abemaciclib_Cp_37C_UP, GSE99060_MCF7_abemaciclib_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE99060_MCF7_abemaciclib_Cp_37C_UP)), rep("DOWN", length(GSE99060_MCF7_abemaciclib_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE99060_MCF7_abemaciclib_Specific_heat_data, aes(x = regulation, y = GSE99060_MCF7_abemaciclib_Specific_heat, fill = regulation)) +
+ggplot(GSE99060_MCF7_abemaciclib_Cp_37C_data, aes(x = regulation, y = GSE99060_MCF7_abemaciclib_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE99060_MCF7_abemaciclib specific Heat of High MFE Transcripts",
        x = "",
@@ -36724,13 +36723,13 @@ ggplot(GSE99060_MCF7_abemaciclib_Specific_heat_data, aes(x = regulation, y = GSE
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE99060_MCF7_abemaciclib_high_MFE_TX_UP <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE99060_MCF7_abemaciclib_high_MFE_TX_DOWN <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE99060_MCF7_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat, GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE99060_MCF7_abemaciclib_high_MFE_TX_UP <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE99060_MCF7_abemaciclib_high_MFE_TX_DOWN <- mean(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE99060_MCF7_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C, GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE99060_MCF7_abemaciclib_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE99060_MCF7_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Specific_heat, GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE99060_MCF7_abemaciclib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE99060_MCF7_abemaciclib_high_MFE_TX_in_DOWN$Cp_37C, GSE99060_MCF7_abemaciclib_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE99060_MCF7_abemaciclib_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -37888,7 +37887,7 @@ GSE93124_SW480_crizotinib_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*"
 GSE93124_SW480_crizotinib_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE93124_SW480_crizotinib_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM2454872, GSM2454873, GSM2454874, GSM2454875, GSM2454876, GSM2454877,
-                Normalized_MFE, Temperature, Specific_heat)  %>%
+                Normalized_MFE, Cp_37C)  %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE93124_SW480_crizotinib$ensembl_transcript_id) 
 
 
@@ -37999,7 +37998,7 @@ GSE93124_SW480_crizotinib_long_data <- GSE93124_SW480_crizotinib_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE93124_SW480_crizotinib_norm_TX_aggregated_data_avg_counts <- GSE93124_SW480_crizotinib_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -38196,7 +38195,7 @@ cat("Z-statistic for low MFE TX counts in Control vs crizotinib:", z_stat_low, "
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE93124_SW480_crizotinib, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE93124_SW480_crizotinib, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -38209,7 +38208,7 @@ ggplot(MFE_res_GSE93124_SW480_crizotinib, aes(y=Specific_heat, x=log2FoldChange)
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE93124_SW480_crizotinib, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE93124_SW480_crizotinib, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -38223,12 +38222,12 @@ ggplot(MFE_res_GSE93124_SW480_crizotinib, aes(x = factor(log2FoldChange > 0), y 
   labs(y="Heat capacity (J/C)",x="",title="GSE93124_SW480_crizotinib_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE93124_SW480_crizotinib_UP <- mean(MFE_res_GSE93124_SW480_crizotinib_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE93124_SW480_crizotinib_DOWN <- mean(MFE_res_GSE93124_SW480_crizotinib_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE93124_SW480_crizotinib_all_UP_vs_DOWN <- t.test(MFE_res_GSE93124_SW480_crizotinib_DOWN$Specific_heat, MFE_res_GSE93124_SW480_crizotinib_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE93124_SW480_crizotinib_UP <- mean(MFE_res_GSE93124_SW480_crizotinib_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE93124_SW480_crizotinib_DOWN <- mean(MFE_res_GSE93124_SW480_crizotinib_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE93124_SW480_crizotinib_all_UP_vs_DOWN <- t.test(MFE_res_GSE93124_SW480_crizotinib_DOWN$Cp_37C, MFE_res_GSE93124_SW480_crizotinib_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE93124_SW480_crizotinib_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE93124_SW480_crizotinib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE93124_SW480_crizotinib_DOWN$Specific_heat, MFE_res_GSE93124_SW480_crizotinib_UP$Specific_heat)
+ks_test_GSE93124_SW480_crizotinib_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE93124_SW480_crizotinib_DOWN$Cp_37C, MFE_res_GSE93124_SW480_crizotinib_UP$Cp_37C)
 print(ks_test_GSE93124_SW480_crizotinib_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -38238,10 +38237,10 @@ print(ks_test_GSE93124_SW480_crizotinib_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE93124_SW480_crizotinib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Specific_heat)
+GSE93124_SW480_crizotinib_high_MFE_TX_in_UP_heat_capacity <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Specific_heat)
+GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE93124_SW480_crizotinib_heat_capacity_gain_UP_vs_DOWN <- GSE93124_SW480_crizotinib_high_MFE_TX_in_UP_heat_capacity - GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN_heat_capacity
@@ -38249,17 +38248,17 @@ cat("GSE93124_SW480_crizotinib net heat capacity UP vs DOWN high MFE TX:", GSE93
 
 
 # Extract specific heat data
-GSE93124_SW480_crizotinib_Specific_heat_UP <- GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Specific_heat
-GSE93124_SW480_crizotinib_Specific_heat_DOWN <- GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Specific_heat
+GSE93124_SW480_crizotinib_Cp_37C_UP <- GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Cp_37C
+GSE93124_SW480_crizotinib_Cp_37C_DOWN <- GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE93124_SW480_crizotinib_Specific_heat_data <- data.frame(
-  GSE93124_SW480_crizotinib_Specific_heat = c(GSE93124_SW480_crizotinib_Specific_heat_UP, GSE93124_SW480_crizotinib_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE93124_SW480_crizotinib_Specific_heat_UP)), rep("DOWN", length(GSE93124_SW480_crizotinib_Specific_heat_DOWN))))
+GSE93124_SW480_crizotinib_Cp_37C_data <- data.frame(
+  GSE93124_SW480_crizotinib_Cp_37C = c(GSE93124_SW480_crizotinib_Cp_37C_UP, GSE93124_SW480_crizotinib_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE93124_SW480_crizotinib_Cp_37C_UP)), rep("DOWN", length(GSE93124_SW480_crizotinib_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE93124_SW480_crizotinib_Specific_heat_data, aes(x = regulation, y = GSE93124_SW480_crizotinib_Specific_heat, fill = regulation)) +
+ggplot(GSE93124_SW480_crizotinib_Cp_37C_data, aes(x = regulation, y = GSE93124_SW480_crizotinib_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE93124_SW480_crizotinib specific Heat of High MFE Transcripts",
        x = "",
@@ -38269,13 +38268,13 @@ ggplot(GSE93124_SW480_crizotinib_Specific_heat_data, aes(x = regulation, y = GSE
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE93124_SW480_crizotinib_high_MFE_TX_UP <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE93124_SW480_crizotinib_high_MFE_TX_DOWN <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE93124_SW480_crizotinib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Specific_heat, GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE93124_SW480_crizotinib_high_MFE_TX_UP <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE93124_SW480_crizotinib_high_MFE_TX_DOWN <- mean(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE93124_SW480_crizotinib_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Cp_37C, GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE93124_SW480_crizotinib_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE93124_SW480_crizotinib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Specific_heat, GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE93124_SW480_crizotinib_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE93124_SW480_crizotinib_high_MFE_TX_in_DOWN$Cp_37C, GSE93124_SW480_crizotinib_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE93124_SW480_crizotinib_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -38977,7 +38976,7 @@ GSE121105_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE121105_
 GSE121105_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE121105_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3426212, GSM3426213, GSM3426214, GSM3426215, GSM3426216, GSM3426217, GSM3426218, GSM3426219, GSM3426220,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -38990,7 +38989,7 @@ GSE121105_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE121105_
 GSE121105_trastuzumab_norm_TX_counts_MFE_df <- GSE121105_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3426212, GSM3426213, GSM3426214, GSM3426215, GSM3426216, GSM3426217, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE121105_trastuzumab$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -39094,7 +39093,7 @@ print(Plot_MFE_GSE121105)
 GSE121105_trastuzumab_pertuzumab_norm_TX_counts_MFE_df <- GSE121105_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3426212, GSM3426213, GSM3426214, GSM3426218, GSM3426219, GSM3426220, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE121105_trastuzumab_pertuzumab$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -39207,7 +39206,7 @@ GSE121105_trastuzumab_long_data <- GSE121105_trastuzumab_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE121105_trastuzumab_norm_TX_aggregated_data_avg_counts <- GSE121105_trastuzumab_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -39403,7 +39402,7 @@ cat("GSE121105_trastuzumab net change counts low MFE TX drug vs control:", GSE12
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE121105_trastuzumab, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE121105_trastuzumab, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -39416,7 +39415,7 @@ ggplot(MFE_res_GSE121105_trastuzumab, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE121105_trastuzumab, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE121105_trastuzumab, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -39430,12 +39429,12 @@ ggplot(MFE_res_GSE121105_trastuzumab, aes(x = factor(log2FoldChange > 0), y = Sp
   labs(y="Heat capacity (J/C)",x="",title="GSE121105_trastuzumab_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE121105_trastuzumab_UP <- mean(MFE_res_GSE121105_trastuzumab_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE121105_trastuzumab_DOWN <- mean(MFE_res_GSE121105_trastuzumab_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE121105_trastuzumab_all_UP_vs_DOWN <- t.test(MFE_res_GSE121105_trastuzumab_DOWN$Specific_heat, MFE_res_GSE121105_trastuzumab_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE121105_trastuzumab_UP <- mean(MFE_res_GSE121105_trastuzumab_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE121105_trastuzumab_DOWN <- mean(MFE_res_GSE121105_trastuzumab_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE121105_trastuzumab_all_UP_vs_DOWN <- t.test(MFE_res_GSE121105_trastuzumab_DOWN$Cp_37C, MFE_res_GSE121105_trastuzumab_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE121105_trastuzumab_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE121105_trastuzumab_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE121105_trastuzumab_DOWN$Specific_heat, MFE_res_GSE121105_trastuzumab_UP$Specific_heat)
+ks_test_GSE121105_trastuzumab_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE121105_trastuzumab_DOWN$Cp_37C, MFE_res_GSE121105_trastuzumab_UP$Cp_37C)
 print(ks_test_GSE121105_trastuzumab_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -39445,10 +39444,10 @@ print(ks_test_GSE121105_trastuzumab_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE121105_trastuzumab_high_MFE_TX_in_UP_heat_capacity <- mean(GSE121105_trastuzumab_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE121105_trastuzumab_high_MFE_TX_in_UP_heat_capacity <- mean(GSE121105_trastuzumab_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE121105_trastuzumab_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE121105_trastuzumab_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE121105_trastuzumab_heat_capacity_gain_UP_vs_DOWN <- GSE121105_trastuzumab_high_MFE_TX_in_UP_heat_capacity - GSE121105_trastuzumab_high_MFE_TX_in_DOWN_heat_capacity
@@ -39456,17 +39455,17 @@ cat("GSE121105_trastuzumab net heat capacity UP vs DOWN high MFE TX:", GSE121105
 
 
 # Extract specific heat data
-GSE121105_trastuzumab_Specific_heat_UP <- GSE121105_trastuzumab_high_MFE_TX_in_UP$Specific_heat
-GSE121105_trastuzumab_Specific_heat_DOWN <- GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Specific_heat
+GSE121105_trastuzumab_Cp_37C_UP <- GSE121105_trastuzumab_high_MFE_TX_in_UP$Cp_37C
+GSE121105_trastuzumab_Cp_37C_DOWN <- GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE121105_trastuzumab_Specific_heat_data <- data.frame(
-  GSE121105_trastuzumab_Specific_heat = c(GSE121105_trastuzumab_Specific_heat_UP, GSE121105_trastuzumab_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE121105_trastuzumab_Specific_heat_UP)), rep("DOWN", length(GSE121105_trastuzumab_Specific_heat_DOWN))))
+GSE121105_trastuzumab_Cp_37C_data <- data.frame(
+  GSE121105_trastuzumab_Cp_37C = c(GSE121105_trastuzumab_Cp_37C_UP, GSE121105_trastuzumab_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE121105_trastuzumab_Cp_37C_UP)), rep("DOWN", length(GSE121105_trastuzumab_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE121105_trastuzumab_Specific_heat_data, aes(x = regulation, y = GSE121105_trastuzumab_Specific_heat, fill = regulation)) +
+ggplot(GSE121105_trastuzumab_Cp_37C_data, aes(x = regulation, y = GSE121105_trastuzumab_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE121105_trastuzumab specific Heat of High MFE Transcripts",
        x = "",
@@ -39476,13 +39475,13 @@ ggplot(GSE121105_trastuzumab_Specific_heat_data, aes(x = regulation, y = GSE1211
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE121105_trastuzumab_high_MFE_TX_UP <- mean(GSE121105_trastuzumab_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE121105_trastuzumab_high_MFE_TX_DOWN <- mean(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE121105_trastuzumab_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Specific_heat, GSE121105_trastuzumab_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE121105_trastuzumab_high_MFE_TX_UP <- mean(GSE121105_trastuzumab_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE121105_trastuzumab_high_MFE_TX_DOWN <- mean(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE121105_trastuzumab_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Cp_37C, GSE121105_trastuzumab_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE121105_trastuzumab_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE121105_trastuzumab_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Specific_heat, GSE121105_trastuzumab_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE121105_trastuzumab_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE121105_trastuzumab_high_MFE_TX_in_DOWN$Cp_37C, GSE121105_trastuzumab_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE121105_trastuzumab_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -39521,7 +39520,7 @@ GSE121105_trastuzumab_pertuzumab_long_data <- GSE121105_trastuzumab_pertuzumab_l
 
 # Aggregate the replicates for each condition
 GSE121105_trastuzumab_pertuzumab_norm_TX_aggregated_data_avg_counts <- GSE121105_trastuzumab_pertuzumab_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts),
     .groups = 'drop'
@@ -39695,7 +39694,7 @@ cat("GSE121105_trastuzumab_pertuzumab net change counts low MFE TX drug vs contr
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE121105_trastuzumab_pertuzumab, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE121105_trastuzumab_pertuzumab, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -39708,7 +39707,7 @@ ggplot(MFE_res_GSE121105_trastuzumab_pertuzumab, aes(y=Specific_heat, x=log2Fold
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE121105_trastuzumab_pertuzumab, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE121105_trastuzumab_pertuzumab, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -39722,12 +39721,12 @@ ggplot(MFE_res_GSE121105_trastuzumab_pertuzumab, aes(x = factor(log2FoldChange >
   labs(y="Heat capacity (J/C)",x="",title="GSE121105_trastuzumab_pertuzumab_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_UP <- mean(MFE_res_GSE121105_trastuzumab_pertuzumab_UP$Specific_heat)
-Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_DOWN <- mean(MFE_res_GSE121105_trastuzumab_pertuzumab_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_UP_vs_DOWN <- t.test(MFE_res_GSE121105_trastuzumab_pertuzumab_DOWN$Specific_heat, MFE_res_GSE121105_trastuzumab_pertuzumab_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_UP <- mean(MFE_res_GSE121105_trastuzumab_pertuzumab_UP$Cp_37C)
+Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_DOWN <- mean(MFE_res_GSE121105_trastuzumab_pertuzumab_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_UP_vs_DOWN <- t.test(MFE_res_GSE121105_trastuzumab_pertuzumab_DOWN$Cp_37C, MFE_res_GSE121105_trastuzumab_pertuzumab_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE121105_trastuzumab_pertuzumab_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE121105_trastuzumab_pertuzumab_DOWN$Specific_heat, MFE_res_GSE121105_trastuzumab_pertuzumab_UP$Specific_heat)
+ks_test_GSE121105_trastuzumab_pertuzumab_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE121105_trastuzumab_pertuzumab_DOWN$Cp_37C, MFE_res_GSE121105_trastuzumab_pertuzumab_UP$Cp_37C)
 print(ks_test_GSE121105_trastuzumab_pertuzumab_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -39737,10 +39736,10 @@ print(ks_test_GSE121105_trastuzumab_pertuzumab_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP_heat_capacity <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Specific_heat)
+GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP_heat_capacity <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Cp_37C)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Specific_heat)
+GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Cp_37C)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE121105_trastuzumab_pertuzumab_heat_capacity_gain_UP_vs_DOWN <- GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP_heat_capacity - GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN_heat_capacity
@@ -39748,17 +39747,17 @@ cat("GSE121105_trastuzumab_pertuzumab net heat capacity UP vs DOWN high MFE TX:"
 
 
 # Extract specific heat data
-GSE121105_trastuzumab_pertuzumab_Specific_heat_UP <- GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Specific_heat
-GSE121105_trastuzumab_pertuzumab_Specific_heat_DOWN <- GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Specific_heat
+GSE121105_trastuzumab_pertuzumab_Cp_37C_UP <- GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Cp_37C
+GSE121105_trastuzumab_pertuzumab_Cp_37C_DOWN <- GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE121105_trastuzumab_pertuzumab_Specific_heat_data <- data.frame(
-  GSE121105_trastuzumab_pertuzumab_Specific_heat = c(GSE121105_trastuzumab_pertuzumab_Specific_heat_UP, GSE121105_trastuzumab_pertuzumab_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE121105_trastuzumab_pertuzumab_Specific_heat_UP)), rep("DOWN", length(GSE121105_trastuzumab_pertuzumab_Specific_heat_DOWN))))
+GSE121105_trastuzumab_pertuzumab_Cp_37C_data <- data.frame(
+  GSE121105_trastuzumab_pertuzumab_Cp_37C = c(GSE121105_trastuzumab_pertuzumab_Cp_37C_UP, GSE121105_trastuzumab_pertuzumab_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE121105_trastuzumab_pertuzumab_Cp_37C_UP)), rep("DOWN", length(GSE121105_trastuzumab_pertuzumab_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE121105_trastuzumab_pertuzumab_Specific_heat_data, aes(x = regulation, y = GSE121105_trastuzumab_pertuzumab_Specific_heat, fill = regulation)) +
+ggplot(GSE121105_trastuzumab_pertuzumab_Cp_37C_data, aes(x = regulation, y = GSE121105_trastuzumab_pertuzumab_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE121105_trastuzumab_pertuzumab specific Heat of High MFE Transcripts",
        x = "",
@@ -39768,13 +39767,13 @@ ggplot(GSE121105_trastuzumab_pertuzumab_Specific_heat_data, aes(x = regulation, 
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_high_MFE_TX_UP <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Specific_heat)
-Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_high_MFE_TX_DOWN <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Specific_heat)
-TTEST_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Specific_heat, GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_high_MFE_TX_UP <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Cp_37C)
+Mean_heat_capacity_GSE121105_trastuzumab_pertuzumab_high_MFE_TX_DOWN <- mean(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Cp_37C)
+TTEST_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Cp_37C, GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Specific_heat, GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_DOWN$Cp_37C, GSE121105_trastuzumab_pertuzumab_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE121105_trastuzumab_pertuzumab_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -40606,7 +40605,7 @@ GSE73318_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE73318_no
 GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890694, GSM1890695, GSM1890696, GSM1890697, GSM1890698, GSM1890699,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -40619,7 +40618,7 @@ GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_no
 GSE73318_HCT_116_norm_TX_counts_MFE_df <- GSE73318_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890694, GSM1890695, GSM1890696, GSM1890697, GSM1890698, GSM1890699, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE73318_HCT_116$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -40736,7 +40735,7 @@ GSE73318_HCT_116_long_data <- GSE73318_HCT_116_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE73318_HCT_116_norm_TX_aggregated_data_avg_counts <- GSE73318_HCT_116_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -40928,7 +40927,7 @@ cat("GSE73318_HCT_116 net change counts low MFE TX drug vs control:", GSE73318_H
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE73318_HCT_116, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE73318_HCT_116, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -40941,7 +40940,7 @@ ggplot(MFE_res_GSE73318_HCT_116, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE73318_HCT_116, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE73318_HCT_116, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -40955,12 +40954,12 @@ ggplot(MFE_res_GSE73318_HCT_116, aes(x = factor(log2FoldChange > 0), y = Specifi
   labs(y="Heat capacity (J/C)",x="",title="GSE73318_HCT_116_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE73318_HCT_116_UP <- mean(MFE_res_GSE73318_HCT_116_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_HCT_116_DOWN <- mean(MFE_res_GSE73318_HCT_116_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_HCT_116_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_HCT_116_DOWN$Specific_heat, MFE_res_GSE73318_HCT_116_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_HCT_116_UP <- mean(MFE_res_GSE73318_HCT_116_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_HCT_116_DOWN <- mean(MFE_res_GSE73318_HCT_116_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_HCT_116_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_HCT_116_DOWN$Cp_37C, MFE_res_GSE73318_HCT_116_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_HCT_116_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE73318_HCT_116_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_HCT_116_DOWN$Specific_heat, MFE_res_GSE73318_HCT_116_UP$Specific_heat)
+ks_test_GSE73318_HCT_116_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_HCT_116_DOWN$Cp_37C, MFE_res_GSE73318_HCT_116_UP$Cp_37C)
 print(ks_test_GSE73318_HCT_116_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -40970,10 +40969,10 @@ print(ks_test_GSE73318_HCT_116_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE73318_HCT_116_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_HCT_116_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE73318_HCT_116_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_HCT_116_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE73318_HCT_116_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE73318_HCT_116_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE73318_HCT_116_heat_capacity_gain_UP_vs_DOWN <- GSE73318_HCT_116_high_MFE_TX_in_UP_heat_capacity - GSE73318_HCT_116_high_MFE_TX_in_DOWN_heat_capacity
@@ -40981,17 +40980,17 @@ cat("GSE73318_HCT_116 net heat capacity UP vs DOWN high MFE TX:", GSE73318_HCT_1
 
 
 # Extract specific heat data
-GSE73318_HCT_116_Specific_heat_UP <- GSE73318_HCT_116_high_MFE_TX_in_UP$Specific_heat
-GSE73318_HCT_116_Specific_heat_DOWN <- GSE73318_HCT_116_high_MFE_TX_in_DOWN$Specific_heat
+GSE73318_HCT_116_Cp_37C_UP <- GSE73318_HCT_116_high_MFE_TX_in_UP$Cp_37C
+GSE73318_HCT_116_Cp_37C_DOWN <- GSE73318_HCT_116_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE73318_HCT_116_Specific_heat_data <- data.frame(
-  GSE73318_HCT_116_Specific_heat = c(GSE73318_HCT_116_Specific_heat_UP, GSE73318_HCT_116_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE73318_HCT_116_Specific_heat_UP)), rep("DOWN", length(GSE73318_HCT_116_Specific_heat_DOWN))))
+GSE73318_HCT_116_Cp_37C_data <- data.frame(
+  GSE73318_HCT_116_Cp_37C = c(GSE73318_HCT_116_Cp_37C_UP, GSE73318_HCT_116_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE73318_HCT_116_Cp_37C_UP)), rep("DOWN", length(GSE73318_HCT_116_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE73318_HCT_116_Specific_heat_data, aes(x = regulation, y = GSE73318_HCT_116_Specific_heat, fill = regulation)) +
+ggplot(GSE73318_HCT_116_Cp_37C_data, aes(x = regulation, y = GSE73318_HCT_116_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE73318_HCT_116 specific Heat of High MFE Transcripts",
        x = "",
@@ -41001,13 +41000,13 @@ ggplot(GSE73318_HCT_116_Specific_heat_data, aes(x = regulation, y = GSE73318_HCT
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE73318_HCT_116_high_MFE_TX_UP <- mean(GSE73318_HCT_116_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_HCT_116_high_MFE_TX_DOWN <- mean(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_HCT_116_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_HCT_116_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_HCT_116_high_MFE_TX_UP <- mean(GSE73318_HCT_116_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_HCT_116_high_MFE_TX_DOWN <- mean(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_HCT_116_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_HCT_116_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_HCT_116_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE73318_HCT_116_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_HCT_116_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE73318_HCT_116_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_HCT_116_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_HCT_116_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE73318_HCT_116_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -41261,7 +41260,7 @@ GSE73318_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE73318_no
 GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890700, GSM1890701, GSM1890702, GSM1890703, GSM1890704, GSM1890705,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -41274,7 +41273,7 @@ GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_no
 GSE73318_SW_480_norm_TX_counts_MFE_df <- GSE73318_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890700, GSM1890701, GSM1890702, GSM1890703, GSM1890704, GSM1890705, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE73318_SW_480$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -41391,7 +41390,7 @@ GSE73318_SW_480_long_data <- GSE73318_SW_480_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE73318_SW_480_norm_TX_aggregated_data_avg_counts <- GSE73318_SW_480_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -41583,7 +41582,7 @@ cat("GSE73318_SW_480 net change counts low MFE TX drug vs control:", GSE73318_SW
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE73318_SW_480, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE73318_SW_480, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -41596,7 +41595,7 @@ ggplot(MFE_res_GSE73318_SW_480, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE73318_SW_480, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE73318_SW_480, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -41610,12 +41609,12 @@ ggplot(MFE_res_GSE73318_SW_480, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE73318_SW_480_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE73318_SW_480_UP <- mean(MFE_res_GSE73318_SW_480_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_SW_480_DOWN <- mean(MFE_res_GSE73318_SW_480_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_SW_480_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_SW_480_DOWN$Specific_heat, MFE_res_GSE73318_SW_480_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_SW_480_UP <- mean(MFE_res_GSE73318_SW_480_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_SW_480_DOWN <- mean(MFE_res_GSE73318_SW_480_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_SW_480_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_SW_480_DOWN$Cp_37C, MFE_res_GSE73318_SW_480_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_SW_480_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE73318_SW_480_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_SW_480_DOWN$Specific_heat, MFE_res_GSE73318_SW_480_UP$Specific_heat)
+ks_test_GSE73318_SW_480_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_SW_480_DOWN$Cp_37C, MFE_res_GSE73318_SW_480_UP$Cp_37C)
 print(ks_test_GSE73318_SW_480_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -41625,10 +41624,10 @@ print(ks_test_GSE73318_SW_480_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE73318_SW_480_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_SW_480_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE73318_SW_480_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_SW_480_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE73318_SW_480_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_SW_480_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE73318_SW_480_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_SW_480_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE73318_SW_480_heat_capacity_gain_UP_vs_DOWN <- GSE73318_SW_480_high_MFE_TX_in_UP_heat_capacity - GSE73318_SW_480_high_MFE_TX_in_DOWN_heat_capacity
@@ -41636,17 +41635,17 @@ cat("GSE73318_SW_480 net heat capacity UP vs DOWN high MFE TX:", GSE73318_SW_480
 
 
 # Extract specific heat data
-GSE73318_SW_480_Specific_heat_UP <- GSE73318_SW_480_high_MFE_TX_in_UP$Specific_heat
-GSE73318_SW_480_Specific_heat_DOWN <- GSE73318_SW_480_high_MFE_TX_in_DOWN$Specific_heat
+GSE73318_SW_480_Cp_37C_UP <- GSE73318_SW_480_high_MFE_TX_in_UP$Cp_37C
+GSE73318_SW_480_Cp_37C_DOWN <- GSE73318_SW_480_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE73318_SW_480_Specific_heat_data <- data.frame(
-  GSE73318_SW_480_Specific_heat = c(GSE73318_SW_480_Specific_heat_UP, GSE73318_SW_480_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE73318_SW_480_Specific_heat_UP)), rep("DOWN", length(GSE73318_SW_480_Specific_heat_DOWN))))
+GSE73318_SW_480_Cp_37C_data <- data.frame(
+  GSE73318_SW_480_Cp_37C = c(GSE73318_SW_480_Cp_37C_UP, GSE73318_SW_480_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE73318_SW_480_Cp_37C_UP)), rep("DOWN", length(GSE73318_SW_480_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE73318_SW_480_Specific_heat_data, aes(x = regulation, y = GSE73318_SW_480_Specific_heat, fill = regulation)) +
+ggplot(GSE73318_SW_480_Cp_37C_data, aes(x = regulation, y = GSE73318_SW_480_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE73318_SW_480 specific Heat of High MFE Transcripts",
        x = "",
@@ -41656,13 +41655,13 @@ ggplot(GSE73318_SW_480_Specific_heat_data, aes(x = regulation, y = GSE73318_SW_4
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE73318_SW_480_high_MFE_TX_UP <- mean(GSE73318_SW_480_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_SW_480_high_MFE_TX_DOWN <- mean(GSE73318_SW_480_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_SW_480_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_SW_480_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_SW_480_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_SW_480_high_MFE_TX_UP <- mean(GSE73318_SW_480_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_SW_480_high_MFE_TX_DOWN <- mean(GSE73318_SW_480_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_SW_480_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_SW_480_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_SW_480_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_SW_480_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE73318_SW_480_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_SW_480_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_SW_480_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE73318_SW_480_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_SW_480_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_SW_480_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE73318_SW_480_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -41907,7 +41906,7 @@ GSE73318_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE73318_no
 GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890706, GSM1890707, GSM1890708, GSM1890709, GSM1890710, GSM1890711,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -41920,7 +41919,7 @@ GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_no
 GSE73318_HT_29_norm_TX_counts_MFE_df <- GSE73318_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890706, GSM1890707, GSM1890708, GSM1890709, GSM1890710, GSM1890711, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE73318_HT_29$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -42037,7 +42036,7 @@ GSE73318_HT_29_long_data <- GSE73318_HT_29_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE73318_HT_29_norm_TX_aggregated_data_avg_counts <- GSE73318_HT_29_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -42229,7 +42228,7 @@ cat("GSE73318_HT_29 net change counts low MFE TX drug vs control:", GSE73318_HT_
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE73318_HT_29, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE73318_HT_29, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -42242,7 +42241,7 @@ ggplot(MFE_res_GSE73318_HT_29, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE73318_HT_29, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE73318_HT_29, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -42256,12 +42255,12 @@ ggplot(MFE_res_GSE73318_HT_29, aes(x = factor(log2FoldChange > 0), y = Specific_
   labs(y="Heat capacity (J/C)",x="",title="GSE73318_HT_29_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE73318_HT_29_UP <- mean(MFE_res_GSE73318_HT_29_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_HT_29_DOWN <- mean(MFE_res_GSE73318_HT_29_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_HT_29_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_HT_29_DOWN$Specific_heat, MFE_res_GSE73318_HT_29_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_HT_29_UP <- mean(MFE_res_GSE73318_HT_29_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_HT_29_DOWN <- mean(MFE_res_GSE73318_HT_29_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_HT_29_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_HT_29_DOWN$Cp_37C, MFE_res_GSE73318_HT_29_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_HT_29_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE73318_HT_29_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_HT_29_DOWN$Specific_heat, MFE_res_GSE73318_HT_29_UP$Specific_heat)
+ks_test_GSE73318_HT_29_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_HT_29_DOWN$Cp_37C, MFE_res_GSE73318_HT_29_UP$Cp_37C)
 print(ks_test_GSE73318_HT_29_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -42271,10 +42270,10 @@ print(ks_test_GSE73318_HT_29_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE73318_HT_29_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_HT_29_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE73318_HT_29_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_HT_29_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE73318_HT_29_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_HT_29_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE73318_HT_29_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_HT_29_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE73318_HT_29_heat_capacity_gain_UP_vs_DOWN <- GSE73318_HT_29_high_MFE_TX_in_UP_heat_capacity - GSE73318_HT_29_high_MFE_TX_in_DOWN_heat_capacity
@@ -42282,17 +42281,17 @@ cat("GSE73318_HT_29 net heat capacity UP vs DOWN high MFE TX:", GSE73318_HT_29_h
 
 
 # Extract specific heat data
-GSE73318_HT_29_Specific_heat_UP <- GSE73318_HT_29_high_MFE_TX_in_UP$Specific_heat
-GSE73318_HT_29_Specific_heat_DOWN <- GSE73318_HT_29_high_MFE_TX_in_DOWN$Specific_heat
+GSE73318_HT_29_Cp_37C_UP <- GSE73318_HT_29_high_MFE_TX_in_UP$Cp_37C
+GSE73318_HT_29_Cp_37C_DOWN <- GSE73318_HT_29_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE73318_HT_29_Specific_heat_data <- data.frame(
-  GSE73318_HT_29_Specific_heat = c(GSE73318_HT_29_Specific_heat_UP, GSE73318_HT_29_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE73318_HT_29_Specific_heat_UP)), rep("DOWN", length(GSE73318_HT_29_Specific_heat_DOWN))))
+GSE73318_HT_29_Cp_37C_data <- data.frame(
+  GSE73318_HT_29_Cp_37C = c(GSE73318_HT_29_Cp_37C_UP, GSE73318_HT_29_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE73318_HT_29_Cp_37C_UP)), rep("DOWN", length(GSE73318_HT_29_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE73318_HT_29_Specific_heat_data, aes(x = regulation, y = GSE73318_HT_29_Specific_heat, fill = regulation)) +
+ggplot(GSE73318_HT_29_Cp_37C_data, aes(x = regulation, y = GSE73318_HT_29_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE73318_HT_29 specific Heat of High MFE Transcripts",
        x = "",
@@ -42302,13 +42301,13 @@ ggplot(GSE73318_HT_29_Specific_heat_data, aes(x = regulation, y = GSE73318_HT_29
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE73318_HT_29_high_MFE_TX_UP <- mean(GSE73318_HT_29_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_HT_29_high_MFE_TX_DOWN <- mean(GSE73318_HT_29_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_HT_29_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_HT_29_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_HT_29_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_HT_29_high_MFE_TX_UP <- mean(GSE73318_HT_29_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_HT_29_high_MFE_TX_DOWN <- mean(GSE73318_HT_29_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_HT_29_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_HT_29_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_HT_29_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_HT_29_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE73318_HT_29_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_HT_29_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_HT_29_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE73318_HT_29_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_HT_29_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_HT_29_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE73318_HT_29_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -42553,7 +42552,7 @@ GSE73318_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE73318_no
 GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890712, GSM1890713, GSM1890714, GSM1890715, GSM1890716, GSM1890717,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -42566,7 +42565,7 @@ GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_no
 GSE73318_COLO_205_norm_TX_counts_MFE_df <- GSE73318_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890712, GSM1890713, GSM1890714, GSM1890715, GSM1890716, GSM1890717, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE73318_COLO_205$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -42682,7 +42681,7 @@ GSE73318_COLO_205_long_data <- GSE73318_COLO_205_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE73318_COLO_205_norm_TX_aggregated_data_avg_counts <- GSE73318_COLO_205_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -42874,7 +42873,7 @@ cat("GSE73318_COLO_205 net change counts low MFE TX drug vs control:", GSE73318_
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE73318_COLO_205, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE73318_COLO_205, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -42887,7 +42886,7 @@ ggplot(MFE_res_GSE73318_COLO_205, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE73318_COLO_205, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE73318_COLO_205, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -42901,12 +42900,12 @@ ggplot(MFE_res_GSE73318_COLO_205, aes(x = factor(log2FoldChange > 0), y = Specif
   labs(y="Heat capacity (J/C)",x="",title="GSE73318_COLO_205_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE73318_COLO_205_UP <- mean(MFE_res_GSE73318_COLO_205_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_COLO_205_DOWN <- mean(MFE_res_GSE73318_COLO_205_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_COLO_205_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_COLO_205_DOWN$Specific_heat, MFE_res_GSE73318_COLO_205_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_COLO_205_UP <- mean(MFE_res_GSE73318_COLO_205_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_COLO_205_DOWN <- mean(MFE_res_GSE73318_COLO_205_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_COLO_205_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_COLO_205_DOWN$Cp_37C, MFE_res_GSE73318_COLO_205_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_COLO_205_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE73318_COLO_205_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_COLO_205_DOWN$Specific_heat, MFE_res_GSE73318_COLO_205_UP$Specific_heat)
+ks_test_GSE73318_COLO_205_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_COLO_205_DOWN$Cp_37C, MFE_res_GSE73318_COLO_205_UP$Cp_37C)
 print(ks_test_GSE73318_COLO_205_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -42916,10 +42915,10 @@ print(ks_test_GSE73318_COLO_205_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE73318_COLO_205_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_COLO_205_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE73318_COLO_205_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_COLO_205_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE73318_COLO_205_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE73318_COLO_205_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE73318_COLO_205_heat_capacity_gain_UP_vs_DOWN <- GSE73318_COLO_205_high_MFE_TX_in_UP_heat_capacity - GSE73318_COLO_205_high_MFE_TX_in_DOWN_heat_capacity
@@ -42927,17 +42926,17 @@ cat("GSE73318_COLO_205 net heat capacity UP vs DOWN high MFE TX:", GSE73318_COLO
 
 
 # Extract specific heat data
-GSE73318_COLO_205_Specific_heat_UP <- GSE73318_COLO_205_high_MFE_TX_in_UP$Specific_heat
-GSE73318_COLO_205_Specific_heat_DOWN <- GSE73318_COLO_205_high_MFE_TX_in_DOWN$Specific_heat
+GSE73318_COLO_205_Cp_37C_UP <- GSE73318_COLO_205_high_MFE_TX_in_UP$Cp_37C
+GSE73318_COLO_205_Cp_37C_DOWN <- GSE73318_COLO_205_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE73318_COLO_205_Specific_heat_data <- data.frame(
-  GSE73318_COLO_205_Specific_heat = c(GSE73318_COLO_205_Specific_heat_UP, GSE73318_COLO_205_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE73318_COLO_205_Specific_heat_UP)), rep("DOWN", length(GSE73318_COLO_205_Specific_heat_DOWN))))
+GSE73318_COLO_205_Cp_37C_data <- data.frame(
+  GSE73318_COLO_205_Cp_37C = c(GSE73318_COLO_205_Cp_37C_UP, GSE73318_COLO_205_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE73318_COLO_205_Cp_37C_UP)), rep("DOWN", length(GSE73318_COLO_205_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE73318_COLO_205_Specific_heat_data, aes(x = regulation, y = GSE73318_COLO_205_Specific_heat, fill = regulation)) +
+ggplot(GSE73318_COLO_205_Cp_37C_data, aes(x = regulation, y = GSE73318_COLO_205_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE73318_COLO_205 specific Heat of High MFE Transcripts",
        x = "",
@@ -42947,13 +42946,13 @@ ggplot(GSE73318_COLO_205_Specific_heat_data, aes(x = regulation, y = GSE73318_CO
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE73318_COLO_205_high_MFE_TX_UP <- mean(GSE73318_COLO_205_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_COLO_205_high_MFE_TX_DOWN <- mean(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_COLO_205_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_COLO_205_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_COLO_205_high_MFE_TX_UP <- mean(GSE73318_COLO_205_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_COLO_205_high_MFE_TX_DOWN <- mean(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_COLO_205_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_COLO_205_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_COLO_205_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE73318_COLO_205_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_COLO_205_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE73318_COLO_205_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_COLO_205_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_COLO_205_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE73318_COLO_205_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -43200,7 +43199,7 @@ GSE73318_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE73318_no
 GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890718, GSM1890719, GSM1890720, GSM1890721, GSM1890722, GSM1890723,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -43213,7 +43212,7 @@ GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_no
 GSE73318_HCT_15_norm_TX_counts_MFE_df <- GSE73318_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890718, GSM1890719, GSM1890720, GSM1890721, GSM1890722, GSM1890723, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE73318_HCT_15$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -43329,7 +43328,7 @@ GSE73318_HCT_15_long_data <- GSE73318_HCT_15_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE73318_HCT_15_norm_TX_aggregated_data_avg_counts <- GSE73318_HCT_15_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -43521,7 +43520,7 @@ cat("GSE73318_HCT_15 net change counts low MFE TX drug vs control:", GSE73318_HC
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE73318_HCT_15, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE73318_HCT_15, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -43534,7 +43533,7 @@ ggplot(MFE_res_GSE73318_HCT_15, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE73318_HCT_15, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE73318_HCT_15, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -43548,12 +43547,12 @@ ggplot(MFE_res_GSE73318_HCT_15, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE73318_HCT_15_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE73318_HCT_15_UP <- mean(MFE_res_GSE73318_HCT_15_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_HCT_15_DOWN <- mean(MFE_res_GSE73318_HCT_15_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_HCT_15_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_HCT_15_DOWN$Specific_heat, MFE_res_GSE73318_HCT_15_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_HCT_15_UP <- mean(MFE_res_GSE73318_HCT_15_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_HCT_15_DOWN <- mean(MFE_res_GSE73318_HCT_15_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_HCT_15_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_HCT_15_DOWN$Cp_37C, MFE_res_GSE73318_HCT_15_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_HCT_15_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE73318_HCT_15_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_HCT_15_DOWN$Specific_heat, MFE_res_GSE73318_HCT_15_UP$Specific_heat)
+ks_test_GSE73318_HCT_15_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_HCT_15_DOWN$Cp_37C, MFE_res_GSE73318_HCT_15_UP$Cp_37C)
 print(ks_test_GSE73318_HCT_15_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -43563,10 +43562,10 @@ print(ks_test_GSE73318_HCT_15_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE73318_HCT_15_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_HCT_15_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE73318_HCT_15_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_HCT_15_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE73318_HCT_15_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE73318_HCT_15_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE73318_HCT_15_heat_capacity_gain_UP_vs_DOWN <- GSE73318_HCT_15_high_MFE_TX_in_UP_heat_capacity - GSE73318_HCT_15_high_MFE_TX_in_DOWN_heat_capacity
@@ -43574,17 +43573,17 @@ cat("GSE73318_HCT_15 net heat capacity UP vs DOWN high MFE TX:", GSE73318_HCT_15
 
 
 # Extract specific heat data
-GSE73318_HCT_15_Specific_heat_UP <- GSE73318_HCT_15_high_MFE_TX_in_UP$Specific_heat
-GSE73318_HCT_15_Specific_heat_DOWN <- GSE73318_HCT_15_high_MFE_TX_in_DOWN$Specific_heat
+GSE73318_HCT_15_Cp_37C_UP <- GSE73318_HCT_15_high_MFE_TX_in_UP$Cp_37C
+GSE73318_HCT_15_Cp_37C_DOWN <- GSE73318_HCT_15_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE73318_HCT_15_Specific_heat_data <- data.frame(
-  GSE73318_HCT_15_Specific_heat = c(GSE73318_HCT_15_Specific_heat_UP, GSE73318_HCT_15_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE73318_HCT_15_Specific_heat_UP)), rep("DOWN", length(GSE73318_HCT_15_Specific_heat_DOWN))))
+GSE73318_HCT_15_Cp_37C_data <- data.frame(
+  GSE73318_HCT_15_Cp_37C = c(GSE73318_HCT_15_Cp_37C_UP, GSE73318_HCT_15_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE73318_HCT_15_Cp_37C_UP)), rep("DOWN", length(GSE73318_HCT_15_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE73318_HCT_15_Specific_heat_data, aes(x = regulation, y = GSE73318_HCT_15_Specific_heat, fill = regulation)) +
+ggplot(GSE73318_HCT_15_Cp_37C_data, aes(x = regulation, y = GSE73318_HCT_15_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE73318_HCT_15 specific Heat of High MFE Transcripts",
        x = "",
@@ -43594,13 +43593,13 @@ ggplot(GSE73318_HCT_15_Specific_heat_data, aes(x = regulation, y = GSE73318_HCT_
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE73318_HCT_15_high_MFE_TX_UP <- mean(GSE73318_HCT_15_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_HCT_15_high_MFE_TX_DOWN <- mean(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_HCT_15_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_HCT_15_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_HCT_15_high_MFE_TX_UP <- mean(GSE73318_HCT_15_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_HCT_15_high_MFE_TX_DOWN <- mean(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_HCT_15_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_HCT_15_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_HCT_15_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE73318_HCT_15_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_HCT_15_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE73318_HCT_15_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_HCT_15_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_HCT_15_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE73318_HCT_15_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -43844,7 +43843,7 @@ GSE73318_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE73318_no
 GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890724, GSM1890725, GSM1890726, GSM1890727, GSM1890728, GSM1890729,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -43857,7 +43856,7 @@ GSE73318_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE73318_no
 GSE73318_COLO_320_norm_TX_counts_MFE_df <- GSE73318_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1890724, GSM1890725, GSM1890726, GSM1890727, GSM1890728, GSM1890729, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE73318_COLO_320$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -43970,7 +43969,7 @@ GSE73318_COLO_320_long_data <- GSE73318_COLO_320_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE73318_COLO_320_norm_TX_aggregated_data_avg_counts <- GSE73318_COLO_320_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -44162,7 +44161,7 @@ cat("GSE73318_COLO_320 net change counts low MFE TX drug vs control:", GSE73318_
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE73318_COLO_320, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE73318_COLO_320, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -44175,7 +44174,7 @@ ggplot(MFE_res_GSE73318_COLO_320, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE73318_COLO_320, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE73318_COLO_320, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -44189,12 +44188,12 @@ ggplot(MFE_res_GSE73318_COLO_320, aes(x = factor(log2FoldChange > 0), y = Specif
   labs(y="Heat capacity (J/C)",x="",title="GSE73318_COLO_320_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE73318_COLO_320_UP <- mean(MFE_res_GSE73318_COLO_320_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_COLO_320_DOWN <- mean(MFE_res_GSE73318_COLO_320_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_COLO_320_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_COLO_320_DOWN$Specific_heat, MFE_res_GSE73318_COLO_320_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_COLO_320_UP <- mean(MFE_res_GSE73318_COLO_320_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_COLO_320_DOWN <- mean(MFE_res_GSE73318_COLO_320_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_COLO_320_all_UP_vs_DOWN <- t.test(MFE_res_GSE73318_COLO_320_DOWN$Cp_37C, MFE_res_GSE73318_COLO_320_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_COLO_320_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE73318_COLO_320_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_COLO_320_DOWN$Specific_heat, MFE_res_GSE73318_COLO_320_UP$Specific_heat)
+ks_test_GSE73318_COLO_320_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE73318_COLO_320_DOWN$Cp_37C, MFE_res_GSE73318_COLO_320_UP$Cp_37C)
 print(ks_test_GSE73318_COLO_320_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -44204,10 +44203,10 @@ print(ks_test_GSE73318_COLO_320_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE73318_COLO_320_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_COLO_320_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE73318_COLO_320_high_MFE_TX_in_UP_heat_capacity <- mean(GSE73318_COLO_320_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE73318_COLO_320_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE73318_COLO_320_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE73318_COLO_320_heat_capacity_gain_UP_vs_DOWN <- GSE73318_COLO_320_high_MFE_TX_in_UP_heat_capacity - GSE73318_COLO_320_high_MFE_TX_in_DOWN_heat_capacity
@@ -44215,17 +44214,17 @@ cat("GSE73318_COLO_320 net heat capacity UP vs DOWN high MFE TX:", GSE73318_COLO
 
 
 # Extract specific heat data
-GSE73318_COLO_320_Specific_heat_UP <- GSE73318_COLO_320_high_MFE_TX_in_UP$Specific_heat
-GSE73318_COLO_320_Specific_heat_DOWN <- GSE73318_COLO_320_high_MFE_TX_in_DOWN$Specific_heat
+GSE73318_COLO_320_Cp_37C_UP <- GSE73318_COLO_320_high_MFE_TX_in_UP$Cp_37C
+GSE73318_COLO_320_Cp_37C_DOWN <- GSE73318_COLO_320_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE73318_COLO_320_Specific_heat_data <- data.frame(
-  GSE73318_COLO_320_Specific_heat = c(GSE73318_COLO_320_Specific_heat_UP, GSE73318_COLO_320_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE73318_COLO_320_Specific_heat_UP)), rep("DOWN", length(GSE73318_COLO_320_Specific_heat_DOWN))))
+GSE73318_COLO_320_Cp_37C_data <- data.frame(
+  GSE73318_COLO_320_Cp_37C = c(GSE73318_COLO_320_Cp_37C_UP, GSE73318_COLO_320_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE73318_COLO_320_Cp_37C_UP)), rep("DOWN", length(GSE73318_COLO_320_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE73318_COLO_320_Specific_heat_data, aes(x = regulation, y = GSE73318_COLO_320_Specific_heat, fill = regulation)) +
+ggplot(GSE73318_COLO_320_Cp_37C_data, aes(x = regulation, y = GSE73318_COLO_320_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE73318_COLO_320 specific Heat of High MFE Transcripts",
        x = "",
@@ -44235,13 +44234,13 @@ ggplot(GSE73318_COLO_320_Specific_heat_data, aes(x = regulation, y = GSE73318_CO
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE73318_COLO_320_high_MFE_TX_UP <- mean(GSE73318_COLO_320_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE73318_COLO_320_high_MFE_TX_DOWN <- mean(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE73318_COLO_320_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_COLO_320_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE73318_COLO_320_high_MFE_TX_UP <- mean(GSE73318_COLO_320_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE73318_COLO_320_high_MFE_TX_DOWN <- mean(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE73318_COLO_320_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_COLO_320_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE73318_COLO_320_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE73318_COLO_320_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Specific_heat, GSE73318_COLO_320_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE73318_COLO_320_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE73318_COLO_320_high_MFE_TX_in_DOWN$Cp_37C, GSE73318_COLO_320_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE73318_COLO_320_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -44630,7 +44629,7 @@ GSE63582_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE63582_no
 GSE63582_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE63582_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1553154, GSM1553155, GSM1553160, GSM1553161,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -44643,7 +44642,7 @@ GSE63582_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE63582_no
 GSE63582_norm_TX_counts_MFE_df <- GSE63582_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM1553154, GSM1553155, GSM1553160, GSM1553161, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE63582$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -44760,7 +44759,7 @@ GSE63582_long_data <- GSE63582_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE63582_norm_TX_aggregated_data_avg_counts <- GSE63582_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -44952,7 +44951,7 @@ cat("GSE63582 net change counts low MFE TX drug vs control:", GSE63582_low_MFE_T
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE63582, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE63582, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -44965,7 +44964,7 @@ ggplot(MFE_res_GSE63582, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE63582, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE63582, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -44979,12 +44978,12 @@ ggplot(MFE_res_GSE63582, aes(x = factor(log2FoldChange > 0), y = Specific_heat))
   labs(y="Heat capacity (J/C)",x="",title="GSE63582_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE63582_UP <- mean(MFE_res_GSE63582_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE63582_DOWN <- mean(MFE_res_GSE63582_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE63582_all_UP_vs_DOWN <- t.test(MFE_res_GSE63582_DOWN$Specific_heat, MFE_res_GSE63582_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE63582_UP <- mean(MFE_res_GSE63582_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE63582_DOWN <- mean(MFE_res_GSE63582_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE63582_all_UP_vs_DOWN <- t.test(MFE_res_GSE63582_DOWN$Cp_37C, MFE_res_GSE63582_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE63582_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE63582_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE63582_DOWN$Specific_heat, MFE_res_GSE63582_UP$Specific_heat)
+ks_test_GSE63582_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE63582_DOWN$Cp_37C, MFE_res_GSE63582_UP$Cp_37C)
 print(ks_test_GSE63582_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -44994,10 +44993,10 @@ print(ks_test_GSE63582_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE63582_high_MFE_TX_in_UP_heat_capacity <- mean(GSE63582_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE63582_high_MFE_TX_in_UP_heat_capacity <- mean(GSE63582_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE63582_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE63582_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE63582_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE63582_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE63582_heat_capacity_gain_UP_vs_DOWN <- GSE63582_high_MFE_TX_in_UP_heat_capacity - GSE63582_high_MFE_TX_in_DOWN_heat_capacity
@@ -45005,17 +45004,17 @@ cat("GSE63582 net heat capacity UP vs DOWN high MFE TX:", GSE63582_heat_capacity
 
 
 # Extract specific heat data
-GSE63582_Specific_heat_UP <- GSE63582_high_MFE_TX_in_UP$Specific_heat
-GSE63582_Specific_heat_DOWN <- GSE63582_high_MFE_TX_in_DOWN$Specific_heat
+GSE63582_Cp_37C_UP <- GSE63582_high_MFE_TX_in_UP$Cp_37C
+GSE63582_Cp_37C_DOWN <- GSE63582_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE63582_Specific_heat_data <- data.frame(
-  GSE63582_Specific_heat = c(GSE63582_Specific_heat_UP, GSE63582_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE63582_Specific_heat_UP)), rep("DOWN", length(GSE63582_Specific_heat_DOWN))))
+GSE63582_Cp_37C_data <- data.frame(
+  GSE63582_Cp_37C = c(GSE63582_Cp_37C_UP, GSE63582_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE63582_Cp_37C_UP)), rep("DOWN", length(GSE63582_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE63582_Specific_heat_data, aes(x = regulation, y = GSE63582_Specific_heat, fill = regulation)) +
+ggplot(GSE63582_Cp_37C_data, aes(x = regulation, y = GSE63582_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE63582 specific Heat of High MFE Transcripts",
        x = "",
@@ -45025,13 +45024,13 @@ ggplot(GSE63582_Specific_heat_data, aes(x = regulation, y = GSE63582_Specific_he
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE63582_high_MFE_TX_UP <- mean(GSE63582_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE63582_high_MFE_TX_DOWN <- mean(GSE63582_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE63582_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE63582_high_MFE_TX_in_DOWN$Specific_heat, GSE63582_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE63582_high_MFE_TX_UP <- mean(GSE63582_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE63582_high_MFE_TX_DOWN <- mean(GSE63582_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE63582_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE63582_high_MFE_TX_in_DOWN$Cp_37C, GSE63582_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE63582_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE63582_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE63582_high_MFE_TX_in_DOWN$Specific_heat, GSE63582_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE63582_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE63582_high_MFE_TX_in_DOWN$Cp_37C, GSE63582_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE63582_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -45422,7 +45421,7 @@ GSE126779_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE126779_
 GSE126779_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE126779_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3612765, GSM3612766, GSM3612767, GSM3612768, GSM3612769, GSM3612770,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -45435,7 +45434,7 @@ GSE126779_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE126779_
 GSE126779_DU145_norm_TX_counts_MFE_df <- GSE126779_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3612765, GSM3612766, GSM3612767, GSM3612768, GSM3612769, GSM3612770, 
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE126779_DU145$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -45549,7 +45548,7 @@ GSE126779_DU145_long_data <- GSE126779_DU145_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE126779_DU145_norm_TX_aggregated_data_avg_counts <- GSE126779_DU145_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -45741,7 +45740,7 @@ cat("GSE126779_DU145 net change counts low MFE TX drug vs control:", GSE126779_D
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE126779_DU145, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE126779_DU145, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -45754,7 +45753,7 @@ ggplot(MFE_res_GSE126779_DU145, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE126779_DU145, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE126779_DU145, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -45768,12 +45767,12 @@ ggplot(MFE_res_GSE126779_DU145, aes(x = factor(log2FoldChange > 0), y = Specific
   labs(y="Heat capacity (J/C)",x="",title="GSE126779_DU145_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE126779_DU145_UP <- mean(MFE_res_GSE126779_DU145_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE126779_DU145_DOWN <- mean(MFE_res_GSE126779_DU145_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE126779_DU145_all_UP_vs_DOWN <- t.test(MFE_res_GSE126779_DU145_DOWN$Specific_heat, MFE_res_GSE126779_DU145_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE126779_DU145_UP <- mean(MFE_res_GSE126779_DU145_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE126779_DU145_DOWN <- mean(MFE_res_GSE126779_DU145_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE126779_DU145_all_UP_vs_DOWN <- t.test(MFE_res_GSE126779_DU145_DOWN$Cp_37C, MFE_res_GSE126779_DU145_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE126779_DU145_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE126779_DU145_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE126779_DU145_DOWN$Specific_heat, MFE_res_GSE126779_DU145_UP$Specific_heat)
+ks_test_GSE126779_DU145_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE126779_DU145_DOWN$Cp_37C, MFE_res_GSE126779_DU145_UP$Cp_37C)
 print(ks_test_GSE126779_DU145_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -45783,10 +45782,10 @@ print(ks_test_GSE126779_DU145_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE126779_DU145_high_MFE_TX_in_UP_heat_capacity <- mean(GSE126779_DU145_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE126779_DU145_high_MFE_TX_in_UP_heat_capacity <- mean(GSE126779_DU145_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE126779_DU145_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE126779_DU145_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE126779_DU145_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE126779_DU145_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE126779_DU145_heat_capacity_gain_UP_vs_DOWN <- GSE126779_DU145_high_MFE_TX_in_UP_heat_capacity - GSE126779_DU145_high_MFE_TX_in_DOWN_heat_capacity
@@ -45794,17 +45793,17 @@ cat("GSE126779_DU145 net heat capacity UP vs DOWN high MFE TX:", GSE126779_DU145
 
 
 # Extract specific heat data
-GSE126779_DU145_Specific_heat_UP <- GSE126779_DU145_high_MFE_TX_in_UP$Specific_heat
-GSE126779_DU145_Specific_heat_DOWN <- GSE126779_DU145_high_MFE_TX_in_DOWN$Specific_heat
+GSE126779_DU145_Cp_37C_UP <- GSE126779_DU145_high_MFE_TX_in_UP$Cp_37C
+GSE126779_DU145_Cp_37C_DOWN <- GSE126779_DU145_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE126779_DU145_Specific_heat_data <- data.frame(
-  GSE126779_DU145_Specific_heat = c(GSE126779_DU145_Specific_heat_UP, GSE126779_DU145_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE126779_DU145_Specific_heat_UP)), rep("DOWN", length(GSE126779_DU145_Specific_heat_DOWN))))
+GSE126779_DU145_Cp_37C_data <- data.frame(
+  GSE126779_DU145_Cp_37C = c(GSE126779_DU145_Cp_37C_UP, GSE126779_DU145_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE126779_DU145_Cp_37C_UP)), rep("DOWN", length(GSE126779_DU145_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE126779_DU145_Specific_heat_data, aes(x = regulation, y = GSE126779_DU145_Specific_heat, fill = regulation)) +
+ggplot(GSE126779_DU145_Cp_37C_data, aes(x = regulation, y = GSE126779_DU145_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE126779_DU145 specific Heat of High MFE Transcripts",
        x = "",
@@ -45814,13 +45813,13 @@ ggplot(GSE126779_DU145_Specific_heat_data, aes(x = regulation, y = GSE126779_DU1
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE126779_DU145_high_MFE_TX_UP <- mean(GSE126779_DU145_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE126779_DU145_high_MFE_TX_DOWN <- mean(GSE126779_DU145_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE126779_DU145_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE126779_DU145_high_MFE_TX_in_DOWN$Specific_heat, GSE126779_DU145_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE126779_DU145_high_MFE_TX_UP <- mean(GSE126779_DU145_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE126779_DU145_high_MFE_TX_DOWN <- mean(GSE126779_DU145_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE126779_DU145_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE126779_DU145_high_MFE_TX_in_DOWN$Cp_37C, GSE126779_DU145_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE126779_DU145_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE126779_DU145_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE126779_DU145_high_MFE_TX_in_DOWN$Specific_heat, GSE126779_DU145_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE126779_DU145_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE126779_DU145_high_MFE_TX_in_DOWN$Cp_37C, GSE126779_DU145_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE126779_DU145_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -46085,7 +46084,7 @@ GSE126779_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE126779_
 GSE126779_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE126779_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3612783, GSM3612784, GSM3612786, GSM3612787,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -46098,7 +46097,7 @@ GSE126779_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE126779_
 GSE126779_PC3_norm_TX_counts_MFE_df <- GSE126779_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3612783, GSM3612784, GSM3612786, GSM3612787,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE126779_PC3$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -46213,7 +46212,7 @@ GSE126779_PC3_long_data <- GSE126779_PC3_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE126779_PC3_norm_TX_aggregated_data_avg_counts <- GSE126779_PC3_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -46405,7 +46404,7 @@ cat("GSE126779_PC3 net change counts low MFE TX drug vs control:", GSE126779_PC3
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE126779_PC3, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE126779_PC3, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -46418,7 +46417,7 @@ ggplot(MFE_res_GSE126779_PC3, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE126779_PC3, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE126779_PC3, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -46432,12 +46431,12 @@ ggplot(MFE_res_GSE126779_PC3, aes(x = factor(log2FoldChange > 0), y = Specific_h
   labs(y="Heat capacity (J/C)",x="",title="GSE126779_PC3_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE126779_PC3_UP <- mean(MFE_res_GSE126779_PC3_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE126779_PC3_DOWN <- mean(MFE_res_GSE126779_PC3_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE126779_PC3_all_UP_vs_DOWN <- t.test(MFE_res_GSE126779_PC3_DOWN$Specific_heat, MFE_res_GSE126779_PC3_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE126779_PC3_UP <- mean(MFE_res_GSE126779_PC3_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE126779_PC3_DOWN <- mean(MFE_res_GSE126779_PC3_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE126779_PC3_all_UP_vs_DOWN <- t.test(MFE_res_GSE126779_PC3_DOWN$Cp_37C, MFE_res_GSE126779_PC3_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE126779_PC3_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE126779_PC3_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE126779_PC3_DOWN$Specific_heat, MFE_res_GSE126779_PC3_UP$Specific_heat)
+ks_test_GSE126779_PC3_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE126779_PC3_DOWN$Cp_37C, MFE_res_GSE126779_PC3_UP$Cp_37C)
 print(ks_test_GSE126779_PC3_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -46447,10 +46446,10 @@ print(ks_test_GSE126779_PC3_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE126779_PC3_high_MFE_TX_in_UP_heat_capacity <- mean(GSE126779_PC3_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE126779_PC3_high_MFE_TX_in_UP_heat_capacity <- mean(GSE126779_PC3_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE126779_PC3_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE126779_PC3_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE126779_PC3_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE126779_PC3_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE126779_PC3_heat_capacity_gain_UP_vs_DOWN <- GSE126779_PC3_high_MFE_TX_in_UP_heat_capacity - GSE126779_PC3_high_MFE_TX_in_DOWN_heat_capacity
@@ -46458,17 +46457,17 @@ cat("GSE126779_PC3 net heat capacity UP vs DOWN high MFE TX:", GSE126779_PC3_hea
 
 
 # Extract specific heat data
-GSE126779_PC3_Specific_heat_UP <- GSE126779_PC3_high_MFE_TX_in_UP$Specific_heat
-GSE126779_PC3_Specific_heat_DOWN <- GSE126779_PC3_high_MFE_TX_in_DOWN$Specific_heat
+GSE126779_PC3_Cp_37C_UP <- GSE126779_PC3_high_MFE_TX_in_UP$Cp_37C
+GSE126779_PC3_Cp_37C_DOWN <- GSE126779_PC3_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE126779_PC3_Specific_heat_data <- data.frame(
-  GSE126779_PC3_Specific_heat = c(GSE126779_PC3_Specific_heat_UP, GSE126779_PC3_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE126779_PC3_Specific_heat_UP)), rep("DOWN", length(GSE126779_PC3_Specific_heat_DOWN))))
+GSE126779_PC3_Cp_37C_data <- data.frame(
+  GSE126779_PC3_Cp_37C = c(GSE126779_PC3_Cp_37C_UP, GSE126779_PC3_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE126779_PC3_Cp_37C_UP)), rep("DOWN", length(GSE126779_PC3_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE126779_PC3_Specific_heat_data, aes(x = regulation, y = GSE126779_PC3_Specific_heat, fill = regulation)) +
+ggplot(GSE126779_PC3_Cp_37C_data, aes(x = regulation, y = GSE126779_PC3_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE126779_PC3 specific Heat of High MFE Transcripts",
        x = "",
@@ -46478,13 +46477,13 @@ ggplot(GSE126779_PC3_Specific_heat_data, aes(x = regulation, y = GSE126779_PC3_S
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE126779_PC3_high_MFE_TX_UP <- mean(GSE126779_PC3_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE126779_PC3_high_MFE_TX_DOWN <- mean(GSE126779_PC3_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE126779_PC3_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE126779_PC3_high_MFE_TX_in_DOWN$Specific_heat, GSE126779_PC3_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE126779_PC3_high_MFE_TX_UP <- mean(GSE126779_PC3_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE126779_PC3_high_MFE_TX_DOWN <- mean(GSE126779_PC3_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE126779_PC3_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE126779_PC3_high_MFE_TX_in_DOWN$Cp_37C, GSE126779_PC3_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE126779_PC3_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE126779_PC3_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE126779_PC3_high_MFE_TX_in_DOWN$Specific_heat, GSE126779_PC3_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE126779_PC3_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE126779_PC3_high_MFE_TX_in_DOWN$Cp_37C, GSE126779_PC3_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE126779_PC3_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -46885,7 +46884,7 @@ GSE115550_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE115550_
 GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181857, GSM3181862, GSM3181867,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -46898,7 +46897,7 @@ GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_
 GSE115550_JQ1_50_nM_norm_TX_counts_MFE_df <- GSE115550_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181857, GSM3181862, GSM3181867,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE115550_JQ1_50_nM$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -47017,7 +47016,7 @@ GSE115550_JQ1_50_nM_long_data <- GSE115550_JQ1_50_nM_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE115550_JQ1_50_nM_norm_TX_aggregated_data_avg_counts <- GSE115550_JQ1_50_nM_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -47209,7 +47208,7 @@ cat("GSE115550_JQ1_50_nM net change counts low MFE TX drug vs control:", GSE1155
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE115550_JQ1_50_nM, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE115550_JQ1_50_nM, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -47222,7 +47221,7 @@ ggplot(MFE_res_GSE115550_JQ1_50_nM, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE115550_JQ1_50_nM, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE115550_JQ1_50_nM, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -47236,12 +47235,12 @@ ggplot(MFE_res_GSE115550_JQ1_50_nM, aes(x = factor(log2FoldChange > 0), y = Spec
   labs(y="Heat capacity (J/C)",x="",title="GSE115550_JQ1_50_nM_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE115550_JQ1_50_nM_UP <- mean(MFE_res_GSE115550_JQ1_50_nM_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_JQ1_50_nM_DOWN <- mean(MFE_res_GSE115550_JQ1_50_nM_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_JQ1_50_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_JQ1_50_nM_DOWN$Specific_heat, MFE_res_GSE115550_JQ1_50_nM_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_JQ1_50_nM_UP <- mean(MFE_res_GSE115550_JQ1_50_nM_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_JQ1_50_nM_DOWN <- mean(MFE_res_GSE115550_JQ1_50_nM_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_JQ1_50_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_JQ1_50_nM_DOWN$Cp_37C, MFE_res_GSE115550_JQ1_50_nM_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_JQ1_50_nM_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE115550_JQ1_50_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_JQ1_50_nM_DOWN$Specific_heat, MFE_res_GSE115550_JQ1_50_nM_UP$Specific_heat)
+ks_test_GSE115550_JQ1_50_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_JQ1_50_nM_DOWN$Cp_37C, MFE_res_GSE115550_JQ1_50_nM_UP$Cp_37C)
 print(ks_test_GSE115550_JQ1_50_nM_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -47251,10 +47250,10 @@ print(ks_test_GSE115550_JQ1_50_nM_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE115550_JQ1_50_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE115550_JQ1_50_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE115550_JQ1_50_nM_heat_capacity_gain_UP_vs_DOWN <- GSE115550_JQ1_50_nM_high_MFE_TX_in_UP_heat_capacity - GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN_heat_capacity
@@ -47262,17 +47261,17 @@ cat("GSE115550_JQ1_50_nM net heat capacity UP vs DOWN high MFE TX:", GSE115550_J
 
 
 # Extract specific heat data
-GSE115550_JQ1_50_nM_Specific_heat_UP <- GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Specific_heat
-GSE115550_JQ1_50_nM_Specific_heat_DOWN <- GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Specific_heat
+GSE115550_JQ1_50_nM_Cp_37C_UP <- GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Cp_37C
+GSE115550_JQ1_50_nM_Cp_37C_DOWN <- GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE115550_JQ1_50_nM_Specific_heat_data <- data.frame(
-  GSE115550_JQ1_50_nM_Specific_heat = c(GSE115550_JQ1_50_nM_Specific_heat_UP, GSE115550_JQ1_50_nM_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE115550_JQ1_50_nM_Specific_heat_UP)), rep("DOWN", length(GSE115550_JQ1_50_nM_Specific_heat_DOWN))))
+GSE115550_JQ1_50_nM_Cp_37C_data <- data.frame(
+  GSE115550_JQ1_50_nM_Cp_37C = c(GSE115550_JQ1_50_nM_Cp_37C_UP, GSE115550_JQ1_50_nM_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE115550_JQ1_50_nM_Cp_37C_UP)), rep("DOWN", length(GSE115550_JQ1_50_nM_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE115550_JQ1_50_nM_Specific_heat_data, aes(x = regulation, y = GSE115550_JQ1_50_nM_Specific_heat, fill = regulation)) +
+ggplot(GSE115550_JQ1_50_nM_Cp_37C_data, aes(x = regulation, y = GSE115550_JQ1_50_nM_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE115550_JQ1_50_nM specific Heat of High MFE Transcripts",
        x = "",
@@ -47282,13 +47281,13 @@ ggplot(GSE115550_JQ1_50_nM_Specific_heat_data, aes(x = regulation, y = GSE115550
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE115550_JQ1_50_nM_high_MFE_TX_UP <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_JQ1_50_nM_high_MFE_TX_DOWN <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_JQ1_50_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_JQ1_50_nM_high_MFE_TX_UP <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_JQ1_50_nM_high_MFE_TX_DOWN <- mean(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_JQ1_50_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_JQ1_50_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE115550_JQ1_50_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE115550_JQ1_50_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_JQ1_50_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_JQ1_50_nM_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE115550_JQ1_50_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -47562,7 +47561,7 @@ GSE115550_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE115550_
 GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181858, GSM3181863, GSM3181868,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -47575,7 +47574,7 @@ GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_
 GSE115550_JQ1_500_nM_norm_TX_counts_MFE_df <- GSE115550_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181858, GSM3181863, GSM3181868,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE115550_JQ1_500_nM$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -47692,7 +47691,7 @@ GSE115550_JQ1_500_nM_long_data <- GSE115550_JQ1_500_nM_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE115550_JQ1_500_nM_norm_TX_aggregated_data_avg_counts <- GSE115550_JQ1_500_nM_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -47884,7 +47883,7 @@ cat("GSE115550_JQ1_500_nM net change counts low MFE TX drug vs control:", GSE115
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE115550_JQ1_500_nM, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE115550_JQ1_500_nM, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -47897,7 +47896,7 @@ ggplot(MFE_res_GSE115550_JQ1_500_nM, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE115550_JQ1_500_nM, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE115550_JQ1_500_nM, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -47911,12 +47910,12 @@ ggplot(MFE_res_GSE115550_JQ1_500_nM, aes(x = factor(log2FoldChange > 0), y = Spe
   labs(y="Heat capacity (J/C)",x="",title="GSE115550_JQ1_500_nM_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE115550_JQ1_500_nM_UP <- mean(MFE_res_GSE115550_JQ1_500_nM_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_JQ1_500_nM_DOWN <- mean(MFE_res_GSE115550_JQ1_500_nM_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_JQ1_500_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_JQ1_500_nM_DOWN$Specific_heat, MFE_res_GSE115550_JQ1_500_nM_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_JQ1_500_nM_UP <- mean(MFE_res_GSE115550_JQ1_500_nM_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_JQ1_500_nM_DOWN <- mean(MFE_res_GSE115550_JQ1_500_nM_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_JQ1_500_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_JQ1_500_nM_DOWN$Cp_37C, MFE_res_GSE115550_JQ1_500_nM_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_JQ1_500_nM_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE115550_JQ1_500_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_JQ1_500_nM_DOWN$Specific_heat, MFE_res_GSE115550_JQ1_500_nM_UP$Specific_heat)
+ks_test_GSE115550_JQ1_500_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_JQ1_500_nM_DOWN$Cp_37C, MFE_res_GSE115550_JQ1_500_nM_UP$Cp_37C)
 print(ks_test_GSE115550_JQ1_500_nM_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -47926,10 +47925,10 @@ print(ks_test_GSE115550_JQ1_500_nM_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE115550_JQ1_500_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE115550_JQ1_500_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE115550_JQ1_500_nM_heat_capacity_gain_UP_vs_DOWN <- GSE115550_JQ1_500_nM_high_MFE_TX_in_UP_heat_capacity - GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN_heat_capacity
@@ -47937,17 +47936,17 @@ cat("GSE115550_JQ1_500_nM net heat capacity UP vs DOWN high MFE TX:", GSE115550_
 
 
 # Extract specific heat data
-GSE115550_JQ1_500_nM_Specific_heat_UP <- GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Specific_heat
-GSE115550_JQ1_500_nM_Specific_heat_DOWN <- GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Specific_heat
+GSE115550_JQ1_500_nM_Cp_37C_UP <- GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Cp_37C
+GSE115550_JQ1_500_nM_Cp_37C_DOWN <- GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE115550_JQ1_500_nM_Specific_heat_data <- data.frame(
-  GSE115550_JQ1_500_nM_Specific_heat = c(GSE115550_JQ1_500_nM_Specific_heat_UP, GSE115550_JQ1_500_nM_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE115550_JQ1_500_nM_Specific_heat_UP)), rep("DOWN", length(GSE115550_JQ1_500_nM_Specific_heat_DOWN))))
+GSE115550_JQ1_500_nM_Cp_37C_data <- data.frame(
+  GSE115550_JQ1_500_nM_Cp_37C = c(GSE115550_JQ1_500_nM_Cp_37C_UP, GSE115550_JQ1_500_nM_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE115550_JQ1_500_nM_Cp_37C_UP)), rep("DOWN", length(GSE115550_JQ1_500_nM_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE115550_JQ1_500_nM_Specific_heat_data, aes(x = regulation, y = GSE115550_JQ1_500_nM_Specific_heat, fill = regulation)) +
+ggplot(GSE115550_JQ1_500_nM_Cp_37C_data, aes(x = regulation, y = GSE115550_JQ1_500_nM_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE115550_JQ1_500_nM specific Heat of High MFE Transcripts",
        x = "",
@@ -47957,13 +47956,13 @@ ggplot(GSE115550_JQ1_500_nM_Specific_heat_data, aes(x = regulation, y = GSE11555
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE115550_JQ1_500_nM_high_MFE_TX_UP <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_JQ1_500_nM_high_MFE_TX_DOWN <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_JQ1_500_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_JQ1_500_nM_high_MFE_TX_UP <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_JQ1_500_nM_high_MFE_TX_DOWN <- mean(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_JQ1_500_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_JQ1_500_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE115550_JQ1_500_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE115550_JQ1_500_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_JQ1_500_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_JQ1_500_nM_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE115550_JQ1_500_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -48224,7 +48223,7 @@ GSE115550_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE115550_
 GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181859, GSM3181864, GSM3181869,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -48237,7 +48236,7 @@ GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_
 GSE115550_MS645_50_nM_norm_TX_counts_MFE_df <- GSE115550_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181859, GSM3181864, GSM3181869,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE115550_MS645_50_nM$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -48352,7 +48351,7 @@ GSE115550_MS645_50_nM_long_data <- GSE115550_MS645_50_nM_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE115550_MS645_50_nM_norm_TX_aggregated_data_avg_counts <- GSE115550_MS645_50_nM_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -48544,7 +48543,7 @@ cat("GSE115550_MS645_50_nM net change counts low MFE TX drug vs control:", GSE11
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE115550_MS645_50_nM, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE115550_MS645_50_nM, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -48557,7 +48556,7 @@ ggplot(MFE_res_GSE115550_MS645_50_nM, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE115550_MS645_50_nM, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE115550_MS645_50_nM, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -48571,12 +48570,12 @@ ggplot(MFE_res_GSE115550_MS645_50_nM, aes(x = factor(log2FoldChange > 0), y = Sp
   labs(y="Heat capacity (J/C)",x="",title="GSE115550_MS645_50_nM_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE115550_MS645_50_nM_UP <- mean(MFE_res_GSE115550_MS645_50_nM_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_MS645_50_nM_DOWN <- mean(MFE_res_GSE115550_MS645_50_nM_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_MS645_50_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_MS645_50_nM_DOWN$Specific_heat, MFE_res_GSE115550_MS645_50_nM_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_MS645_50_nM_UP <- mean(MFE_res_GSE115550_MS645_50_nM_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_MS645_50_nM_DOWN <- mean(MFE_res_GSE115550_MS645_50_nM_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_MS645_50_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_MS645_50_nM_DOWN$Cp_37C, MFE_res_GSE115550_MS645_50_nM_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_MS645_50_nM_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE115550_MS645_50_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_MS645_50_nM_DOWN$Specific_heat, MFE_res_GSE115550_MS645_50_nM_UP$Specific_heat)
+ks_test_GSE115550_MS645_50_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_MS645_50_nM_DOWN$Cp_37C, MFE_res_GSE115550_MS645_50_nM_UP$Cp_37C)
 print(ks_test_GSE115550_MS645_50_nM_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -48586,10 +48585,10 @@ print(ks_test_GSE115550_MS645_50_nM_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE115550_MS645_50_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE115550_MS645_50_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE115550_MS645_50_nM_heat_capacity_gain_UP_vs_DOWN <- GSE115550_MS645_50_nM_high_MFE_TX_in_UP_heat_capacity - GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN_heat_capacity
@@ -48597,17 +48596,17 @@ cat("GSE115550_MS645_50_nM net heat capacity UP vs DOWN high MFE TX:", GSE115550
 
 
 # Extract specific heat data
-GSE115550_MS645_50_nM_Specific_heat_UP <- GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Specific_heat
-GSE115550_MS645_50_nM_Specific_heat_DOWN <- GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Specific_heat
+GSE115550_MS645_50_nM_Cp_37C_UP <- GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Cp_37C
+GSE115550_MS645_50_nM_Cp_37C_DOWN <- GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE115550_MS645_50_nM_Specific_heat_data <- data.frame(
-  GSE115550_MS645_50_nM_Specific_heat = c(GSE115550_MS645_50_nM_Specific_heat_UP, GSE115550_MS645_50_nM_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE115550_MS645_50_nM_Specific_heat_UP)), rep("DOWN", length(GSE115550_MS645_50_nM_Specific_heat_DOWN))))
+GSE115550_MS645_50_nM_Cp_37C_data <- data.frame(
+  GSE115550_MS645_50_nM_Cp_37C = c(GSE115550_MS645_50_nM_Cp_37C_UP, GSE115550_MS645_50_nM_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE115550_MS645_50_nM_Cp_37C_UP)), rep("DOWN", length(GSE115550_MS645_50_nM_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE115550_MS645_50_nM_Specific_heat_data, aes(x = regulation, y = GSE115550_MS645_50_nM_Specific_heat, fill = regulation)) +
+ggplot(GSE115550_MS645_50_nM_Cp_37C_data, aes(x = regulation, y = GSE115550_MS645_50_nM_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE115550_MS645_50_nM specific Heat of High MFE Transcripts",
        x = "",
@@ -48617,13 +48616,13 @@ ggplot(GSE115550_MS645_50_nM_Specific_heat_data, aes(x = regulation, y = GSE1155
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE115550_MS645_50_nM_high_MFE_TX_UP <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_MS645_50_nM_high_MFE_TX_DOWN <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_MS645_50_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_MS645_50_nM_high_MFE_TX_UP <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_MS645_50_nM_high_MFE_TX_DOWN <- mean(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_MS645_50_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_MS645_50_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE115550_MS645_50_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE115550_MS645_50_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_MS645_50_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_MS645_50_nM_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE115550_MS645_50_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -48887,7 +48886,7 @@ GSE115550_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE115550_
 GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181860, GSM3181865, GSM3181870,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -48900,7 +48899,7 @@ GSE115550_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE115550_
 GSE115550_MS645_500_nM_norm_TX_counts_MFE_df <- GSE115550_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3181856, GSM3181861, GSM3181866, GSM3181860, GSM3181865, GSM3181870,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE115550_MS645_500_nM$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -49016,7 +49015,7 @@ GSE115550_MS645_500_nM_long_data <- GSE115550_MS645_500_nM_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE115550_MS645_500_nM_norm_TX_aggregated_data_avg_counts <- GSE115550_MS645_500_nM_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -49208,7 +49207,7 @@ cat("GSE115550_MS645_500_nM net change counts low MFE TX drug vs control:", GSE1
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE115550_MS645_500_nM, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE115550_MS645_500_nM, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -49221,7 +49220,7 @@ ggplot(MFE_res_GSE115550_MS645_500_nM, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE115550_MS645_500_nM, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE115550_MS645_500_nM, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -49235,12 +49234,12 @@ ggplot(MFE_res_GSE115550_MS645_500_nM, aes(x = factor(log2FoldChange > 0), y = S
   labs(y="Heat capacity (J/C)",x="",title="GSE115550_MS645_500_nM_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
 
-Mean_heat_capacity_GSE115550_MS645_500_nM_UP <- mean(MFE_res_GSE115550_MS645_500_nM_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_MS645_500_nM_DOWN <- mean(MFE_res_GSE115550_MS645_500_nM_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_MS645_500_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_MS645_500_nM_DOWN$Specific_heat, MFE_res_GSE115550_MS645_500_nM_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_MS645_500_nM_UP <- mean(MFE_res_GSE115550_MS645_500_nM_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_MS645_500_nM_DOWN <- mean(MFE_res_GSE115550_MS645_500_nM_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_MS645_500_nM_all_UP_vs_DOWN <- t.test(MFE_res_GSE115550_MS645_500_nM_DOWN$Cp_37C, MFE_res_GSE115550_MS645_500_nM_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_MS645_500_nM_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE115550_MS645_500_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_MS645_500_nM_DOWN$Specific_heat, MFE_res_GSE115550_MS645_500_nM_UP$Specific_heat)
+ks_test_GSE115550_MS645_500_nM_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE115550_MS645_500_nM_DOWN$Cp_37C, MFE_res_GSE115550_MS645_500_nM_UP$Cp_37C)
 print(ks_test_GSE115550_MS645_500_nM_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -49250,10 +49249,10 @@ print(ks_test_GSE115550_MS645_500_nM_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE115550_MS645_500_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE115550_MS645_500_nM_high_MFE_TX_in_UP_heat_capacity <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE115550_MS645_500_nM_heat_capacity_gain_UP_vs_DOWN <- GSE115550_MS645_500_nM_high_MFE_TX_in_UP_heat_capacity - GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN_heat_capacity
@@ -49261,17 +49260,17 @@ cat("GSE115550_MS645_500_nM net heat capacity UP vs DOWN high MFE TX:", GSE11555
 
 
 # Extract specific heat data
-GSE115550_MS645_500_nM_Specific_heat_UP <- GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Specific_heat
-GSE115550_MS645_500_nM_Specific_heat_DOWN <- GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Specific_heat
+GSE115550_MS645_500_nM_Cp_37C_UP <- GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Cp_37C
+GSE115550_MS645_500_nM_Cp_37C_DOWN <- GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE115550_MS645_500_nM_Specific_heat_data <- data.frame(
-  GSE115550_MS645_500_nM_Specific_heat = c(GSE115550_MS645_500_nM_Specific_heat_UP, GSE115550_MS645_500_nM_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE115550_MS645_500_nM_Specific_heat_UP)), rep("DOWN", length(GSE115550_MS645_500_nM_Specific_heat_DOWN))))
+GSE115550_MS645_500_nM_Cp_37C_data <- data.frame(
+  GSE115550_MS645_500_nM_Cp_37C = c(GSE115550_MS645_500_nM_Cp_37C_UP, GSE115550_MS645_500_nM_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE115550_MS645_500_nM_Cp_37C_UP)), rep("DOWN", length(GSE115550_MS645_500_nM_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE115550_MS645_500_nM_Specific_heat_data, aes(x = regulation, y = GSE115550_MS645_500_nM_Specific_heat, fill = regulation)) +
+ggplot(GSE115550_MS645_500_nM_Cp_37C_data, aes(x = regulation, y = GSE115550_MS645_500_nM_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE115550_MS645_500_nM specific Heat of High MFE Transcripts",
        x = "",
@@ -49281,13 +49280,13 @@ ggplot(GSE115550_MS645_500_nM_Specific_heat_data, aes(x = regulation, y = GSE115
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE115550_MS645_500_nM_high_MFE_TX_UP <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE115550_MS645_500_nM_high_MFE_TX_DOWN <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE115550_MS645_500_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE115550_MS645_500_nM_high_MFE_TX_UP <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE115550_MS645_500_nM_high_MFE_TX_DOWN <- mean(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE115550_MS645_500_nM_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE115550_MS645_500_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE115550_MS645_500_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Specific_heat, GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE115550_MS645_500_nM_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE115550_MS645_500_nM_high_MFE_TX_in_DOWN$Cp_37C, GSE115550_MS645_500_nM_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE115550_MS645_500_nM_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -49711,7 +49710,7 @@ GSE241600_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE241600_
 GSE241600_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE241600_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM7731540, GSM7731541, GSM7731542, GSM7731546, GSM7731547, GSM7731548,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -49724,7 +49723,7 @@ GSE241600_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE241600_
 GSE241600_MG132_24H_norm_TX_counts_MFE_df <- GSE241600_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM7731540, GSM7731541, GSM7731542, GSM7731546, GSM7731547, GSM7731548,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE241600_MG132_24H$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -49841,7 +49840,7 @@ GSE241600_MG132_24H_long_data <- GSE241600_MG132_24H_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE241600_MG132_24H_norm_TX_aggregated_data_avg_counts <- GSE241600_MG132_24H_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -50036,7 +50035,7 @@ cat("GSE241600_MG132_24H net change counts low MFE TX drug vs control:", GSE2416
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE241600_MG132_24H, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE241600_MG132_24H, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -50049,7 +50048,7 @@ ggplot(MFE_res_GSE241600_MG132_24H, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE241600_MG132_24H, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE241600_MG132_24H, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -50063,12 +50062,12 @@ ggplot(MFE_res_GSE241600_MG132_24H, aes(x = factor(log2FoldChange > 0), y = Spec
   labs(y="Heat capacity (J/C)",x="",title="GSE241600_MG132_24H_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
 
-Mean_heat_capacity_GSE241600_MG132_24H_UP <- mean(MFE_res_GSE241600_MG132_24H_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE241600_MG132_24H_DOWN <- mean(MFE_res_GSE241600_MG132_24H_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE241600_MG132_24H_all_UP_vs_DOWN <- t.test(MFE_res_GSE241600_MG132_24H_DOWN$Specific_heat, MFE_res_GSE241600_MG132_24H_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE241600_MG132_24H_UP <- mean(MFE_res_GSE241600_MG132_24H_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE241600_MG132_24H_DOWN <- mean(MFE_res_GSE241600_MG132_24H_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE241600_MG132_24H_all_UP_vs_DOWN <- t.test(MFE_res_GSE241600_MG132_24H_DOWN$Cp_37C, MFE_res_GSE241600_MG132_24H_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE241600_MG132_24H_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE241600_MG132_24H_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE241600_MG132_24H_DOWN$Specific_heat, MFE_res_GSE241600_MG132_24H_UP$Specific_heat)
+ks_test_GSE241600_MG132_24H_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE241600_MG132_24H_DOWN$Cp_37C, MFE_res_GSE241600_MG132_24H_UP$Cp_37C)
 print(ks_test_GSE241600_MG132_24H_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -50078,10 +50077,10 @@ print(ks_test_GSE241600_MG132_24H_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE241600_MG132_24H_high_MFE_TX_in_UP_heat_capacity <- mean(GSE241600_MG132_24H_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE241600_MG132_24H_high_MFE_TX_in_UP_heat_capacity <- mean(GSE241600_MG132_24H_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE241600_MG132_24H_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE241600_MG132_24H_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE241600_MG132_24H_heat_capacity_gain_UP_vs_DOWN <- GSE241600_MG132_24H_high_MFE_TX_in_UP_heat_capacity - GSE241600_MG132_24H_high_MFE_TX_in_DOWN_heat_capacity
@@ -50089,17 +50088,17 @@ cat("GSE241600_MG132_24H net heat capacity UP vs DOWN high MFE TX:", GSE241600_M
 
 
 # Extract specific heat data
-GSE241600_MG132_24H_Specific_heat_UP <- GSE241600_MG132_24H_high_MFE_TX_in_UP$Specific_heat
-GSE241600_MG132_24H_Specific_heat_DOWN <- GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Specific_heat
+GSE241600_MG132_24H_Cp_37C_UP <- GSE241600_MG132_24H_high_MFE_TX_in_UP$Cp_37C
+GSE241600_MG132_24H_Cp_37C_DOWN <- GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE241600_MG132_24H_Specific_heat_data <- data.frame(
-  GSE241600_MG132_24H_Specific_heat = c(GSE241600_MG132_24H_Specific_heat_UP, GSE241600_MG132_24H_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE241600_MG132_24H_Specific_heat_UP)), rep("DOWN", length(GSE241600_MG132_24H_Specific_heat_DOWN))))
+GSE241600_MG132_24H_Cp_37C_data <- data.frame(
+  GSE241600_MG132_24H_Cp_37C = c(GSE241600_MG132_24H_Cp_37C_UP, GSE241600_MG132_24H_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE241600_MG132_24H_Cp_37C_UP)), rep("DOWN", length(GSE241600_MG132_24H_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE241600_MG132_24H_Specific_heat_data, aes(x = regulation, y = GSE241600_MG132_24H_Specific_heat, fill = regulation)) +
+ggplot(GSE241600_MG132_24H_Cp_37C_data, aes(x = regulation, y = GSE241600_MG132_24H_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE241600_MG132_24H specific Heat of High MFE Transcripts",
        x = "",
@@ -50109,13 +50108,13 @@ ggplot(GSE241600_MG132_24H_Specific_heat_data, aes(x = regulation, y = GSE241600
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE241600_MG132_24H_high_MFE_TX_UP <- mean(GSE241600_MG132_24H_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE241600_MG132_24H_high_MFE_TX_DOWN <- mean(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE241600_MG132_24H_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Specific_heat, GSE241600_MG132_24H_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE241600_MG132_24H_high_MFE_TX_UP <- mean(GSE241600_MG132_24H_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE241600_MG132_24H_high_MFE_TX_DOWN <- mean(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE241600_MG132_24H_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Cp_37C, GSE241600_MG132_24H_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE241600_MG132_24H_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE241600_MG132_24H_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Specific_heat, GSE241600_MG132_24H_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE241600_MG132_24H_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE241600_MG132_24H_high_MFE_TX_in_DOWN$Cp_37C, GSE241600_MG132_24H_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE241600_MG132_24H_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -50527,7 +50526,7 @@ GSE129944_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE129944_
 GSE129944_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE129944_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3728402, GSM3728403, GSM3728406, GSM3728407,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -50540,7 +50539,7 @@ GSE129944_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE129944_
 GSE129944_Belinostat_norm_TX_counts_MFE_df <- GSE129944_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3728402, GSM3728403, GSM3728406, GSM3728407,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE129944_Belinostat$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -50656,7 +50655,7 @@ GSE129944_Belinostat_long_data <- GSE129944_Belinostat_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE129944_Belinostat_norm_TX_aggregated_data_avg_counts <- GSE129944_Belinostat_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -50846,7 +50845,7 @@ cat("GSE129944_Belinostat net change counts low MFE TX drug vs DMSO:", GSE129944
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE129944_Belinostat, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE129944_Belinostat, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -50859,7 +50858,7 @@ ggplot(MFE_res_GSE129944_Belinostat, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE129944_Belinostat, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE129944_Belinostat, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -50873,12 +50872,12 @@ ggplot(MFE_res_GSE129944_Belinostat, aes(x = factor(log2FoldChange > 0), y = Spe
   labs(y="Heat capacity (J/C)",x="",title="GSE129944_Belinostat_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
 
-Mean_heat_capacity_GSE129944_Belinostat_UP <- mean(MFE_res_GSE129944_Belinostat_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE129944_Belinostat_DOWN <- mean(MFE_res_GSE129944_Belinostat_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE129944_Belinostat_all_UP_vs_DOWN <- t.test(MFE_res_GSE129944_Belinostat_DOWN$Specific_heat, MFE_res_GSE129944_Belinostat_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129944_Belinostat_UP <- mean(MFE_res_GSE129944_Belinostat_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE129944_Belinostat_DOWN <- mean(MFE_res_GSE129944_Belinostat_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE129944_Belinostat_all_UP_vs_DOWN <- t.test(MFE_res_GSE129944_Belinostat_DOWN$Cp_37C, MFE_res_GSE129944_Belinostat_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129944_Belinostat_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE129944_Belinostat_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129944_Belinostat_DOWN$Specific_heat, MFE_res_GSE129944_Belinostat_UP$Specific_heat)
+ks_test_GSE129944_Belinostat_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129944_Belinostat_DOWN$Cp_37C, MFE_res_GSE129944_Belinostat_UP$Cp_37C)
 print(ks_test_GSE129944_Belinostat_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -50888,10 +50887,10 @@ print(ks_test_GSE129944_Belinostat_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE129944_Belinostat_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129944_Belinostat_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE129944_Belinostat_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129944_Belinostat_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE129944_Belinostat_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE129944_Belinostat_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE129944_Belinostat_heat_capacity_gain_UP_vs_DOWN <- GSE129944_Belinostat_high_MFE_TX_in_UP_heat_capacity - GSE129944_Belinostat_high_MFE_TX_in_DOWN_heat_capacity
@@ -50899,17 +50898,17 @@ cat("GSE129944_Belinostat net heat capacity UP vs DOWN high MFE TX:", GSE129944_
 
 
 # Extract specific heat data
-GSE129944_Belinostat_Specific_heat_UP <- GSE129944_Belinostat_high_MFE_TX_in_UP$Specific_heat
-GSE129944_Belinostat_Specific_heat_DOWN <- GSE129944_Belinostat_high_MFE_TX_in_DOWN$Specific_heat
+GSE129944_Belinostat_Cp_37C_UP <- GSE129944_Belinostat_high_MFE_TX_in_UP$Cp_37C
+GSE129944_Belinostat_Cp_37C_DOWN <- GSE129944_Belinostat_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE129944_Belinostat_Specific_heat_data <- data.frame(
-  GSE129944_Belinostat_Specific_heat = c(GSE129944_Belinostat_Specific_heat_UP, GSE129944_Belinostat_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE129944_Belinostat_Specific_heat_UP)), rep("DOWN", length(GSE129944_Belinostat_Specific_heat_DOWN))))
+GSE129944_Belinostat_Cp_37C_data <- data.frame(
+  GSE129944_Belinostat_Cp_37C = c(GSE129944_Belinostat_Cp_37C_UP, GSE129944_Belinostat_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE129944_Belinostat_Cp_37C_UP)), rep("DOWN", length(GSE129944_Belinostat_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE129944_Belinostat_Specific_heat_data, aes(x = regulation, y = GSE129944_Belinostat_Specific_heat, fill = regulation)) +
+ggplot(GSE129944_Belinostat_Cp_37C_data, aes(x = regulation, y = GSE129944_Belinostat_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE129944_Belinostat specific Heat of High MFE Transcripts",
        x = "",
@@ -50919,13 +50918,13 @@ ggplot(GSE129944_Belinostat_Specific_heat_data, aes(x = regulation, y = GSE12994
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE129944_Belinostat_high_MFE_TX_UP <- mean(GSE129944_Belinostat_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE129944_Belinostat_high_MFE_TX_DOWN <- mean(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE129944_Belinostat_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Specific_heat, GSE129944_Belinostat_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129944_Belinostat_high_MFE_TX_UP <- mean(GSE129944_Belinostat_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE129944_Belinostat_high_MFE_TX_DOWN <- mean(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE129944_Belinostat_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Cp_37C, GSE129944_Belinostat_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129944_Belinostat_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE129944_Belinostat_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Specific_heat, GSE129944_Belinostat_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE129944_Belinostat_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129944_Belinostat_high_MFE_TX_in_DOWN$Cp_37C, GSE129944_Belinostat_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE129944_Belinostat_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -51180,7 +51179,7 @@ GSE129944_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE129944_
 GSE129944_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE129944_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3728402, GSM3728403, GSM3728404, GSM3728405,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -51193,7 +51192,7 @@ GSE129944_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE129944_
 GSE129944_17_AAG_norm_TX_counts_MFE_df <- GSE129944_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM3728402, GSM3728403, GSM3728404, GSM3728405,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE129944_17_AAG$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -51310,7 +51309,7 @@ GSE129944_17_AAG_long_data <- GSE129944_17_AAG_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE129944_17_AAG_norm_TX_aggregated_data_avg_counts <- GSE129944_17_AAG_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -51505,7 +51504,7 @@ cat("GSE129944_17_AAG net change counts low MFE TX drug vs DMSO:", GSE129944_17_
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE129944_17_AAG, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE129944_17_AAG, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -51518,7 +51517,7 @@ ggplot(MFE_res_GSE129944_17_AAG, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE129944_17_AAG, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE129944_17_AAG, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -51532,12 +51531,12 @@ ggplot(MFE_res_GSE129944_17_AAG, aes(x = factor(log2FoldChange > 0), y = Specifi
   labs(y="Heat capacity (J/C)",x="",title="GSE129944_17_AAG_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
 
-Mean_heat_capacity_GSE129944_17_AAG_UP <- mean(MFE_res_GSE129944_17_AAG_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE129944_17_AAG_DOWN <- mean(MFE_res_GSE129944_17_AAG_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE129944_17_AAG_all_UP_vs_DOWN <- t.test(MFE_res_GSE129944_17_AAG_DOWN$Specific_heat, MFE_res_GSE129944_17_AAG_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129944_17_AAG_UP <- mean(MFE_res_GSE129944_17_AAG_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE129944_17_AAG_DOWN <- mean(MFE_res_GSE129944_17_AAG_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE129944_17_AAG_all_UP_vs_DOWN <- t.test(MFE_res_GSE129944_17_AAG_DOWN$Cp_37C, MFE_res_GSE129944_17_AAG_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129944_17_AAG_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE129944_17_AAG_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129944_17_AAG_DOWN$Specific_heat, MFE_res_GSE129944_17_AAG_UP$Specific_heat)
+ks_test_GSE129944_17_AAG_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE129944_17_AAG_DOWN$Cp_37C, MFE_res_GSE129944_17_AAG_UP$Cp_37C)
 print(ks_test_GSE129944_17_AAG_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -51547,10 +51546,10 @@ print(ks_test_GSE129944_17_AAG_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE129944_17_AAG_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129944_17_AAG_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE129944_17_AAG_high_MFE_TX_in_UP_heat_capacity <- mean(GSE129944_17_AAG_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE129944_17_AAG_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE129944_17_AAG_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE129944_17_AAG_heat_capacity_gain_UP_vs_DOWN <- GSE129944_17_AAG_high_MFE_TX_in_UP_heat_capacity - GSE129944_17_AAG_high_MFE_TX_in_DOWN_heat_capacity
@@ -51558,17 +51557,17 @@ cat("GSE129944_17_AAG net heat capacity UP vs DOWN high MFE TX:", GSE129944_17_A
 
 
 # Extract specific heat data
-GSE129944_17_AAG_Specific_heat_UP <- GSE129944_17_AAG_high_MFE_TX_in_UP$Specific_heat
-GSE129944_17_AAG_Specific_heat_DOWN <- GSE129944_17_AAG_high_MFE_TX_in_DOWN$Specific_heat
+GSE129944_17_AAG_Cp_37C_UP <- GSE129944_17_AAG_high_MFE_TX_in_UP$Cp_37C
+GSE129944_17_AAG_Cp_37C_DOWN <- GSE129944_17_AAG_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE129944_17_AAG_Specific_heat_data <- data.frame(
-  GSE129944_17_AAG_Specific_heat = c(GSE129944_17_AAG_Specific_heat_UP, GSE129944_17_AAG_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE129944_17_AAG_Specific_heat_UP)), rep("DOWN", length(GSE129944_17_AAG_Specific_heat_DOWN))))
+GSE129944_17_AAG_Cp_37C_data <- data.frame(
+  GSE129944_17_AAG_Cp_37C = c(GSE129944_17_AAG_Cp_37C_UP, GSE129944_17_AAG_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE129944_17_AAG_Cp_37C_UP)), rep("DOWN", length(GSE129944_17_AAG_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE129944_17_AAG_Specific_heat_data, aes(x = regulation, y = GSE129944_17_AAG_Specific_heat, fill = regulation)) +
+ggplot(GSE129944_17_AAG_Cp_37C_data, aes(x = regulation, y = GSE129944_17_AAG_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE129944_17_AAG specific Heat of High MFE Transcripts",
        x = "",
@@ -51578,13 +51577,13 @@ ggplot(GSE129944_17_AAG_Specific_heat_data, aes(x = regulation, y = GSE129944_17
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE129944_17_AAG_high_MFE_TX_UP <- mean(GSE129944_17_AAG_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE129944_17_AAG_high_MFE_TX_DOWN <- mean(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE129944_17_AAG_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Specific_heat, GSE129944_17_AAG_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE129944_17_AAG_high_MFE_TX_UP <- mean(GSE129944_17_AAG_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE129944_17_AAG_high_MFE_TX_DOWN <- mean(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE129944_17_AAG_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Cp_37C, GSE129944_17_AAG_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE129944_17_AAG_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE129944_17_AAG_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Specific_heat, GSE129944_17_AAG_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE129944_17_AAG_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE129944_17_AAG_high_MFE_TX_in_DOWN$Cp_37C, GSE129944_17_AAG_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE129944_17_AAG_all_high_MFE_TX_UP_vs_DOWN)
 
 
@@ -51993,7 +51992,7 @@ GSE163249_norm_TX_counts_df$ensembl_transcript_id <- sub("\\..*", "", GSE163249_
 GSE163249_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE163249_norm_TX_counts_df, by="ensembl_transcript_id") %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM4975597, GSM4975599, GSM4975611, GSM4975613,
-                Normalized_MFE, Temperature, Specific_heat)
+                Normalized_MFE, Cp_37C)
 
 
 
@@ -52006,7 +52005,7 @@ GSE163249_norm_TX_counts_MFE_df <- dplyr::inner_join(Table_ANNOTATED, GSE163249_
 GSE163249_Vorinostat_norm_TX_counts_MFE_df <- GSE163249_norm_TX_counts_MFE_df %>%
   dplyr::select(ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id, external_gene_name, transcript_is_canonical, Transcript_length, 
                 GSM4975597, GSM4975599, GSM4975611, GSM4975613,
-                Normalized_MFE, Temperature, Specific_heat) %>%
+                Normalized_MFE, Cp_37C) %>%
   dplyr::filter(ensembl_transcript_id %in% MFE_res_GSE163249_Vorinostat$ensembl_transcript_id) 
 
 # Identify the 75th percentile of the combined MFE distributions of control and drug-treated samples
@@ -52123,7 +52122,7 @@ GSE163249_Vorinostat_long_data <- GSE163249_Vorinostat_long_data %>%
 
 # Aggregate the replicates for each condition
 GSE163249_Vorinostat_norm_TX_aggregated_data_avg_counts <- GSE163249_Vorinostat_long_data %>%
-  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Specific_heat) %>%
+  group_by(ensembl_transcript_id_version, condition, Normalized_MFE, Cp_37C) %>%
   summarise(
     avg_counts = mean(counts, na.rm = TRUE),
     .groups = 'drop'
@@ -52312,7 +52311,7 @@ cat("GSE163249_Vorinostat net change counts low MFE TX drug vs DMSO:", GSE163249
 
 # This is calculated on the total n. of transcripts with a significant log2 fold change
 # Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_res_GSE163249_Vorinostat, aes(y=Specific_heat, x=log2FoldChange)) +
+ggplot(MFE_res_GSE163249_Vorinostat, aes(y=Cp_37C, x=log2FoldChange)) +
   geom_point(size=1.5, alpha=0.1)+
   theme_classic() +
   theme(legend.position="none") +
@@ -52325,7 +52324,7 @@ ggplot(MFE_res_GSE163249_Vorinostat, aes(y=Specific_heat, x=log2FoldChange)) +
 
 
 # Show the data with a box plot
-ggplot(MFE_res_GSE163249_Vorinostat, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+ggplot(MFE_res_GSE163249_Vorinostat, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -52339,12 +52338,12 @@ ggplot(MFE_res_GSE163249_Vorinostat, aes(x = factor(log2FoldChange > 0), y = Spe
   labs(y="Heat capacity (J/C)",x="",title="GSE163249_Vorinostat_Log2_FC_adj.P<0.05 heat_capacity all transcripts") +
   scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
 
-Mean_heat_capacity_GSE163249_Vorinostat_UP <- mean(MFE_res_GSE163249_Vorinostat_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE163249_Vorinostat_DOWN <- mean(MFE_res_GSE163249_Vorinostat_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE163249_Vorinostat_all_UP_vs_DOWN <- t.test(MFE_res_GSE163249_Vorinostat_DOWN$Specific_heat, MFE_res_GSE163249_Vorinostat_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE163249_Vorinostat_UP <- mean(MFE_res_GSE163249_Vorinostat_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE163249_Vorinostat_DOWN <- mean(MFE_res_GSE163249_Vorinostat_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE163249_Vorinostat_all_UP_vs_DOWN <- t.test(MFE_res_GSE163249_Vorinostat_DOWN$Cp_37C, MFE_res_GSE163249_Vorinostat_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE163249_Vorinostat_all_UP_vs_DOWN)
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE163249_Vorinostat_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE163249_Vorinostat_DOWN$Specific_heat, MFE_res_GSE163249_Vorinostat_UP$Specific_heat)
+ks_test_GSE163249_Vorinostat_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_res_GSE163249_Vorinostat_DOWN$Cp_37C, MFE_res_GSE163249_Vorinostat_UP$Cp_37C)
 print(ks_test_GSE163249_Vorinostat_all_UP_vs_DOWN_heat_capacity)
 
 
@@ -52354,10 +52353,10 @@ print(ks_test_GSE163249_Vorinostat_all_UP_vs_DOWN_heat_capacity)
 
 # Contribution of the UP or DOWN-regulated high MFE transcripts to the heat capacity
 # Look at the heat capacity of the UP-regulated high MFE transcripts
-GSE163249_Vorinostat_high_MFE_TX_in_UP_heat_capacity <- mean(GSE163249_Vorinostat_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
+GSE163249_Vorinostat_high_MFE_TX_in_UP_heat_capacity <- mean(GSE163249_Vorinostat_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
 
 # Look at the heat capacity of the DOWN-regulated high MFE transcripts
-GSE163249_Vorinostat_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
+GSE163249_Vorinostat_high_MFE_TX_in_DOWN_heat_capacity <- mean(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
 
 # Heat capacity gain in UP-regulated high MFE transcripts vs DOWN-regulated high MFE transcripts
 GSE163249_Vorinostat_heat_capacity_gain_UP_vs_DOWN <- GSE163249_Vorinostat_high_MFE_TX_in_UP_heat_capacity - GSE163249_Vorinostat_high_MFE_TX_in_DOWN_heat_capacity
@@ -52365,17 +52364,17 @@ cat("GSE163249_Vorinostat net heat capacity UP vs DOWN high MFE TX:", GSE163249_
 
 
 # Extract specific heat data
-GSE163249_Vorinostat_Specific_heat_UP <- GSE163249_Vorinostat_high_MFE_TX_in_UP$Specific_heat
-GSE163249_Vorinostat_Specific_heat_DOWN <- GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Specific_heat
+GSE163249_Vorinostat_Cp_37C_UP <- GSE163249_Vorinostat_high_MFE_TX_in_UP$Cp_37C
+GSE163249_Vorinostat_Cp_37C_DOWN <- GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Cp_37C
 
 # Combine data into a single data frame for easier plotting
-GSE163249_Vorinostat_Specific_heat_data <- data.frame(
-  GSE163249_Vorinostat_Specific_heat = c(GSE163249_Vorinostat_Specific_heat_UP, GSE163249_Vorinostat_Specific_heat_DOWN),
-  regulation = factor(c(rep("UP", length(GSE163249_Vorinostat_Specific_heat_UP)), rep("DOWN", length(GSE163249_Vorinostat_Specific_heat_DOWN))))
+GSE163249_Vorinostat_Cp_37C_data <- data.frame(
+  GSE163249_Vorinostat_Cp_37C = c(GSE163249_Vorinostat_Cp_37C_UP, GSE163249_Vorinostat_Cp_37C_DOWN),
+  regulation = factor(c(rep("UP", length(GSE163249_Vorinostat_Cp_37C_UP)), rep("DOWN", length(GSE163249_Vorinostat_Cp_37C_DOWN))))
 )
 
 # Generate box plot
-ggplot(GSE163249_Vorinostat_Specific_heat_data, aes(x = regulation, y = GSE163249_Vorinostat_Specific_heat, fill = regulation)) +
+ggplot(GSE163249_Vorinostat_Cp_37C_data, aes(x = regulation, y = GSE163249_Vorinostat_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE163249_Vorinostat specific Heat of High MFE Transcripts",
        x = "",
@@ -52385,13 +52384,13 @@ ggplot(GSE163249_Vorinostat_Specific_heat_data, aes(x = regulation, y = GSE16324
   theme(axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 25))
 
-Mean_heat_capacity_GSE163249_Vorinostat_high_MFE_TX_UP <- mean(GSE163249_Vorinostat_high_MFE_TX_in_UP$Specific_heat, na.rm = TRUE)
-Mean_heat_capacity_GSE163249_Vorinostat_high_MFE_TX_DOWN <- mean(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Specific_heat, na.rm = TRUE)
-TTEST_heat_capacity_GSE163249_Vorinostat_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Specific_heat, GSE163249_Vorinostat_high_MFE_TX_in_UP$Specific_heat, paired=FALSE)
+Mean_heat_capacity_GSE163249_Vorinostat_high_MFE_TX_UP <- mean(GSE163249_Vorinostat_high_MFE_TX_in_UP$Cp_37C, na.rm = TRUE)
+Mean_heat_capacity_GSE163249_Vorinostat_high_MFE_TX_DOWN <- mean(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Cp_37C, na.rm = TRUE)
+TTEST_heat_capacity_GSE163249_Vorinostat_all_high_MFE_TX_UP_vs_DOWN <- t.test(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Cp_37C, GSE163249_Vorinostat_high_MFE_TX_in_UP$Cp_37C, paired=FALSE)
 print(TTEST_heat_capacity_GSE163249_Vorinostat_all_high_MFE_TX_UP_vs_DOWN)
 
 # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_heat_capacity_GSE163249_Vorinostat_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Specific_heat, GSE163249_Vorinostat_high_MFE_TX_in_UP$Specific_heat)
+ks_test_heat_capacity_GSE163249_Vorinostat_all_high_MFE_TX_UP_vs_DOWN <- ks.test(GSE163249_Vorinostat_high_MFE_TX_in_DOWN$Cp_37C, GSE163249_Vorinostat_high_MFE_TX_in_UP$Cp_37C)
 print(ks_test_heat_capacity_GSE163249_Vorinostat_all_high_MFE_TX_UP_vs_DOWN)
 
 
