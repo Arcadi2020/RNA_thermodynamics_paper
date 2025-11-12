@@ -20,25 +20,6 @@
 #   – Produce per-sample boxplots for selected significant drug–cell line combinations (e.g. PC3_torin-1, A375_tozasertib, ES2_lapatinib).
 # • Benchmark cell-cycle transitions in MCF7 and HeLa (G0/G1 vs G2/M, S vs G0/G1, G1 vs G2, S vs G1)
 #   using the same UP vs DOWN heat-capacity contrasts.
-#
-# Inputs (paths to be set by user)
-# • Cross_validation_MFE_AC_environment.RData (GREIN + Science objects)
-# • DESeq2/DEXSeq result tables for Science models (72h and early-phase)
-# • iLINCS RData environments (3.33 µM and 10 µM) and CSVs (Results_all_cancer_cell_lines_*.csv, cellinfo_beta.csv,
-#   iLINCs_complete_data_selected_samples.csv, Table_ANNOTATED_iLINCs.csv)
-# • Cell-cycle environment: Analysis_cell_cycle_genes_MFE_environment.RData
-#
-# Outputs
-# • Expression_changes_targeted_agents: wide log2FC matrix across GREIN/Science datasets.
-# • Boxplots and combined panels of heat capacity contrasts (GREIN, Science models, cell cycle).
-# • Summary statistics tables (TTEST_KS_results, Wilcoxon p-values, per-model Statistics).
-# • Volcano plots and quadrant summaries for iLINCS at 3.33 µM and 10 µM, plus per-sample boxplots.
-# • Publication-ready PDF/TIFF outputs corresponding to Figure 5 panels.
-
-
-
-
-
 
 
 library(DESeq2)
@@ -67,31 +48,17 @@ library(gridExtra)
 
 
 
-# Load the script in which all the GREIN datasets and the Science models of drug resistance are analysed
 
-# It is also possible to load the environment of the script:
-load("path_to//Cross_validation_MFE_AC_environment.RData")
-
-
-
-
-# Here below I perform the analysis of all the datasets treated with agents targeting specific signaling pathways regulating cell proliferation.
+# Load Table_ANNOTATED_MFE_heat_capacity ####
+# The table has been generated with the script:
+# path_to/R_scripts/MFE_Human_transcriptome.R
+Gencode_TX_norm_MFE_HC_table <- read.delim("path_to/Gencode_TX_norm_MFE_HC_table.csv",
+                                           sep = ",", header = T, stringsAsFactors = F)
+Table_ANNOTATED_gene_names <- Gencode_TX_norm_MFE_HC_table
 
 
 
-# Create a data frame with the gene-level DESeq2 log_FC values of all the cell lines exposed to targeted agents.
-# Take all the log_FC values (not only the transcripts with a significant log_FC)
-
-# Generate the data frame with the gene-level DESeq2 log_FC values of all the cell lines exposed to single targeted agents:
-# "GSE137535_SH454", "GSE143462_KYSE150_omipalisib", "GSE148096_TNBC_erlotinib", "GSE178755_HCC827_erlotinib",
-# "GSE103021_LU65_ARS_1620",
-# "GSE118548_T84_Trametinib", "GSE177054_MDAMB231_Ribociclib",
-# "GSE93124_SW480_crizotinib",
-# "GSE135514_MDAMB468_Das_24h", "GSE135514_MDAMB468_Das_72h",
-# "GSE121105_BT474_trastuzumab", 
-# "GSE105083_MIA_PACA2_CM03_6h", "GSE105083_MIA_PACA2_CM03_24h", "GSE105083_PANC1_CM03_24h", 
-# "X778_nutlin3a_72h", "X778_palbo_72h", "X778_tunic_72h", "SKBR3_LAP_72h", "SKMEL28_VEM_72h", "X778_palbo_EP", "SKBR3_LAP_72h", "SKMEL28_VEM_EP"
-
+load("path_to/Cross_validation_MFE_AC_environment.RData")
 
 
 # Load the DESeq2 data at the gene level
@@ -141,7 +108,7 @@ Expression_changes_GSE129221_PC9GR <- dplyr::select(res_GSE129221_PC9GR_gene_df,
 
 
 # Science models 72h time point
-Expression_changes_X778_PALBO <- read.delim(file="path_to//72h_778_palbociclib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
+Expression_changes_X778_PALBO <- read.delim(file="/Volumes/AC_HD_8TB/Exp.\ 271\ Profiling\ of\ alternative\ splicing\ landscape_Nanopore\ sequencing\ drug\ treatment\ 72h/Data_Andre_modified_analysis_26_Sep_2022/72h.files/72h_778_palbociclib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
   dplyr::rename(Gene_symbol = gene_name) %>%
   dplyr::rename(X778_PALBO_Log_FC = log2FoldChange) %>%
   dplyr::select(Gene_symbol, X778_PALBO_Log_FC) %>%
@@ -150,26 +117,7 @@ Expression_changes_X778_PALBO <- read.delim(file="path_to//72h_778_palbociclib.t
   dplyr::filter(!is.na(X778_PALBO_Log_FC))
 
 
-
-Expression_changes_X778_TUNIC <- read.delim(file="path_to//72h_778_tunicamycin.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(X778_TUNIC_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, X778_TUNIC_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(X778_TUNIC_Log_FC = mean(X778_TUNIC_Log_FC)) %>%
-  dplyr::filter(!is.na(X778_TUNIC_Log_FC))
-
-
-Expression_changes_X778_nutlin <- read.delim(file="path_to//72h_778_nutlin3a.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(X778_nutlin_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, X778_nutlin_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(X778_nutlin_Log_FC = mean(X778_nutlin_Log_FC)) %>%
-  dplyr::filter(!is.na(X778_nutlin_Log_FC))
-
-
-Expression_changes_SKBR3_LAP <- read.delim(file="path_to//72h_SKBR3_lapatinib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
+Expression_changes_SKBR3_LAP <- read.delim(file="/Volumes/AC_HD_8TB/Exp.\ 271\ Profiling\ of\ alternative\ splicing\ landscape_Nanopore\ sequencing\ drug\ treatment\ 72h/Data_Andre_modified_analysis_26_Sep_2022/72h.files/72h_SKBR3_lapatinib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
   dplyr::rename(Gene_symbol = gene_name) %>%
   dplyr::rename(SKBR3_Log_FC = log2FoldChange) %>%
   dplyr::select(Gene_symbol, SKBR3_Log_FC) %>%
@@ -178,47 +126,13 @@ Expression_changes_SKBR3_LAP <- read.delim(file="path_to//72h_SKBR3_lapatinib.tx
   dplyr::filter(!is.na(SKBR3_Log_FC))
 
 
-Expression_changes_SKMEL28_VEM <- read.delim(file="path_to//72h_SKMEL28_vemurafenib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
+Expression_changes_SKMEL28_VEM <- read.delim(file="/Volumes/AC_HD_8TB/Exp.\ 271\ Profiling\ of\ alternative\ splicing\ landscape_Nanopore\ sequencing\ drug\ treatment\ 72h/Data_Andre_modified_analysis_26_Sep_2022/72h.files/72h_SKMEL28_vemurafenib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
   dplyr::rename(Gene_symbol = gene_name) %>%
   dplyr::rename(SKMEL28_Log_FC = log2FoldChange) %>%
   dplyr::select(Gene_symbol, SKMEL28_Log_FC) %>%
   group_by(Gene_symbol) %>%
   summarize(SKMEL28_Log_FC = mean(SKMEL28_Log_FC)) %>%
   dplyr::filter(!is.na(SKMEL28_Log_FC))
-
-
-
-
-
-
-
-# Science models early-phase time point (the nutlin3a and the tunicamycin conditions have not been sequenced during the early phase response)
-Expression_changes_X778_PALBO_EP <- read.delim(file="path_to//early.phase_778_palbociclib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(X778_PALBO_EP_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, X778_PALBO_EP_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(X778_PALBO_EP_Log_FC = mean(X778_PALBO_EP_Log_FC)) %>%
-  dplyr::filter(!is.na(X778_PALBO_EP_Log_FC))
-
-
-Expression_changes_SKBR3_LAP_EP <- read.delim(file="path_to//early.phase_SKBR3_lapatinib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(SKBR3_EP_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, SKBR3_EP_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(SKBR3_EP_Log_FC = mean(SKBR3_EP_Log_FC)) %>%
-  dplyr::filter(!is.na(SKBR3_EP_Log_FC))
-
-
-Expression_changes_SKMEL28_VEM_EP <- read.delim(file="path_to//early.phase_SKMEL28_vemurafenib.tx_counts.both_conditions.treated_untreated_deseq2.tab", header = TRUE, sep = "\t", quote = "") %>%
-  dplyr::rename(Gene_symbol = gene_name) %>%
-  dplyr::rename(SKMEL28_EP_Log_FC = log2FoldChange) %>%
-  dplyr::select(Gene_symbol, SKMEL28_EP_Log_FC) %>%
-  group_by(Gene_symbol) %>%
-  summarize(SKMEL28_EP_Log_FC = mean(SKMEL28_EP_Log_FC)) %>%
-  dplyr::filter(!is.na(SKMEL28_EP_Log_FC))
-
 
 
 
@@ -240,16 +154,8 @@ Expression_changes_targeted_agents <- dplyr::full_join(Expression_changes_GSE137
   dplyr::full_join(Expression_changes_GSE105083_PANC1_CM03_24h, by = "Gene_symbol") %>%
   dplyr::full_join(Expression_changes_GSE129221_PC9GR, by = "Gene_symbol") %>%
   dplyr::full_join(Expression_changes_X778_PALBO, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_X778_TUNIC, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_X778_nutlin, by = "Gene_symbol") %>%
   dplyr::full_join(Expression_changes_SKBR3_LAP, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_SKMEL28_VEM, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_X778_PALBO_EP, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_SKBR3_LAP_EP, by = "Gene_symbol") %>%
-  dplyr::full_join(Expression_changes_SKMEL28_VEM_EP, by = "Gene_symbol")
-
-
-
+  dplyr::full_join(Expression_changes_SKMEL28_VEM, by = "Gene_symbol")
 
 
 
@@ -269,20 +175,10 @@ Expression_changes_targeted_agents <- dplyr::full_join(Expression_changes_GSE137
 # Fig. 5B Heat_capacity GREIN dataset ####
 # Heat capacity plots
 
-# Add the heat capacity box plots of these samples:
-# "GSE143462_omopalisib_12h"
-# "GSE121105_trastuzumab_72h"
-# "GSE103021_LU65_ARS_1620_24h"
-# "GSE135514_dasatinib_24h"
-# "GSE135514_dasatinib_72h"
-
-
-
-
 
 # Heat capacity changes GSE143462_omipalisib 12h
 # GSE143462_omipalisib box plot heat capacity all transcripts UP- and DOWN-regulated
-Plot_Heat_capacity_GSE143462_omipalisib_12h <- ggplot(MFE_res_GSE143462, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_GSE143462_omipalisib_12h <- ggplot(MFE_res_GSE143462, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -305,7 +201,7 @@ ks_test_GSE143462_all_UP_vs_DOWN_heat_capacity
 
 
 # GSE143462_omipalisib 12h box plot heat capacity high MFE transcripts
-Plot_Heat_capacity_high_GSE143462_omipalisib_12h <- ggplot(GSE143462_Specific_heat_data, aes(x = regulation, y = GSE143462_Specific_heat, fill = regulation)) +
+Plot_Heat_capacity_high_GSE143462_omipalisib_12h <- ggplot(GSE143462_Cp_37C_data, aes(x = regulation, y = GSE143462_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE143462 specific Heat of High MFE Transcripts",
        x = "",
@@ -332,7 +228,7 @@ ks_test_heat_capacity_GSE143462_all_high_MFE_TX_UP_vs_DOWN
 
 # Heat capacity changes GSE121105_trastuzumab 72h
 # GSE121105_trastuzumab box plot heat capacity all transcripts UP- and DOWN-regulated
-Plot_Heat_capacity_GSE121105_trastuzumab_72h <- ggplot(MFE_res_GSE121105_trastuzumab, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_GSE121105_trastuzumab_72h <- ggplot(MFE_res_GSE121105_trastuzumab, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -355,7 +251,7 @@ ks_test_GSE121105_trastuzumab_all_UP_vs_DOWN_heat_capacity
 
 
 # GSE121105_trastuzumab 72h box plot heat capacity high MFE transcripts
-Plot_Heat_capacity_high_GSE121105_trastuzumab_72h <- ggplot(GSE121105_trastuzumab_Specific_heat_data, aes(x = regulation, y = GSE121105_trastuzumab_Specific_heat, fill = regulation)) +
+Plot_Heat_capacity_high_GSE121105_trastuzumab_72h <- ggplot(GSE121105_trastuzumab_Cp_37C_data, aes(x = regulation, y = GSE121105_trastuzumab_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE121105_trastuzumab specific Heat of High MFE Transcripts",
        x = "",
@@ -381,7 +277,7 @@ ks_test_heat_capacity_GSE121105_trastuzumab_all_high_MFE_TX_UP_vs_DOWN
 
 # Heat capacity changes GSE103021_ARS_1620_LU65_24h
 # GSE103021_ARS_1620_LU65_24h box plot heat capacity all transcripts UP- and DOWN-regulated
-Plot_Heat_capacity_GSE103021_ARS_1620_LU65_24h <- ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_GSE103021_ARS_1620_LU65_24h <- ggplot(MFE_res_GSE103021_ARS_1620_LU65, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -404,7 +300,7 @@ ks_test_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN_heat_capacity
 
 
 # GSE103021_ARS_1620_LU65_24h box plot heat capacity high MFE transcripts
-Plot_Heat_capacity_high_GSE103021_ARS_1620_LU65_24h <- ggplot(GSE103021_ARS_1620_LU65_Specific_heat_data, aes(x = regulation, y = GSE103021_ARS_1620_LU65_Specific_heat, fill = regulation)) +
+Plot_Heat_capacity_high_GSE103021_ARS_1620_LU65_24h <- ggplot(GSE103021_ARS_1620_LU65_Cp_37C_data, aes(x = regulation, y = GSE103021_ARS_1620_LU65_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE103021_ARS_1620_LU65 specific Heat of High MFE Transcripts",
        x = "",
@@ -433,7 +329,7 @@ ks_test_heat_capacity_GSE103021_ARS_1620_LU65_all_high_MFE_TX_UP_vs_DOWN
 
 # GSE135514_Das_24h heat capacity changes
 # GSE135514_Das_24h box plot heat capacity all transcripts UP- and DOWN-regulated
-Plot_Heat_capacity_GSE135514_Das_24h <- ggplot(MFE_res_GSE135514_Das_24h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_GSE135514_Das_24h <- ggplot(MFE_res_GSE135514_Das_24h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -456,7 +352,7 @@ ks_test_GSE135514_Das_24h_all_UP_vs_DOWN_heat_capacity
 
 
 # GSE135514_Das_24h 24h box plot heat capacity high MFE transcripts
-Plot_Heat_capacity_high_GSE135514_Das_24h <- ggplot(GSE135514_Das_24h_Specific_heat_data, aes(x = regulation, y = GSE135514_Das_24h_Specific_heat, fill = regulation)) +
+Plot_Heat_capacity_high_GSE135514_Das_24h <- ggplot(GSE135514_Das_24h_Cp_37C_data, aes(x = regulation, y = GSE135514_Das_24h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Das_24h specific Heat of High MFE Transcripts",
        x = "",
@@ -482,7 +378,7 @@ ks_test_heat_capacity_GSE135514_Das_24h_all_high_MFE_TX_UP_vs_DOWN
 
 # GSE135514_Das_72h heat capacity changes
 # GSE135514_Das_72h box plot heat capacity all transcripts UP- and DOWN-regulated
-Plot_Heat_capacity_GSE135514_Das_72h <- ggplot(MFE_res_GSE135514_Das_72h, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_GSE135514_Das_72h <- ggplot(MFE_res_GSE135514_Das_72h, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -505,7 +401,7 @@ ks_test_GSE135514_Das_72h_all_UP_vs_DOWN_heat_capacity
 
 
 # GSE135514_Das_72h 72h box plot heat capacity high MFE transcripts
-Plot_Heat_capacity_high_GSE135514_Das_72h <- ggplot(GSE135514_Das_72h_Specific_heat_data, aes(x = regulation, y = GSE135514_Das_72h_Specific_heat, fill = regulation)) +
+Plot_Heat_capacity_high_GSE135514_Das_72h <- ggplot(GSE135514_Das_72h_Cp_37C_data, aes(x = regulation, y = GSE135514_Das_72h_Cp_37C, fill = regulation)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   labs(title = "GSE135514_Das_72h specific Heat of High MFE Transcripts",
        x = "",
@@ -593,7 +489,7 @@ combined_plots <- grid.arrange(
 )
 
 # Save the combined plot
-ggsave("combined_plots.pdf", plot = combined_plots, width = 12, height = 6, path = "path_to/output")
+ggsave("combined_plots.pdf", plot = combined_plots, width = 12, height = 6, path = "path_to/Desktop")
 
 
 
@@ -607,7 +503,6 @@ ggsave("combined_plots.pdf", plot = combined_plots, width = 12, height = 6, path
 
 
 # Plot the data relative to the high MFE transcripts
-
 # Generate a data frame with the ttest and KS test results
 TTEST_KS_results_high_MFE_TX <- data.frame(
   Sample = c("GSE143462_omopalisib_12h", 
@@ -652,55 +547,55 @@ print(TTEST_KS_results_high_MFE_TX)
 
 # Wilcoxon test for all transcripts (UP vs DOWN)
 wilcox_heat_capacity_GSE143462_all_UP_vs_DOWN <- wilcox.test(
-  Specific_heat ~ factor(log2FoldChange > 0), 
+  Cp_37C ~ factor(log2FoldChange > 0), 
   data = MFE_res_GSE143462
 )
 
 wilcox_heat_capacity_GSE121105_trastuzumab_all_UP_vs_DOWN <- wilcox.test(
-  Specific_heat ~ factor(log2FoldChange > 0), 
+  Cp_37C ~ factor(log2FoldChange > 0), 
   data = MFE_res_GSE121105_trastuzumab
 )
 
 wilcox_heat_capacity_GSE103021_ARS_1620_LU65_all_UP_vs_DOWN <- wilcox.test(
-  Specific_heat ~ factor(log2FoldChange > 0), 
+  Cp_37C ~ factor(log2FoldChange > 0), 
   data = MFE_res_GSE103021_ARS_1620_LU65
 )
 
 wilcox_heat_capacity_GSE135514_Das_24h_all_UP_vs_DOWN <- wilcox.test(
-  Specific_heat ~ factor(log2FoldChange > 0), 
+  Cp_37C ~ factor(log2FoldChange > 0), 
   data = MFE_res_GSE135514_Das_24h
 )
 
 wilcox_heat_capacity_GSE135514_Das_72h_all_UP_vs_DOWN <- wilcox.test(
-  Specific_heat ~ factor(log2FoldChange > 0), 
+  Cp_37C ~ factor(log2FoldChange > 0), 
   data = MFE_res_GSE135514_Das_72h
 )
 
 
 # Wilcoxon test for high MFE transcripts (UP vs DOWN)
 wilcox_heat_capacity_GSE143462_high_MFE_TX_UP_vs_DOWN <- wilcox.test(
-  GSE143462_Specific_heat ~ regulation, 
-  data = GSE143462_Specific_heat_data
+  GSE143462_Cp_37C ~ regulation, 
+  data = GSE143462_Cp_37C_data
 )
 
 wilcox_heat_capacity_GSE121105_trastuzumab_high_MFE_TX_UP_vs_DOWN <- wilcox.test(
-  GSE121105_trastuzumab_Specific_heat ~ regulation, 
-  data = GSE121105_trastuzumab_Specific_heat_data
+  GSE121105_trastuzumab_Cp_37C ~ regulation, 
+  data = GSE121105_trastuzumab_Cp_37C_data
 )
 
 wilcox_heat_capacity_GSE103021_ARS_1620_LU65_high_MFE_TX_UP_vs_DOWN <- wilcox.test(
-  GSE103021_ARS_1620_LU65_Specific_heat ~ regulation, 
-  data = GSE103021_ARS_1620_LU65_Specific_heat_data
+  GSE103021_ARS_1620_LU65_Cp_37C ~ regulation, 
+  data = GSE103021_ARS_1620_LU65_Cp_37C_data
 )
 
 wilcox_heat_capacity_GSE135514_Das_24h_high_MFE_TX_UP_vs_DOWN <- wilcox.test(
-  GSE135514_Das_24h_Specific_heat ~ regulation, 
-  data = GSE135514_Das_24h_Specific_heat_data
+  GSE135514_Das_24h_Cp_37C ~ regulation, 
+  data = GSE135514_Das_24h_Cp_37C_data
 )
 
 wilcox_heat_capacity_GSE135514_Das_72h_high_MFE_TX_UP_vs_DOWN <- wilcox.test(
-  GSE135514_Das_72h_Specific_heat ~ regulation, 
-  data = GSE135514_Das_72h_Specific_heat_data
+  GSE135514_Das_72h_Cp_37C ~ regulation, 
+  data = GSE135514_Das_72h_Cp_37C_data
 )
 
 
@@ -713,14 +608,6 @@ TTEST_KS_results$Wilcoxon_p_value <- c(
   wilcox_heat_capacity_GSE135514_Das_72h_all_UP_vs_DOWN$p.value
 )
 
-# # For high MFE transcripts
-# TTEST_KS_results_high_MFE_TX$Wilcoxon_p_value <- c(
-#   wilcox_heat_capacity_GSE143462_high_MFE_TX_UP_vs_DOWN$p.value,
-#   wilcox_heat_capacity_GSE121105_trastuzumab_high_MFE_TX_UP_vs_DOWN$p.value,
-#   wilcox_heat_capacity_GSE103021_ARS_1620_LU65_high_MFE_TX_UP_vs_DOWN$p.value,
-#   wilcox_heat_capacity_GSE135514_Das_24h_high_MFE_TX_UP_vs_DOWN$p.value,
-#   wilcox_heat_capacity_GSE135514_Das_72h_high_MFE_TX_UP_vs_DOWN$p.value
-# )
 
 
 
@@ -738,15 +625,14 @@ combined_plot <- (Plot_Heat_capacity_GSE143462_omipalisib_12h +
                     Plot_Heat_capacity_GSE135514_Das_72h) +
   plot_layout(ncol = 5, guides = "collect") &  # 5 columns, collect legends
   theme(
-    axis.text.x = element_blank(),    # remove x-axis text
-    axis.ticks.x = element_blank(),   # remove x-axis ticks
-    axis.title.x = element_blank(),   # remove x-axis title
-    axis.title.y = element_blank(),   # remove y-axis title
-    plot.title = element_blank()      # remove plot titles
-    # leave y-axis text and ticks intact
+    axis.text.x = element_blank(),    
+    axis.ticks.x = element_blank(),   
+    axis.title.x = element_blank(),   
+    axis.title.y = element_blank(),   
+    plot.title = element_blank()      
   )
 
-ggsave("GREIN_combined_plots.pdf", combined_plot, width = 12, height = 6, path = "path_to/output")
+ggsave("GREIN_combined_plots.pdf", combined_plot, width = 12, height = 6, path = "path_to/Desktop")
 
 
 
@@ -776,7 +662,7 @@ ggsave("GREIN_combined_plots.pdf", combined_plot, width = 12, height = 6, path =
 
 # Analysis 778 palbociclib
 # Analysis heat capacity 778 palbociclib 72h all UP-regulated vs DOWN-regulated transcripts
-Plot_heat_capacity_778_PALBO <- ggplot(X778_PALBO_dexseq_ANNOTATED, aes(x = factor(log2fold_treated_untreated > 0), y = Specific_heat)) +
+Plot_heat_capacity_778_PALBO <- ggplot(X778_PALBO_dexseq_ANNOTATED, aes(x = factor(log2fold_treated_untreated > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
   theme_classic() +
@@ -796,30 +682,14 @@ ks_test_X778_PALBO_dexseq_ANNOTATED_all_UP_vs_DOWN_heat_capacity
 
 
 # Save the plot
-ggsave("Plot_heat_capacity_778_PALBO.pdf", plot = Plot_heat_capacity_778_PALBO, width = 4, height = 6, path = "path_to/output")
+ggsave("Plot_heat_capacity_778_PALBO.pdf", plot = Plot_heat_capacity_778_PALBO, width = 4, height = 6, path = "path_to/Desktop")
 
 
-
-
-# Analysis heat capacity 778 palbociclib 72h high-MFE UP-regulated vs DOWN-regulated transcripts
-# Plot_heat_capacity_high_MFE_778_PALBO <- ggplot(X778_PALBO_dexseq_ANNOTATED_Specific_heat_data, aes(x = regulation, y = X778_PALBO_dexseq_ANNOTATED_Specific_heat, fill = regulation)) +
-#   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-#   labs(title = "",
-#        x = "",
-#        y = "") +
-#   scale_x_discrete(labels = c("log2_FC < 0", "log2_FC > 0")) +
-#   theme_classic() +
-#   theme(axis.text.x = element_text(size = 16),
-#         axis.title = element_text(size = 25))
-# print(Plot_heat_capacity_high_MFE_778_PALBO)
-# 
-# TTEST_heat_capacity_X778_PALBO_dexseq_ANNOTATED_all_high_MFE_TX_UP_vs_DOWN
-# ks_test_heat_capacity_X778_PALBO_dexseq_ANNOTATED_all_high_MFE_TX_UP_vs_DOWN
 
 
 # Wilcoxon test of the heat capacity values of all transcripts UP- vs DOWN-regulated
 wilcox_heat_capacity_X778_PALBO_dexseq_ANNOTATED_all_UP_vs_DOWN <- wilcox.test(
-  Specific_heat ~ factor(log2fold_treated_untreated > 0),
+  Cp_37C ~ factor(log2fold_treated_untreated > 0),
   data = X778_PALBO_dexseq_ANNOTATED
 )
 
@@ -852,257 +722,10 @@ print(Statistics)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Fig. 5D Heat capacity Science models EP ####
-
-
-# Load the data of the Science models generated at 72h:
-source("path_to/R_scripts/All_model_systems_72h_summary.R")
-
-# Load the data of the Science models generated during the early phase response
-source("path_to/R_scripts/All_model_systems_early_phase_summary.R")
-
-
-
-
-library(gridExtra)
-library(grid)
-
-
-# Combine all the data into a single data frame
-combine_log2FoldChange <- function(data_frames) {
-  # Find the maximum length of all log2FoldChange vectors
-  max_length <- max(sapply(data_frames, function(df) length(df$log2FoldChange)))
-  
-  # Pad each log2FoldChange vector to the maximum length with NA
-  padded_log2FC <- lapply(data_frames, function(df) {
-    len <- length(df$log2FoldChange)
-    c(df$log2FoldChange, rep(NA, max_length - len))
-  })
-  
-  # Combine the padded vectors into a data frame and name the columns
-  combined_df <- as.data.frame(do.call(cbind, padded_log2FC))
-  colnames(combined_df) <- names(data_frames)
-  
-  return(combined_df)
-}
-
-# Generate the data frame
-data_frames_Proliferation_Science_mode_systems <- list(
-  X778_palbo_72h_Signt_1 = df_X778_PALBO_Proliferation_Science,
-  X778_palbo_EP_Signt_1 = df_X778_PALBO_Proliferation_Science_EP,
-  X778_palbo_72h_Signt_2 = df_X778_PALBO_Meta_PCNA,
-  X778_palbo_EP_Signt_2 = df_X778_PALBO_Meta_PCNA_EP,
-  X778_palbo_72h_Signt_3 = df_X778_PALBO_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
-  X778_palbo_EP_Signt_3 = df_X778_PALBO_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019_EP
-)
-
-# Rename the list elements
-names(data_frames_Proliferation_Science_mode_systems) <- c(
-  "WDLPS_72h_Signt_1", 
-  "WDLPS_EP_Signt_1", 
-  "WDLPS_72h_Signt_2", 
-  "WDLPS_EP_Signt_2", 
-  "WDLPS_72h_Signt_3", 
-  "WDLPS_EP_Signt_3"
-)
-
-
-combined_df_Proliferation_Science_model_systems <- combine_log2FoldChange(data_frames_Proliferation_Science_mode_systems)
-
-
-
-# Calculate the mean for each sample
-means <- colMeans(combined_df_Proliferation_Science_model_systems, na.rm = TRUE)
-
-
-# Wilcoxon test proliferation gene sets Science models - individual samples
-# IMPORTANT: some of the samples may not have a significant repression of proliferation gene sets, therefore, they may be absent in the final plots
-Wilcox_test_Proliferation_Science_models <- data.frame(
-  Samples = c("WDLPS_palbo_72h_Signt_1", 
-              "WDLPS_palbo_EP_Signt_1", 
-              "WDLPS_palbo_72h_Signt_2", 
-              "WDLPS_palbo_EP_Signt_2", 
-              "WDLPS_palbo_72h_Signt_3", 
-              "WDLPS_palbo_EP_Signt_3"),
-  wilcox_test_Proliferation_Science = c(wilcox_test_Proliferation_Science_X778_PALBO_72h$p.value, 
-                                        wilcox_test_Proliferation_Science_X778_PALBO_EP$p.value), 
-  wilcox_test_Meta_PCNA = c(wilcox_test_Meta_PCNA_X778_PALBO_72h$p.value, 
-                            wilcox_test_Meta_PCNA_X778_PALBO_EP$p.value),
-  wilcox_test_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019 = c(wilcox_test_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019_X778_PALBO_72h$p.value, 
-                                                                       wilcox_test_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019_X778_PALBO_EP$p.value))
-print(Wilcox_test_Proliferation_Science_models)
-
-
-
-
-
-
-# Check whether the difference between the proliferation signatures in aggreate is significant between the 72h and the EP time points
-wilcox_test_results <- list(
-  wilcox_test_Proliferation_Science_Signt_1 = wilcox.test(combined_df_Proliferation_Science_model_systems$WDLPS_72h_Signt_1, combined_df_Proliferation_Science_model_systems$WDLPS_EP_Signt_1),
-  wilcox_test_Proliferation_Science_Signt_2 = wilcox.test(combined_df_Proliferation_Science_model_systems$WDLPS_72h_Signt_2, combined_df_Proliferation_Science_model_systems$WDLPS_EP_Signt_2),
-  wilcox_test_Proliferation_Science_Signt_3 = wilcox.test(combined_df_Proliferation_Science_model_systems$WDLPS_72h_Signt_3, combined_df_Proliferation_Science_model_systems$WDLPS_EP_Signt_3)
-)
-
-# Extract p-values from each Wilcoxon test result
-wilcox_p_values <- sapply(wilcox_test_results, function(test) test$p.value)
-
-# Combine the p-values into a data frame for easier viewing
-p_value_df <- data.frame(
-  Signature = c("Signt_1", "Signt_2", "Signt_3"),
-  P_Value = wilcox_p_values
-)
-
-# Print the p-value results
-print(p_value_df)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Analysis 778 palbociclib early-phase response
-
-# Analysis 778 palbociclib early-phase response
-Plot_heat_capacity_778_PALBO_EP <- ggplot(X778_counts_EP, aes(x = factor(log2fold_treated_untreated > 0), y = Specific_heat)) +
-  geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  ylim(0, 400) +
-  theme(legend.position = "none", 
-        axis.title = element_text(size = 20), 
-        plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 16, color = "black")) +
-  theme(plot.title = element_text(size = 20)) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(y="",x="",title="") +
-  scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
-print(Plot_heat_capacity_778_PALBO_EP)
-
-TTEST_heat_capacity_X778_PALBO_EP_dexseq_ANNOTATED_all_UP_vs_DOWN
-ks_test_X778_PALBO_EP_dexseq_ANNOTATED_all_UP_vs_DOWN_heat_capacity
-
-# Wilcoxon test of heat capacity values (UP vs DOWN) for EP dataset
-wilcox_heat_capacity_X778_PALBO_EP_dexseq_ANNOTATED_all_UP_vs_DOWN <- wilcox.test(
-  Specific_heat ~ factor(log2fold_treated_untreated > 0),
-  data = X778_counts_EP
-)
-
-
-ggsave("Plot_heat_capacity_778_PALBO_EP.pdf", plot = Plot_heat_capacity_778_PALBO_EP, width = 4, height = 6, path = "path_to/output")
-
-
-
-
-
-# Generate a data frame with the ttest and KS test results
-Statistics_results <- data.frame(
-  Sample = "WDLPS_PALBO_EP",
-  Mean_heat_capacity_TX_UP = c(Mean_heat_capacity_X778_PALBO_EP_dexseq_ANNOTATED_UP
-  ),
-  Mean_heat_capacity_TX_DOWN = c(Mean_heat_capacity_X778_PALBO_EP_dexseq_ANNOTATED_DOWN
-  ),
-  TTEST_p_value = c(TTEST_heat_capacity_X778_PALBO_EP_dexseq_ANNOTATED_all_UP_vs_DOWN$p.value
-  ),
-  Wilcoxon_p_value = c(wilcox_heat_capacity_X778_PALBO_EP_dexseq_ANNOTATED_all_UP_vs_DOWN$p.value
-  ),
-  KS_p_value = c(ks_test_X778_PALBO_EP_dexseq_ANNOTATED_all_UP_vs_DOWN_heat_capacity$p.value
-  ))
-
-print(Statistics_results)
-
-
-
-
-
-
-
-
-
-
-
-# Combine all plots heat capacity all transcripts UP- and DOWN- regulated
-library(patchwork)
-
-combined_plot <- (Plot_heat_capacity_778_PALBO + 
-                    Plot_heat_capacity_778_PALBO_EP) +
-  plot_layout(ncol = 2, guides = "collect") & 
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    axis.title.x = element_blank(),
-    axis.title.y = element_blank(),
-    plot.title = element_blank(),
-    legend.position = "none"
-  )
-
-ggsave("combined_plots_patchwork.pdf", combined_plot, width = 5, height = 6, path = "path_to/output")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Fig. 5E volcano plot iLINCS 3.33 µM ####
+# Fig. 5D volcano plot iLINCS 3.33 µM ####
 
 # Load the environment of the script output
-load("path_to//Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines_environment.RData")
+load("path_to/Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines_environment.RData")
 
 library(readr)
 library(dplyr)
@@ -1122,7 +745,7 @@ library(gridExtra)
 
 
 # Load the complete iLINCs data
-all_results_2_complete_3.33uM <- read.csv("path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_3.33uM/Results_all_cancer_cell_lines_3.33uM.csv",
+all_results_2_complete_3.33uM <- read.csv("path_to/Results_all_cancer_cell_lines_3.33uM.csv",
                                    header = TRUE, sep = ",", stringsAsFactors = FALSE) %>%
   dplyr::rename(iLINCs_cell_line = cell_line)
 
@@ -1130,78 +753,36 @@ iLINCS_analysis_3.33uM <- all_results_2_complete_3.33uM
 
 
 
-iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis_3.33uM, aes(x = Log10_Specific_heat_change, y = -log10(iLINCS_analysis_3.33uM$wilcox_test_all_UP_vs_DOWN_Specific_heat))) +
-  theme_classic() +
-  geom_point(aes(
-    fill = ifelse(Log10_Specific_heat_change > 0 & -log10(iLINCS_analysis_3.33uM$wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301, "blue", 
-                  ifelse(Log10_Specific_heat_change > 0 & -log10(iLINCS_analysis_3.33uM$wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, "lightgrey",
-                         ifelse(Log10_Specific_heat_change < 0 & -log10(iLINCS_analysis_3.33uM$wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301, "lightgrey", 
-                                ifelse(Log10_Specific_heat_change < 0 & -log10(iLINCS_analysis_3.33uM$wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, "lightgrey", "lightgrey"))))),
-    color = "black",  # Border color for all points
-    size = 4,  # Set a larger fixed size for all points
-    shape = 21,  # Set a consistent shape for all points
-    alpha = ifelse(-log10(iLINCS_analysis_3.33uM$wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, 0.6, 1),
-    stroke = 0.6) +  # Stroke for empty circles' border
-  scale_fill_identity() +
-  scale_color_identity() +
-  scale_alpha_identity() +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-  geom_hline(yintercept = 1.301, linetype = "dashed", color = "black") +
-  labs(x = "Log10_Specific_heat_change", y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", title = "") +
-  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
-        legend.position = "none") +
-  xlim(-0.2, 0.2) +
-  geom_text_repel(aes(label = ifelse(-log10(iLINCS_analysis_3.33uM$wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301 & 
-                                       paste(iLINCs_cell_line, Drug, sep = "_") %in% c("HT29_vemurafenib", "LNCAP_sorafenib", "HCC515_trametinib"),
-                                     paste(iLINCs_cell_line, Drug, sep = "_"), "")), 
-                  size = 3, box.padding = 0.5, point.padding = 0.5, nudge_x = 0.004, nudge_y = 0.001, max.overlaps = Inf, 
-                  segment.color = 'lightgrey', segment.size = 0.5)
-
-print(iLINCS_analysis_plot_membrane_receptors)
-
-# Save the plot
-# ggsave("iLINCS_analysis_volcano_plot.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "path_to/output")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 library(ggrepel)
 
-# Add the name of the specific cell lines and pharmacologic agents to the plot
-
-iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis_3.33uM, 
-                                                  aes(x = Log10_Specific_heat_change, 
-                                                      y = -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat))) +
+iLINCS_analysis_plot_membrane_receptors <- ggplot(
+  iLINCS_analysis_3.33uM,
+  aes(x = Log10_Cp_37C_change,
+      y = -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C))
+) +
   theme_classic() +
   geom_point(
     aes(
       fill = ifelse(
-        Log10_Specific_heat_change > 0 & 
-          -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301, 
+        Log10_Cp_37C_change > 0 &
+          -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301,
         "blue", "lightgrey"
       )
     ),
-    shape = 21,     
+    color = "black",
     size = 4,
+    shape = 21,
     stroke = 0.6,
-    color = "black"
+    alpha = 1   # <- constant alpha so all greys look the same
   ) +
   scale_fill_identity() +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = 1.301, linetype = "dashed", color = "black") +
-  labs(x = "Log10_Specific_heat_change", 
-       y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", 
-       title = "") +
+  labs(
+    x = "Log10_Cp_37C_change",
+    y = "-Log10_wilcox_test_all_UP_vs_DOWN_pValue",
+    title = ""
+  ) +
   theme(
     plot.title = element_text(color = "black", size = 14, face = "bold"),
     legend.position = "none"
@@ -1209,8 +790,9 @@ iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis_3.33uM,
   xlim(-0.2, 0.2) +
   geom_text_repel(
     aes(label = ifelse(
-      Log10_Specific_heat_change > 0 &
-        -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301,
+      -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301 &
+        paste(iLINCs_cell_line, Drug, sep = "_") %in%
+        c("A375_MLN-2480", "PC3_PI-103", "PC3_torin-1"),
       paste(iLINCs_cell_line, Drug, sep = "_"),
       ""
     )),
@@ -1220,11 +802,15 @@ iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis_3.33uM,
     nudge_x = 0.004,
     nudge_y = 0.001,
     max.overlaps = Inf,
-    segment.color = 'lightgrey',
+    segment.color = "lightgrey",
     segment.size = 0.5
   )
 
 print(iLINCS_analysis_plot_membrane_receptors)
+
+
+
+
 
 
 
@@ -1244,17 +830,17 @@ y_thr <- -log10(alpha_thr)   # = 1.30103
 
 # --- Clean data (drop NAs just in case)
 iLINCS_analysis_3.33uM_clean <- iLINCS_analysis_3.33uM %>%
-  filter(is.finite(Log10_Specific_heat_change),
-         is.finite(wilcox_test_all_UP_vs_DOWN_Specific_heat))
+  filter(is.finite(Log10_Cp_37C_change),
+         is.finite(wilcox_test_all_UP_vs_DOWN_Cp_37C))
 
 # --- Classify quadrants (include boundary lines)
 iLINCS_analysis_3.33uM_clean <- iLINCS_analysis_3.33uM_clean %>%
   mutate(
     HeatCapacity_Quadrant = case_when(
-      Log10_Specific_heat_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) >= y_thr ~ "UP_regulated_heat_capacity",
-      Log10_Specific_heat_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) <  y_thr ~ "Q2",
-      Log10_Specific_heat_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) >= y_thr ~ "DOWN_regulated_heat_capacity",
-      Log10_Specific_heat_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) <  y_thr ~ "Q4",
+      Log10_Cp_37C_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) >= y_thr ~ "UP_regulated_heat_capacity",
+      Log10_Cp_37C_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) <  y_thr ~ "Q2",
+      Log10_Cp_37C_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) >= y_thr ~ "DOWN_regulated_heat_capacity",
+      Log10_Cp_37C_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) <  y_thr ~ "Q4",
       TRUE ~ "Other"
     )
   )
@@ -1268,8 +854,8 @@ quad_table <- iLINCS_analysis_3.33uM_clean %>%
                             "DOWN_regulated_heat_capacity","Q4","Other")))
 
 # --- Side totals (RIGHT = UP; LEFT = DOWN)
-up_total   <- iLINCS_analysis_3.33uM_clean %>% filter(Log10_Specific_heat_change >= 0) %>% nrow()
-down_total <- iLINCS_analysis_3.33uM_clean %>% filter(Log10_Specific_heat_change  < 0) %>% nrow()
+up_total   <- iLINCS_analysis_3.33uM_clean %>% filter(Log10_Cp_37C_change >= 0) %>% nrow()
+down_total <- iLINCS_analysis_3.33uM_clean %>% filter(Log10_Cp_37C_change  < 0) %>% nrow()
 N_all      <- nrow(iLINCS_analysis_3.33uM_clean)
 
 # --- Significant subsets (Wilcoxon)
@@ -1301,14 +887,14 @@ side_summary
 
 
 # Volcano plot
-volcano_plot_3.33uM <- ggplot(iLINCS_analysis_3.33uM, aes(x = Log10_Specific_heat_change, y = -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat))) +
+volcano_plot_3.33uM <- ggplot(iLINCS_analysis_3.33uM, aes(x = Log10_Cp_37C_change, y = -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C))) +
   theme_classic() +
   geom_point(aes(
     fill = case_when(
-      Log10_Specific_heat_change > 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301 ~ "blue",
+      Log10_Cp_37C_change > 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301 ~ "blue",
       TRUE ~ "lightgrey"
     ),
-    #alpha = ifelse(-log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, 0.6, 1)
+    #alpha = ifelse(-log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) < 1.301, 0.6, 1)
   ),
   shape = 21, size = 4, stroke = 0.6, color = "black") +
   scale_fill_identity() +
@@ -1320,9 +906,9 @@ volcano_plot_3.33uM <- ggplot(iLINCS_analysis_3.33uM, aes(x = Log10_Specific_hea
   # # Label only selected samples
   geom_text_repel(
     aes(label = ifelse(
-      -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301 &
+      -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301 &
         paste(iLINCs_cell_line, Drug, sep = "_") %in%
-        c("A375_MLN-2480", "PC3_PI-103", "LNCAP_PI-103"),
+        c("A375_MLN-2480", "PC3_PI-103", "PC3_torin-1"),
       paste(iLINCs_cell_line, Drug, sep = "_"), "")
     ),
     size = 3,
@@ -1335,11 +921,12 @@ volcano_plot_3.33uM <- ggplot(iLINCS_analysis_3.33uM, aes(x = Log10_Specific_hea
     segment.size = 0.5
   ) +
   labs(
-    x = "Log10_Specific_heat_change",
-    y = "-Log10_ks_test_all_UP_vs_DOWN_pValue",
+    x = "Log10_Cp_37C_change",
+    y = "-Log10_wilcox_test_all_UP_vs_DOWN_pValue",
     title = ""
   ) +
   xlim(-0.2, 0.2) +
+  ylim(0, 10) +
   theme(
     plot.title = element_text(color = "black", size = 14, face = "bold"),
     legend.position = "none"
@@ -1349,8 +936,8 @@ print(volcano_plot_3.33uM)
 
 
 
-# Horizontal boxplot for Log10_Specific_heat_change
-boxplot_heat_capacity <- ggplot(iLINCS_analysis_3.33uM, aes(y = "", x = Log10_Specific_heat_change)) +
+# Horizontal boxplot for Log10_Cp_37C_change
+boxplot_heat_capacity <- ggplot(iLINCS_analysis_3.33uM, aes(y = "", x = Log10_Cp_37C_change)) +
   theme_classic() +
   geom_boxplot(fill = "lightgrey", color = "black", width = 0.8) +
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.8, color = "black") +
@@ -1372,16 +959,10 @@ print(combined_plot)
 
 ggsave("combined_heat_capacity_volcano_plot.tiff",
        plot = combined_plot, width = 5, height = 8.5,
-       path = "path_to/output", dpi = 300)
+       path = "path_to/Desktop", dpi = 300)
 
 
-
-
-
-# Null hypothesis (H0): median(Log10_Specific_heat_change) = 0
-# Alternative hypothesis (HA): median(Log10_Specific_heat_change) > 0
-
-Heat_capacity_shift_significance_3.33uM <- wilcox.test(iLINCS_analysis_3.33uM$Log10_Specific_heat_change,
+Heat_capacity_shift_significance_3.33uM <- wilcox.test(iLINCS_analysis_3.33uM$Log10_Cp_37C_change,
             mu = 0, alternative = "greater")
 print(Heat_capacity_shift_significance_3.33uM)
 
@@ -1405,7 +986,8 @@ print(Heat_capacity_shift_significance_3.33uM)
 
 
 
-# Fig. 5F Box plots iLINCS 3.33 µM heat capacity ####
+# Fig. 5E Box plots iLINCS 3.33 µM heat capacity ####
+
 library(dplyr)
 library(ggplot2)
 library(readr)
@@ -1413,134 +995,125 @@ library(stringr)
 library(patchwork)
 
 
-# Load the list object from the specified directory
-directory <- "path_to//Output_script_cancer_cell_lines_3.33uM"
+
+# Load inputs
+directory <- "path_to/Output_script_cancer_cell_lines_3.33uM"
 result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
 
-
-# Input data required
-# - 'result_list_2' : named list of per-sample data.frames with at least columns: ensembl_id, z_score, p_value
-# - 'Table_ANNOTATED_iLINCs' OR a path to load it (we load from CSV below)
-# - 'all_results_2_complete_3.33uM' already loaded (as in your code above)
-#   with at least: SampleName, Log10_Specific_heat_change, wilcox_test_all_UP_vs_DOWN_Specific_heat
-
-# -- 1) Ensure the annotation table is available --
 Table_ANNOTATED_iLINCs <- read.delim(
-  "path_to//Table_ANNOTATED_iLINCs.csv",
+  "path_to/Table_ANNOTATED_iLINCs.csv",
   sep = ",", header = TRUE, stringsAsFactors = FALSE
 ) %>% dplyr::rename(ensembl_id = ensembl_gene_id)
 
+# Mapping (REP-aware)
 
-
-# ===== Fig. 5F robust mapping based on first-two-tokens key =====
-suppressMessages({ library(dplyr); library(stringr); library(patchwork); library(ggplot2) })
-
-# 0) Helper: extract canonical key "CELL_DRUG" from a list element name
+# Helper: extract canonical key "CELL_DRUG" from a list element name
 canon_from_listname <- function(x) {
   parts <- strsplit(x, "_", fixed = TRUE)[[1]]
   paste(parts[1:min(2, length(parts))], collapse = "_")
 }
 
-# 1) Build a lookup table from result_list_2 names -> canonical key
+# Prefer a candidate that starts with "<key>_REP"; fallback to shortest matching name
+prefer_rep_pick <- function(key, candidates) {
+  rep_cand <- grep(paste0("^", key, "_REP"), candidates, value = TRUE)
+  pick_set <- if (length(rep_cand) > 0) rep_cand else candidates
+  pick_set[order(nchar(pick_set))][1]
+}
+
 pool_names <- names(result_list_2)
-lookup <- tibble::tibble(
-  listname = pool_names,
-  canonical_key = vapply(pool_names, canon_from_listname, character(1))
-) %>%
-  distinct(canonical_key, .keep_all = TRUE)  # prefer first occurrence
+all_keys <- unique(vapply(pool_names, canon_from_listname, character(1)))
 
-# 2) Your requested exemplars for 3.33 µM (edit if needed)
-samples_of_interest_3.33uM <- c("A375_MLN-2480", "PC3_PI-103", "LNCAP_PI-103")
+# Build lookup: canonical_key -> chosen listname (REP preferred)
+lookup <- tibble::tibble(canonical_key = all_keys) %>%
+  rowwise() %>%
+  mutate(listname = {
+    cand <- grep(paste0("^", canonical_key, "($|_)"), pool_names, value = TRUE)
+    if (length(cand) == 0) NA_character_ else prefer_rep_pick(canonical_key, cand)
+  }) %>%
+  ungroup()
 
-# 3) Normalise requested keys to the same canonical form used by lookup
+# Requested exemplars for 3.33 µM
+samples_of_interest_3.33uM <- c("A375_MLN-2480", "PC3_PI-103", "PC3_torin-1")
+
+# Normalize requested keys to canonical form "CELL_DRUG"
 norm_key <- function(key) {
-  # tokenise and keep first two tokens; allow case differences and hyphens
   parts <- strsplit(key, "_", fixed = TRUE)[[1]]
   paste(parts[1:min(2, length(parts))], collapse = "_")
 }
+
 requested_canon <- tibble::tibble(
   requested = samples_of_interest_3.33uM,
   canonical_key = vapply(samples_of_interest_3.33uM, norm_key, character(1))
 )
 
-# 4) Try to join by canonical key; if missing, fall back to regex grep
-resolved <- requested_canon %>%
-  left_join(lookup, by = "canonical_key")
+# Resolve requested to list names via REP-aware lookup (and fallback if needed)
+resolved <- requested_canon %>% left_join(lookup, by = "canonical_key")
 
 if (any(is.na(resolved$listname))) {
-  # fallback: grep inside pool names using start-of-string match for robustness
   for (i in which(is.na(resolved$listname))) {
     key <- resolved$canonical_key[i]
     cand <- grep(paste0("^", key, "($|_)"), pool_names, value = TRUE)
-    if (length(cand) == 0) cand <- grep(key, pool_names, value = TRUE, ignore.case = TRUE)
-    if (length(cand) > 0) {
-      # choose the shortest candidate (usually canonical)
-      resolved$listname[i] <- cand[order(nchar(cand))][1]
-    }
+    if (length(cand) > 0) resolved$listname[i] <- prefer_rep_pick(key, cand)
   }
 }
 
-# 5) Abort early if still nothing mapped
 if (all(is.na(resolved$listname))) {
   stop("No result_list_2 entries matched. Inspect names(result_list_2)[1:30] and refine sample keys.")
 }
 
-# 6) Generate the per-sample boxplots HERE (visible)
-
-# Initialise containers (reset if they already exist)
+# Per-sample boxplots and summary table
 plot_list_3.33uM <- list()
 all_results_3.33uM <- data.frame(
   SampleName = character(),
-  MeanSpecific_heat_UP = numeric(),
-  MeanSpecific_heat_DOWN = numeric(),
-  ks_test_all_UP_vs_DOWN_Specific_heat = numeric(),
-  wilcox_test_all_UP_vs_DOWN_Specific_heat = numeric(),
+  MeanCp_37C_UP = numeric(),
+  MeanCp_37C_DOWN = numeric(),
+  ks_test_all_UP_vs_DOWN_Cp_37C = numeric(),
+  wilcox_test_all_UP_vs_DOWN_Cp_37C = numeric(),
   stringsAsFactors = FALSE
 )
 
-# Helper: build a canonical title from a list element name ("CELL_DRUG")
+# Build a canonical panel title "CELL_DRUG" from the list element name
 title_from_listname <- function(x) {
   parts <- strsplit(x, "_", fixed = TRUE)[[1]]
   paste(parts[1:min(2, length(parts))], collapse = "_")
 }
 
-# Unique list entries to plot, as resolved above
 plotted <- unique(stats::na.omit(resolved$listname))
 
 for (ln in plotted) {
-  # --- fetch data.frame for this sample
   df <- result_list_2[[ln]]
   if (is.null(df)) next
   
-  # --- title used for the panel and for de-dup guard
   title_plot <- title_from_listname(ln)
-  
-  # Skip if we already added this sample (avoid duplicates if multiple ln map to same canonical title)
   if (title_plot %in% all_results_3.33uM$SampleName) next
   
-  # --- join with annotation to get Specific_heat
+  # Join with annotation to get Cp_37C
   Sample_TX <- dplyr::right_join(df, Table_ANNOTATED_iLINCs, by = "ensembl_id")
   
-  # --- keep only significant z-scores
+  # Keep only significant z-scores
   Sample_TX_sig <- dplyr::filter(Sample_TX, p_value < 0.05)
   
-  # --- split by direction and compute means
+  # Split by direction and compute means
   df_up   <- dplyr::filter(Sample_TX_sig, z_score > 0)
   df_down <- dplyr::filter(Sample_TX_sig, z_score < 0)
   
-  Mean_UP   <- mean(df_up$Specific_heat,   na.rm = TRUE)
-  Mean_DOWN <- mean(df_down$Specific_heat, na.rm = TRUE)
+  Mean_UP   <- mean(df_up$Cp_37C,   na.rm = TRUE)
+  Mean_DOWN <- mean(df_down$Cp_37C, na.rm = TRUE)
   
-  # --- stats (KS + Wilcoxon)
-  KS    <- tryCatch(ks.test(df_down$Specific_heat, df_up$Specific_heat), error = function(e) NA)
-  WILCX <- tryCatch(wilcox.test(df_down$Specific_heat, df_up$Specific_heat), error = function(e) NA)
+  # Stats (KS + Wilcoxon)
+  KS    <- tryCatch(ks.test(df_down$Cp_37C, df_up$Cp_37C), error = function(e) NA)
+  WILCX <- tryCatch(wilcox.test(df_down$Cp_37C, df_up$Cp_37C), error = function(e) NA)
   
-  # --- PLOT (visible here) with y-axis 0..300
-  p <- ggplot(Sample_TX_sig,
-              aes(x = factor(z_score > 0,
-                             levels = c(FALSE, TRUE),
-                             labels = c("z_score < 0", "z_score > 0")),
-                  y = Specific_heat)) +
+  # Plot with y-axis fixed to 0..300
+  p <- ggplot(
+    Sample_TX_sig,
+    aes(
+      x = factor(z_score > 0,
+                 levels = c(FALSE, TRUE),
+                 labels = c("z_score < 0", "z_score > 0")),
+      y = Cp_37C
+    )
+  ) +
     geom_boxplot(fill = "lightgrey", alpha = 0.7, outlier.shape = 16, outlier.size = 0.8) +
     theme_classic() +
     theme(
@@ -1551,30 +1124,29 @@ for (ln in plotted) {
     ) +
     geom_vline(xintercept = 1.5, linewidth = 0.3) +
     labs(y = "", x = NULL, title = title_plot) +
-    scale_y_continuous(limits = c(0, 300))   # <-- fix y-axis scale here
+    scale_y_continuous(limits = c(0, 300))
   
-  # --- save each single panel as PDF (optional; comment out if not needed)
-  ggsave(filename = paste0(title_plot, "_Specific_heat_plot_3.33uM.pdf"),
-         plot = p, width = 4, height = 5, path = "path_to/output")
+  # Save each panel (optional)
+  ggsave(filename = paste0(title_plot, "_Cp_37C_plot_3.33uM.pdf"),
+         plot = p, width = 4, height = 5, path = "path_to/Desktop")
   
-  # --- store for the combined figure
+  # Store and append summary
   plot_list_3.33uM[[title_plot]] <- p
   
-  # --- append summary row
   all_results_3.33uM <- rbind(
     all_results_3.33uM,
     data.frame(
       SampleName = title_plot,
-      MeanSpecific_heat_UP = Mean_UP,
-      MeanSpecific_heat_DOWN = Mean_DOWN,
-      ks_test_all_UP_vs_DOWN_Specific_heat = if (is.list(KS)) KS$p.value else NA_real_,
-      wilcox_test_all_UP_vs_DOWN_Specific_heat = if (is.list(WILCX)) WILCX$p.value else NA_real_,
+      MeanCp_37C_UP = Mean_UP,
+      MeanCp_37C_DOWN = Mean_DOWN,
+      ks_test_all_UP_vs_DOWN_Cp_37C = if (is.list(KS)) KS$p.value else NA_real_,
+      wilcox_test_all_UP_vs_DOWN_Cp_37C = if (is.list(WILCX)) WILCX$p.value else NA_real_,
       stringsAsFactors = FALSE
     )
   )
 }
 
-# Ensure unique rows (belt-and-braces)
+# Ensure unique rows
 all_results_3.33uM <- dplyr::distinct(all_results_3.33uM, SampleName, .keep_all = TRUE)
 print(all_results_3.33uM)
 
@@ -1598,12 +1170,10 @@ print(all_results_3.33uM)
 
 
 
-
-
-# Fig. 5G volcano plot iLINCS 10 µM ####
+# Fig. 5F volcano plot iLINCS 10 µM ####
 
 # Load the environment of the script output
-load("path_to//Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_environment_selected.RData")
+load("path_to/Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_environment_selected.RData")
 
 
 library(readr)
@@ -1631,7 +1201,7 @@ iLINCS_analysis <- all_results_2_complete
 # Add information on cell lines and drugs and group the samples accordingly
 
 # Open the iLINCs cell_info file
-iLINCs_cell_info <- read.delim("path_to//cellinfo_beta.csv",
+iLINCs_cell_info <- read.delim("path_to/cellinfo_beta.csv",
                                sep = ",", header = T, stringsAsFactors = F) %>%
   dplyr::rename(cell_line = cell_iname)
 
@@ -1647,7 +1217,7 @@ iLINCs_cell_info_complete <- dplyr::left_join(iLINCS_analysis, iLINCs_cell_info,
 
 # Add the drug targets
 # In the original data frame, some of the drug targets, were missing. They have been added together with the relative signaling pathways. The file has been save as .csv file and loaded here below.
-iLINCs_drug_info_complete <- read.delim("path_to//iLINCs_complete_data_selected_samples.csv",
+iLINCs_drug_info_complete <- read.delim("path_to/iLINCs_complete_data_selected_samples.csv",
                                         sep = ",", header = T, stringsAsFactors = F) %>%
   dplyr::select("Anti_cancer_agents", "TARGET", "TARGET_PATHWAY") %>%
   dplyr::rename(Drug = Anti_cancer_agents)
@@ -1687,31 +1257,31 @@ print(length(Total_anti_cancer_agents))
 
 
 
-iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10_Specific_heat_change, y = -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Specific_heat))) +
+iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10_Cp_37C_change, y = -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Cp_37C))) +
   theme_classic() +
   geom_point(aes(
-    fill = ifelse(Log10_Specific_heat_change > 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301, "blue", 
-                  ifelse(Log10_Specific_heat_change > 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, "lightgrey",
-                         ifelse(Log10_Specific_heat_change < 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301, "lightgrey", 
-                                ifelse(Log10_Specific_heat_change < 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, "lightgrey", "lightgrey"))))),
+    fill = ifelse(Log10_Cp_37C_change > 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301, "blue", 
+                  ifelse(Log10_Cp_37C_change > 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Cp_37C) < 1.301, "lightgrey",
+                         ifelse(Log10_Cp_37C_change < 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301, "lightgrey", 
+                                ifelse(Log10_Cp_37C_change < 0 & -log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Cp_37C) < 1.301, "lightgrey", "lightgrey"))))),
     color = "black",  # Border color for all points
     size = 4,  # Set a larger fixed size for all points
     shape = 21,  # Set a consistent shape for all points
-    alpha = ifelse(-log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, 0.6, 1),
+    alpha = ifelse(-log10(iLINCS_analysis$wilcox_test_all_UP_vs_DOWN_Cp_37C) < 1.301, 0.6, 1),
     stroke = 0.6) +  # Stroke for empty circles' border
   scale_fill_identity() +
   scale_color_identity() +
   scale_alpha_identity() +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = 1.301, linetype = "dashed", color = "black") +
-  labs(x = "Log10_Specific_heat_change", y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", title = "") +
+  labs(x = "Log10_Cp_37C_change", y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", title = "") +
   theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
         legend.position = "none") +
   xlim(-0.2, 0.2) +
   geom_text_repel(
     aes(label = ifelse(
-      Log10_Specific_heat_change > 0 &
-        -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301,
+      Log10_Cp_37C_change > 0 &
+        -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301,
       paste(cell_line, Drug, sep = "_"),
       NA_character_  # use NA so unlabeled points are skipped cleanly
     )),
@@ -1722,13 +1292,6 @@ iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10
 
 
 print(iLINCS_analysis_plot_membrane_receptors)
-
-# Save the plot
-# ggsave("iLINCS_analysis_volcano_plot.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "path_to/output")
-
-
-
-
 
 
 
@@ -1742,15 +1305,15 @@ print(iLINCS_analysis_plot_membrane_receptors)
 
 
 # Add the name of the specific cell lines and pharmacologic agents to the plot
-iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10_Specific_heat_change, y = -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat))) +
+iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10_Cp_37C_change, y = -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C))) +
   theme_classic() +
   geom_point(
     aes(
       fill = ifelse(
-        Log10_Specific_heat_change > 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301, "blue", 
+        Log10_Cp_37C_change > 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301, "blue", 
         "lightgrey"
       ),
-      #alpha = ifelse(-log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, 0.6, 1)
+      #alpha = ifelse(-log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) < 1.301, 0.6, 1)
     ),
     shape = 21,     # fixed value, placed outside aes()
     size = 4,
@@ -1761,7 +1324,7 @@ iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10
   scale_alpha_identity() +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = 1.301, linetype = "dashed", color = "black") +
-  labs(x = "Log10_Specific_heat_change", y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", title = "") +
+  labs(x = "Log10_Cp_37C_change", y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", title = "") +
   theme(
     plot.title = element_text(color = "black", size = 14, face = "bold"),
     legend.position = "none"
@@ -1769,8 +1332,8 @@ iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10
   xlim(-0.2, 0.2) +
   geom_text_repel(
     aes(label = ifelse(
-      Log10_Specific_heat_change > 0 &
-        -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301 &
+      Log10_Cp_37C_change > 0 &
+        -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301 &
         paste(cell_line, Drug, sep = "_") %in% c("ES2_lapatinib", "A375_tozasertib", "PC3_torin-1"),
       paste(cell_line, Drug, sep = "_"),
       ""
@@ -1810,17 +1373,17 @@ y_thr <- -log10(alpha_thr)   # 1.30103
 # Make sure it's a tibble and drop NAs IN-PLACE
 iLINCS_analysis <- iLINCS_analysis %>%
   as_tibble() %>%
-  filter(is.finite(Log10_Specific_heat_change),
-         is.finite(wilcox_test_all_UP_vs_DOWN_Specific_heat))
+  filter(is.finite(Log10_Cp_37C_change),
+         is.finite(wilcox_test_all_UP_vs_DOWN_Cp_37C))
 
 # Classify
 iLINCS_analysis <- iLINCS_analysis %>%
   mutate(
     HeatCapacity_Quadrant = case_when(
-      Log10_Specific_heat_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) >= y_thr ~ "UP_regulated_heat_capacity",
-      Log10_Specific_heat_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) <  y_thr ~ "Q2",
-      Log10_Specific_heat_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) >= y_thr ~ "DOWN_regulated_heat_capacity",
-      Log10_Specific_heat_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) <  y_thr ~ "Q4",
+      Log10_Cp_37C_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) >= y_thr ~ "UP_regulated_heat_capacity",
+      Log10_Cp_37C_change >= 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) <  y_thr ~ "Q2",
+      Log10_Cp_37C_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) >= y_thr ~ "DOWN_regulated_heat_capacity",
+      Log10_Cp_37C_change  < 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) <  y_thr ~ "Q4",
       TRUE ~ "Other"
     )
   )
@@ -1834,8 +1397,8 @@ quad_table <- iLINCS_analysis %>%
                             "DOWN_regulated_heat_capacity","Q4","Other")))
 
 # Side totals
-up_total   <- sum(iLINCS_analysis$Log10_Specific_heat_change >= 0, na.rm = TRUE)
-down_total <- sum(iLINCS_analysis$Log10_Specific_heat_change  < 0, na.rm = TRUE)
+up_total   <- sum(iLINCS_analysis$Log10_Cp_37C_change >= 0, na.rm = TRUE)
+down_total <- sum(iLINCS_analysis$Log10_Cp_37C_change  < 0, na.rm = TRUE)
 N_all      <- nrow(iLINCS_analysis)
 
 sig_up   <- sum(iLINCS_analysis$HeatCapacity_Quadrant == "UP_regulated_heat_capacity", na.rm = TRUE)
@@ -1864,14 +1427,14 @@ side_summary
 
 
 # ---- Volcano plot ----
-volcano_plot <- ggplot(iLINCS_analysis, aes(x = Log10_Specific_heat_change, y = -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat))) +
+volcano_plot <- ggplot(iLINCS_analysis, aes(x = Log10_Cp_37C_change, y = -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C))) +
   theme_classic() +
   geom_point(aes(
     fill = case_when(
-      Log10_Specific_heat_change > 0 & -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301 ~ "blue",
+      Log10_Cp_37C_change > 0 & -log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) > 1.301 ~ "blue",
       TRUE ~ "lightgrey"
     ),
-    #alpha = ifelse(-log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) < 1.301, 0.6, 1)
+    #alpha = ifelse(-log10(wilcox_test_all_UP_vs_DOWN_Cp_37C) < 1.301, 0.6, 1)
   ),
   shape = 21, size = 4, stroke = 0.6, color = "black") +
   scale_fill_identity() +
@@ -1879,27 +1442,9 @@ volcano_plot <- ggplot(iLINCS_analysis, aes(x = Log10_Specific_heat_change, y = 
   geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
   geom_hline(yintercept = 1.301, linetype = "dashed", color = "black") +
   
-  # Uncomment the geom_text_repel to remove the labels
-  # # Label only selected samples
-  # geom_text_repel(
-  #   aes(label = ifelse(
-  #     -log10(wilcox_test_all_UP_vs_DOWN_Specific_heat) > 1.301 &
-  #       paste(iLINCs_cell_line, Drug, sep = "_") %in%
-  #       c("ES2_lapatinib", "A375_tozasertib", "PC3_torin-1"),
-  #     paste(iLINCs_cell_line, Drug, sep = "_"), "")
-  #   ),
-  #   size = 3,
-  #   box.padding = 0.5,
-  #   point.padding = 0.5,
-  #   nudge_x = 0.004,
-  #   nudge_y = 0.001,
-  #   max.overlaps = Inf,
-  #   segment.color = 'lightgrey',
-  #   segment.size = 0.5
-  # ) +
   
   labs(
-    x = "Log10_Specific_heat_change",
+    x = "Log10_Cp_37C_change",
     y = "-Log10_ks_test_all_UP_vs_DOWN_pValue",
     title = ""
   ) +
@@ -1910,8 +1455,8 @@ volcano_plot <- ggplot(iLINCS_analysis, aes(x = Log10_Specific_heat_change, y = 
   )
 
 
-# Horizontal boxplot for Log10_Specific_heat_change
-boxplot_heat_capacity <- ggplot(iLINCS_analysis, aes(y = "", x = Log10_Specific_heat_change)) +
+# Horizontal boxplot for Log10_Cp_37C_change
+boxplot_heat_capacity <- ggplot(iLINCS_analysis, aes(y = "", x = Log10_Cp_37C_change)) +
   theme_classic() +
   geom_boxplot(fill = "lightgrey", color = "black", width = 0.8) +
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.8, color = "black") +
@@ -1933,16 +1478,11 @@ print(combined_plot)
 
 ggsave("combined_heat_capacity_volcano_plot.tiff",
        plot = combined_plot, width = 5, height = 8.5,
-       path = "path_to/output", dpi = 300)
+       path = "path_to/Desktop", dpi = 300)
 
 
 
-
-
-# Null hypothesis (H0): median(Log10_Specific_heat_change) = 0
-# Alternative hypothesis (HA): median(Log10_Specific_heat_change) > 0
-
-Heat_capacity_shift_significance_10uM <- wilcox.test(iLINCS_analysis$Log10_Specific_heat_change,
+Heat_capacity_shift_significance_10uM <- wilcox.test(iLINCS_analysis$Log10_Cp_37C_change,
                                                 mu = 0, alternative = "greater")
 print(Heat_capacity_shift_significance_10uM)
 
@@ -1963,24 +1503,10 @@ print(Heat_capacity_shift_significance_10uM)
 
 
 
-# Fig. 5H Box plots iLINCS 10 µM heat capacity ####
+# Fig. 5G Box plots iLINCS 10 µM heat capacity ####
 
 
 # Box plots heat capacity
-
-# Load the complete data generated in STEP 7 the R script:
-# path_to//Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_AC.R
-
-# Load the list object from the specified directory (STEP 7 of the original R script)
-# directory <- "path_to//Output_script_cancer_cell_lines_10uM"
-# result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
-
-
-# Select the samples of interest:
-# all_results_2_complete <- read.csv("path_to//Results_analysis_RNA_MFE_iLINCS/Results_analysis_all_cancer_cell_lines_10uM/Results_all_cancer_cell_lines_10uM.csv",
-#                                    header = TRUE, sep = ",", stringsAsFactors = FALSE) 
-
-# The objects "result_list_2" and "all_results_2_complete" have been saved in the intial RData object
 
 # Edit the names of the samples to match the iLINCs format
 all_results_2_complete$iLINCs_cell_line_drug <- sub("^(([^_]*_[^_]*)_).*", "\\1", all_results_2_complete$SampleName)
@@ -1988,39 +1514,39 @@ all_results_2_complete$iLINCs_cell_line_drug <- sub("^(([^_]*_[^_]*)_).*", "\\1"
 # Remove the trailing underscore
 all_results_2_complete$iLINCs_cell_line_drug <- gsub("_$", "", all_results_2_complete$iLINCs_cell_line_drug)
 
-iLINCs_all_results_2_complete_filtered_Specific_heat <- dplyr::filter(all_results_2_complete,  iLINCs_cell_line_drug %in% c("PC3_torin-1", "A375_tozasertib", "ES2_lapatinib")) %>%
-  #dplyr::filter(Log10_Specific_heat_change > 0) %>%
-  dplyr::filter(ks_test_all_UP_vs_DOWN_Specific_heat < 0.05)  # Filter for significant samples
+iLINCs_all_results_2_complete_filtered_Cp_37C <- dplyr::filter(all_results_2_complete,  iLINCs_cell_line_drug %in% c("PC3_torin-1", "A375_tozasertib", "ES2_lapatinib")) %>%
+  #dplyr::filter(Log10_Cp_37C_change > 0) %>%
+  dplyr::filter(ks_test_all_UP_vs_DOWN_Cp_37C < 0.05)  # Filter for significant samples
 
 
 # Filter the result_list_2 list object to only include the selected samples
-iLINCs_selected_samples_Specific_heat <- result_list_2[grep(paste(iLINCs_all_results_2_complete_filtered_Specific_heat$SampleName, collapse = "|"), names(result_list_2))]
+iLINCs_selected_samples_Cp_37C <- result_list_2[grep(paste(iLINCs_all_results_2_complete_filtered_Cp_37C$SampleName, collapse = "|"), names(result_list_2))]
 
 
 
 # Open the Table_ANNOTATED_iLINCs
-Table_ANNOTATED_iLINCs <- read.delim("path_to//Table_ANNOTATED_iLINCs.csv",
+Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
 
 
 
 
-# Generate the data of the Specific_heat values
+# Generate the data of the Cp_37C values
 # Initialize plot_list as an empty list
 plot_list <- list()
 
 # Initialize all_results as an empty data frame with appropriate column names
 all_results <- data.frame(SampleName = character(),
-                          MeanSpecific_heat_UP = numeric(),
-                          MeanSpecific_heat_DOWN = numeric(),
-                          ks_test_all_UP_vs_DOWN_Specific_heat = numeric(),
+                          MeanCp_37C_UP = numeric(),
+                          MeanCp_37C_DOWN = numeric(),
+                          ks_test_all_UP_vs_DOWN_Cp_37C = numeric(),
                           stringsAsFactors = FALSE)
 
 # Function to analyze the data and store plots
 process_result_list <- function(Sample_name) { 
   message("Processing ", Sample_name)
-  df <- iLINCs_selected_samples_Specific_heat[[Sample_name]] # Access individual data frames
+  df <- iLINCs_selected_samples_Cp_37C[[Sample_name]] # Access individual data frames
   
   # Modify title_plot_1 to remove text after the second underscore
   split_title <- strsplit(Sample_name, "_")[[1]]
@@ -2039,27 +1565,27 @@ process_result_list <- function(Sample_name) {
   Sample_name_TX_filtered <- dplyr::filter(Sample_name_TX, p_value < 0.05)
   
   # Calculate means for up-regulated and down-regulated genes
-  Specific_heat_Sample_name_UP <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
-  Mean_Specific_heat_Sample_name_UP <- mean(Specific_heat_Sample_name_UP$Specific_heat, na.rm = TRUE)
+  Cp_37C_Sample_name_UP <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
+  Mean_Cp_37C_Sample_name_UP <- mean(Cp_37C_Sample_name_UP$Cp_37C, na.rm = TRUE)
   
-  Specific_heat_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
-  Mean_Specific_heat_Sample_name_DOWN <- mean(Specific_heat_Sample_name_DOWN$Specific_heat, na.rm = TRUE)
+  Cp_37C_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
+  Mean_Cp_37C_Sample_name_DOWN <- mean(Cp_37C_Sample_name_DOWN$Cp_37C, na.rm = TRUE)
   
   # Perform statistical tests
-  TTEST <- t.test(Specific_heat_Sample_name_DOWN$Specific_heat, Specific_heat_Sample_name_UP$Specific_heat, paired = FALSE)
+  TTEST <- t.test(Cp_37C_Sample_name_DOWN$Cp_37C, Cp_37C_Sample_name_UP$Cp_37C, paired = FALSE)
   
-  ks_test_all_UP_vs_DOWN <- ks.test(Specific_heat_Sample_name_DOWN$Specific_heat, Specific_heat_Sample_name_UP$Specific_heat)
+  ks_test_all_UP_vs_DOWN <- ks.test(Cp_37C_Sample_name_DOWN$Cp_37C, Cp_37C_Sample_name_UP$Cp_37C)
   
-  wilcox_test_all_UP_vs_DOWN <- wilcox.test(Specific_heat_Sample_name_DOWN$Specific_heat, 
-                                            Specific_heat_Sample_name_UP$Specific_heat)
+  wilcox_test_all_UP_vs_DOWN <- wilcox.test(Cp_37C_Sample_name_DOWN$Cp_37C, 
+                                            Cp_37C_Sample_name_UP$Cp_37C)
   
-  # Calculate the net Specific_heat change
-  Sample_name_TX_net_Specific_heat_change <- Sample_name_TX_filtered %>% 
-    dplyr::mutate(Net_Specific_heat_change = (Specific_heat * z_score) * (-1))
-  Net_Specific_heat_change <- sum(Sample_name_TX_net_Specific_heat_change$Net_Specific_heat_change, na.rm = TRUE)
+  # Calculate the net Cp_37C change
+  Sample_name_TX_net_Cp_37C_change <- Sample_name_TX_filtered %>% 
+    dplyr::mutate(Net_Cp_37C_change = (Cp_37C * z_score) * (-1))
+  Net_Cp_37C_change <- sum(Sample_name_TX_net_Cp_37C_change$Net_Cp_37C_change, na.rm = TRUE)
   
   ## Generate box plot 
-  Specific_heat_Sample_name <- ggplot(Sample_name_TX_filtered, aes(x = factor(z_score > 0), y = Specific_heat)) +
+  Cp_37C_Sample_name <- ggplot(Sample_name_TX_filtered, aes(x = factor(z_score > 0), y = Cp_37C)) +
     geom_boxplot(fill = "lightgrey", alpha = 0.7) +
     #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
     theme_classic() +
@@ -2076,23 +1602,23 @@ process_result_list <- function(Sample_name) {
   
   # Save the plot individually for each sample
   ggsave(
-    filename = paste0(Sample_name, "_Specific_heat_plot.pdf"),  # Create a unique filename
-    plot = Specific_heat_Sample_name,
+    filename = paste0(Sample_name, "_Cp_37C_plot.pdf"),  # Create a unique filename
+    plot = Cp_37C_Sample_name,
     width = 4,
     height = 5,
-    path = "path_to/output"  # Specify the path to save the plot
+    path = "path_to/Desktop"  # Specify the path to save the plot
   )
   
   # Store the plot in the list
-  plot_list[[Sample_name]] <<- Specific_heat_Sample_name
+  plot_list[[Sample_name]] <<- Cp_37C_Sample_name
   
   # Create a data frame with the results for the current sample
   sample_results <- data.frame(
     SampleName = Sample_name,
-    MeanSpecific_heat_UP = Mean_Specific_heat_Sample_name_UP,
-    MeanSpecific_heat_DOWN = Mean_Specific_heat_Sample_name_DOWN,
-    ks_test_all_UP_vs_DOWN_Specific_heat = ks_test_all_UP_vs_DOWN$p.value,
-    wilcox_test_all_UP_vs_DOWN_Specific_heat = wilcox_test_all_UP_vs_DOWN$p.value  # Add Wilcoxon p-value
+    MeanCp_37C_UP = Mean_Cp_37C_Sample_name_UP,
+    MeanCp_37C_DOWN = Mean_Cp_37C_Sample_name_DOWN,
+    ks_test_all_UP_vs_DOWN_Cp_37C = ks_test_all_UP_vs_DOWN$p.value,
+    wilcox_test_all_UP_vs_DOWN_Cp_37C = wilcox_test_all_UP_vs_DOWN$p.value  # Add Wilcoxon p-value
   )
   
   
@@ -2101,7 +1627,7 @@ process_result_list <- function(Sample_name) {
 }
 
 # Run the function for each iLINCS data frame
-Data_result_list <- lapply(names(iLINCs_selected_samples_Specific_heat), process_result_list)
+Data_result_list <- lapply(names(iLINCs_selected_samples_Cp_37C), process_result_list)
 
 # Convert to data frame to clearly see the data
 # Bind rows and include a source column
@@ -2132,17 +1658,17 @@ print(Data_combined)
 
 
 
-# Fig. 5I box plots heat capacity cell cycle ####
+# Fig. 5H box plots heat capacity cell cycle ####
 
 # To load the environment
-load("path_to//Analysis_cell_cycle_genes_MFE_environment.RData")
+load("path_to/Analysis_cell_cycle_genes_MFE_environment.RData")
 
 
 # Heat capacity changes MCF7 G0G1 vs G2M
 # MCF7 box plot heat capacity all transcripts UP- and DOWN-regulated
 
 
-Plot_Heat_capacity_MCF7_G0G1_vs_G2M <- ggplot(GSE94479_G0G1vsG2M, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_MCF7_G0G1_vs_G2M <- ggplot(GSE94479_G0G1vsG2M, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   # geom_jitter(width = 0.1, size = 1, alpha = 0.3) +  # optional
   theme_classic() +
@@ -2164,7 +1690,7 @@ Plot_Heat_capacity_MCF7_G0G1_vs_G2M <- ggplot(GSE94479_G0G1vsG2M, aes(x = factor
 print(Plot_Heat_capacity_MCF7_G0G1_vs_G2M)
 
 # Save plot
-ggsave("Plot_Heat_capacity_MCF7_G0G1_vs_G2M.pdf", plot = Plot_Heat_capacity_MCF7_G0G1_vs_G2M, width = 4, height = 6, path = "path_to/output")
+ggsave("Plot_Heat_capacity_MCF7_G0G1_vs_G2M.pdf", plot = Plot_Heat_capacity_MCF7_G0G1_vs_G2M, width = 4, height = 6, path = "path_to/Desktop")
 
 
 
@@ -2173,21 +1699,21 @@ HeatCap_MCF7_G0G1vsG2M_UP <- dplyr::filter(GSE94479_G0G1vsG2M, log2FoldChange > 
 HeatCap_MCF7_G0G1vsG2M_DOWN <- dplyr::filter(GSE94479_G0G1vsG2M, log2FoldChange < 0)
 
 TTEST_heat_capacity_MCF7_all_UP_vs_DOWN <- t.test(
-  HeatCap_MCF7_G0G1vsG2M_DOWN$Specific_heat,
-  HeatCap_MCF7_G0G1vsG2M_UP$Specific_heat,
+  HeatCap_MCF7_G0G1vsG2M_DOWN$Cp_37C,
+  HeatCap_MCF7_G0G1vsG2M_UP$Cp_37C,
   paired = FALSE
 )
 print(TTEST_heat_capacity_MCF7_all_UP_vs_DOWN)
 
 ks_test_MCF7_all_UP_vs_DOWN_heat_capacity <- ks.test(
-  HeatCap_MCF7_G0G1vsG2M_DOWN$Specific_heat,
-  HeatCap_MCF7_G0G1vsG2M_UP$Specific_heat
+  HeatCap_MCF7_G0G1vsG2M_DOWN$Cp_37C,
+  HeatCap_MCF7_G0G1vsG2M_UP$Cp_37C
 )
 print(ks_test_MCF7_all_UP_vs_DOWN_heat_capacity)
 
 wilcox_test_MCF7_all_UP_vs_DOWN_heat_capacity <- wilcox.test(
-  HeatCap_MCF7_G0G1vsG2M_DOWN$Specific_heat,
-  HeatCap_MCF7_G0G1vsG2M_UP$Specific_heat
+  HeatCap_MCF7_G0G1vsG2M_DOWN$Cp_37C,
+  HeatCap_MCF7_G0G1vsG2M_UP$Cp_37C
 )
 print(wilcox_test_MCF7_all_UP_vs_DOWN_heat_capacity)
 
@@ -2203,7 +1729,7 @@ print(wilcox_test_MCF7_all_UP_vs_DOWN_heat_capacity)
 # Heat capacity changes GSE104736 HeLa G1 vs G2
 # Box plot heat capacity for all transcripts UP- and DOWN-regulated
 
-Plot_Heat_capacity_HeLa_G1_vs_G2 <- ggplot(MFE_GSE104736_G1_vs_G2, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_HeLa_G1_vs_G2 <- ggplot(MFE_GSE104736_G1_vs_G2, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   # geom_jitter(width = 0.1, size = 1, alpha = 0.3) +  # optional
   theme_classic() +
@@ -2225,7 +1751,7 @@ Plot_Heat_capacity_HeLa_G1_vs_G2 <- ggplot(MFE_GSE104736_G1_vs_G2, aes(x = facto
 print(Plot_Heat_capacity_HeLa_G1_vs_G2)
 
 # Save the plot
-ggsave("Plot_Heat_capacity_HeLa_G1_vs_G2.pdf", plot = Plot_Heat_capacity_HeLa_G1_vs_G2, width = 4, height = 6, path = "path_to/output")
+ggsave("Plot_Heat_capacity_HeLa_G1_vs_G2.pdf", plot = Plot_Heat_capacity_HeLa_G1_vs_G2, width = 4, height = 6, path = "path_to/Desktop")
 
 
 
@@ -2234,21 +1760,21 @@ HeatCap_HeLa_G1_vs_G2_UP <- dplyr::filter(MFE_GSE104736_G1_vs_G2, log2FoldChange
 HeatCap_HeLa_G1_vs_G2_DOWN <- dplyr::filter(MFE_GSE104736_G1_vs_G2, log2FoldChange < 0)
 
 TTEST_heat_capacity_HeLa_G1_vs_G2_UP_vs_DOWN <- t.test(
-  HeatCap_HeLa_G1_vs_G2_DOWN$Specific_heat,
-  HeatCap_HeLa_G1_vs_G2_UP$Specific_heat,
+  HeatCap_HeLa_G1_vs_G2_DOWN$Cp_37C,
+  HeatCap_HeLa_G1_vs_G2_UP$Cp_37C,
   paired = FALSE
 )
 print(TTEST_heat_capacity_HeLa_G1_vs_G2_UP_vs_DOWN)
 
 ks_test_HeLa_G1_vs_G2_UP_vs_DOWN_heat_capacity <- ks.test(
-  HeatCap_HeLa_G1_vs_G2_DOWN$Specific_heat,
-  HeatCap_HeLa_G1_vs_G2_UP$Specific_heat
+  HeatCap_HeLa_G1_vs_G2_DOWN$Cp_37C,
+  HeatCap_HeLa_G1_vs_G2_UP$Cp_37C
 )
 print(ks_test_HeLa_G1_vs_G2_UP_vs_DOWN_heat_capacity)
 
 wilcox_test_HeLa_G1_vs_G2_UP_vs_DOWN_heat_capacity <- wilcox.test(
-  HeatCap_HeLa_G1_vs_G2_DOWN$Specific_heat,
-  HeatCap_HeLa_G1_vs_G2_UP$Specific_heat
+  HeatCap_HeLa_G1_vs_G2_DOWN$Cp_37C,
+  HeatCap_HeLa_G1_vs_G2_UP$Cp_37C
 )
 print(wilcox_test_HeLa_G1_vs_G2_UP_vs_DOWN_heat_capacity)
 
@@ -2270,7 +1796,7 @@ print(wilcox_test_HeLa_G1_vs_G2_UP_vs_DOWN_heat_capacity)
 # Heat capacity changes MCF7 S vs G0G1
 # MCF7 box plot heat capacity all transcripts UP- and DOWN-regulated
 
-Plot_Heat_capacity_MCF7_SvsG0G1 <- ggplot(GSE94479_SvsG0G1, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_MCF7_SvsG0G1 <- ggplot(GSE94479_SvsG0G1, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   # geom_jitter(width = 0.1, size = 1, alpha = 0.3) +  # optional
   theme_classic() +
@@ -2292,7 +1818,7 @@ Plot_Heat_capacity_MCF7_SvsG0G1 <- ggplot(GSE94479_SvsG0G1, aes(x = factor(log2F
 print(Plot_Heat_capacity_MCF7_SvsG0G1)
 
 # Save plot
-ggsave("Plot_Heat_capacity_MCF7_SvsG0G1.pdf", plot = Plot_Heat_capacity_MCF7_SvsG0G1, width = 4, height = 6, path = "path_to/output")
+ggsave("Plot_Heat_capacity_MCF7_SvsG0G1.pdf", plot = Plot_Heat_capacity_MCF7_SvsG0G1, width = 4, height = 6, path = "path_to/Desktop")
 
 
 
@@ -2301,21 +1827,21 @@ HeatCap_MCF7_SvsG0G1_UP <- dplyr::filter(GSE94479_SvsG0G1, log2FoldChange > 0)
 HeatCap_MCF7_SvsG0G1_DOWN <- dplyr::filter(GSE94479_SvsG0G1, log2FoldChange < 0)
 
 TTEST_heat_capacity_MCF7_SvsG0G1_UP_vs_DOWN <- t.test(
-  HeatCap_MCF7_SvsG0G1_DOWN$Specific_heat,
-  HeatCap_MCF7_SvsG0G1_UP$Specific_heat,
+  HeatCap_MCF7_SvsG0G1_DOWN$Cp_37C,
+  HeatCap_MCF7_SvsG0G1_UP$Cp_37C,
   paired = FALSE
 )
 print(TTEST_heat_capacity_MCF7_SvsG0G1_UP_vs_DOWN)
 
 ks_test_MCF7_SvsG0G1_UP_vs_DOWN_heat_capacity <- ks.test(
-  HeatCap_MCF7_SvsG0G1_DOWN$Specific_heat,
-  HeatCap_MCF7_SvsG0G1_UP$Specific_heat
+  HeatCap_MCF7_SvsG0G1_DOWN$Cp_37C,
+  HeatCap_MCF7_SvsG0G1_UP$Cp_37C
 )
 print(ks_test_MCF7_SvsG0G1_UP_vs_DOWN_heat_capacity)
 
 wilcox_test_MCF7_SvsG0G1_UP_vs_DOWN_heat_capacity <- wilcox.test(
-  HeatCap_MCF7_SvsG0G1_DOWN$Specific_heat,
-  HeatCap_MCF7_SvsG0G1_UP$Specific_heat
+  HeatCap_MCF7_SvsG0G1_DOWN$Cp_37C,
+  HeatCap_MCF7_SvsG0G1_UP$Cp_37C
 )
 print(wilcox_test_MCF7_SvsG0G1_UP_vs_DOWN_heat_capacity)
 
@@ -2333,7 +1859,7 @@ print(wilcox_test_MCF7_SvsG0G1_UP_vs_DOWN_heat_capacity)
 # Heat capacity changes GSE104736 HeLa S vs G1
 # Box plot heat capacity for all transcripts UP- and DOWN-regulated
 
-Plot_Heat_capacity_HeLa_S_vs_G1 <- ggplot(MFE_GSE104736_S_vs_G1, aes(x = factor(log2FoldChange > 0), y = Specific_heat)) +
+Plot_Heat_capacity_HeLa_S_vs_G1 <- ggplot(MFE_GSE104736_S_vs_G1, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
   geom_boxplot(fill = "lightgrey", alpha = 0.7) +
   # geom_jitter(width = 0.1, size = 1, alpha = 0.3) +  # optional
   theme_classic() +
@@ -2355,7 +1881,7 @@ Plot_Heat_capacity_HeLa_S_vs_G1 <- ggplot(MFE_GSE104736_S_vs_G1, aes(x = factor(
 print(Plot_Heat_capacity_HeLa_S_vs_G1)
 
 # Save the plot
-ggsave("Plot_Heat_capacity_HeLa_S_vs_G1.pdf", plot = Plot_Heat_capacity_HeLa_S_vs_G1, width = 4, height = 6, path = "path_to/output")
+ggsave("Plot_Heat_capacity_HeLa_S_vs_G1.pdf", plot = Plot_Heat_capacity_HeLa_S_vs_G1, width = 4, height = 6, path = "path_to/Desktop")
 
 
 
@@ -2365,21 +1891,21 @@ HeatCap_HeLa_S_vs_G1_UP <- dplyr::filter(MFE_GSE104736_S_vs_G1, log2FoldChange >
 HeatCap_HeLa_S_vs_G1_DOWN <- dplyr::filter(MFE_GSE104736_S_vs_G1, log2FoldChange < 0)
 
 TTEST_heat_capacity_HeLa_S_vs_G1_UP_vs_DOWN <- t.test(
-  HeatCap_HeLa_S_vs_G1_DOWN$Specific_heat,
-  HeatCap_HeLa_S_vs_G1_UP$Specific_heat,
+  HeatCap_HeLa_S_vs_G1_DOWN$Cp_37C,
+  HeatCap_HeLa_S_vs_G1_UP$Cp_37C,
   paired = FALSE
 )
 print(TTEST_heat_capacity_HeLa_S_vs_G1_UP_vs_DOWN)
 
 ks_test_HeLa_S_vs_G1_UP_vs_DOWN_heat_capacity <- ks.test(
-  HeatCap_HeLa_S_vs_G1_DOWN$Specific_heat,
-  HeatCap_HeLa_S_vs_G1_UP$Specific_heat
+  HeatCap_HeLa_S_vs_G1_DOWN$Cp_37C,
+  HeatCap_HeLa_S_vs_G1_UP$Cp_37C
 )
 print(ks_test_HeLa_S_vs_G1_UP_vs_DOWN_heat_capacity)
 
 wilcox_test_HeLa_S_vs_G1_UP_vs_DOWN_heat_capacity <- wilcox.test(
-  HeatCap_HeLa_S_vs_G1_DOWN$Specific_heat,
-  HeatCap_HeLa_S_vs_G1_UP$Specific_heat
+  HeatCap_HeLa_S_vs_G1_DOWN$Cp_37C,
+  HeatCap_HeLa_S_vs_G1_UP$Cp_37C
 )
 print(wilcox_test_HeLa_S_vs_G1_UP_vs_DOWN_heat_capacity)
 
