@@ -1,668 +1,237 @@
-# CELL CYCLE TRANSCRIPTOME–THERMODYNAMICS PIPELINE
-# Aim:
-#   To investigate how RNA folding energetics (Minimum Free Energy [MFE] and heat capacity) couple with 
-#   differential gene expression across cell cycle phases in two human cancer cell lines: MCF-7 (breast cancer) 
-#   and HeLa (cervical cancer).
-#
-# Datasets:
-#   - MCF-7: GSE94479 (Liu et al., PNAS 2017), transcriptome profiling across G0/G1, S, and G2/M phases.
-#   - HeLa: GSE104736 (Boström et al., PLOS ONE 2017), FUCCI-sorted cells in G1, S, and G2 phases with three replicates/condition.
-#   - RNA structural annotations (Table_ANNOTATED) from RNAfold, providing transcript-level Normalized_MFE (ΔGfold/nt) 
-#     and Specific_heat.
-#
-# Workflow:
-#   1) Data preparation
-#        - Load raw or processed counts from GREIN/GEO.
-#        - Harmonize sample metadata (cell line, condition, phase).
-#        - Construct DESeq2 datasets (design ~ condition) and perform QC (sample clustering, PCA, heatmaps).
-#   2) Differential expression
-#        - Perform pairwise contrasts between phases (G0/G1 vs G2/M, S vs G0/G1, G2/M vs S for MCF-7; G1 vs G2, S vs G1, G2 vs S for HeLa).
-#        - Prefilter low counts, normalize, run DESeq().
-#        - Extract significant transcripts (padj < 0.05) and join with RNA structural metrics.
-#   3) Thermodynamic integration
-#        - Scatterplots: log2FC vs Normalized_MFE and vs Specific_heat.
-#        - Violin + boxplots: distribution of MFE/heat capacity in up- vs down-regulated transcripts.
-#        - Statistical testing: group means, two-sample t-tests, Kolmogorov–Smirnov tests, and quantile-tail comparisons (0.25, 0.75).
-#   4) Phase-level weighted profiles
-#        - Load TPMs and average replicates by phase.
-#        - Compute expression-weighted mean Normalized_MFE ± weighted SD for each phase.
-#        - Plot phase-wise dot plots with error bars and transcript-level weighted distributions.
-#   5) Gene set enrichment (KEGG GSEA)
-#        - Collapse to gene-level log2FC (with baseMean weights where relevant).
-#        - Map Ensembl IDs → Entrez (biomaRt).
-#        - Run clusterProfiler::gseKEGG per contrast.
-#        - Visualize pathway-level results with dot plots, NES heatmaps, and bubble plots.
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(biomaRt)
+  library(clusterProfiler)
+  library(DESeq2)
+})
 
+gencode_mfe_file <- "path_to/Gencode_TX_norm_MFE_HC_table.csv"
+mcf7_differential_expression_rdata_file <- "path_to/Analysis_RNAseq_PNAS_2017_environment.RData"
+mcf7_transcript_tpm_file <- "path_to/GSE94479_TranscriptLevel_TPM_data.csv"
+mcf7_transcript_raw_counts_file <- "path_to/GSE94479_TranscriptLevel_Raw_data.csv"
+hela_transcript_raw_counts_file <- "path_to/GSE104736_TranscriptLevel_Raw_data.csv"
+hela_transcript_tpm_file <- "path_to/GSE104736_TranscriptLevel_TPM_data.csv"
+hela_gene_raw_counts_file <- "path_to/GSE104736_GeneLevel_Raw_data.csv"
+analysis_output_dir <- "path_to/cell_cycle_analysis_outputs"
+figure2_results_file <- file.path(
+  analysis_output_dir,
+  "cell_cycle_analysis_results_for_Fig_2.rds"
+)
 
+stop_if_missing <- function(file_path, label) {
+  if (!file.exists(file_path)) {
+    stop(label, " not found: ", file_path, call. = FALSE)
+  }
+}
 
-library(dplyr)
-library(readr)
-library(ggplot2)
-library(scales)
-library(gtools)
-library(tibble)
-library(reshape2)
-library(tidyverse)
-library(ggpubr)
-library(tidyr)
-library(biomaRt)
+load_rdata_objects <- function(file_path, object_names) {
+  object_environment <- new.env(parent = baseenv())
+  loaded_names <- load(file_path, envir = object_environment)
+  missing_names <- setdiff(object_names, loaded_names)
+  if (length(missing_names) > 0) {
+    stop(
+      "Required objects missing from ", basename(file_path), ": ",
+      paste(missing_names, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  mget(object_names, envir = object_environment, inherits = FALSE)
+}
 
-Gencode_TX_norm_MFE_HC_table <- read.delim("path_to/Gencode_TX_norm_MFE_HC_table.csv",
-                                           sep = ",", header = T, stringsAsFactors = F)
+input_files <- c(
+  gencode_mfe_file,
+  mcf7_differential_expression_rdata_file,
+  mcf7_transcript_tpm_file,
+  mcf7_transcript_raw_counts_file,
+  hela_transcript_raw_counts_file,
+  hela_transcript_tpm_file,
+  hela_gene_raw_counts_file
+)
+
+for (input_file in input_files) {
+  stop_if_missing(input_file, "Input file")
+}
+
+dir.create(analysis_output_dir, recursive = TRUE, showWarnings = FALSE)
+
+Gencode_TX_norm_MFE_HC_table <- read.delim(
+  gencode_mfe_file,
+  sep = ",",
+  header = TRUE,
+  stringsAsFactors = FALSE
+)
 Table_ANNOTATED <- Gencode_TX_norm_MFE_HC_table
 
+mcf7_differential_expression_objects <- load_rdata_objects(
+  mcf7_differential_expression_rdata_file,
+  c(
+    "GSE94479_Deseq_G0G1vsG2M_IDs",
+    "GSE94479_Deseq_SvsG0G1_IDs",
+    "GSE94479_Deseq_G2MvsS_IDs"
+  )
+)
 
+GSE94479_Deseq_G0G1vsG2M_IDs <-
+  mcf7_differential_expression_objects[["GSE94479_Deseq_G0G1vsG2M_IDs"]]
+GSE94479_Deseq_SvsG0G1_IDs <-
+  mcf7_differential_expression_objects[["GSE94479_Deseq_SvsG0G1_IDs"]]
+GSE94479_Deseq_G2MvsS_IDs <-
+  mcf7_differential_expression_objects[["GSE94479_Deseq_G2MvsS_IDs"]]
 
-
-# Cell cycle MCF-7 cell line ####
-# Data have been obtained from: Yin Liu et al. PNAS 2017 'Transcriptional landscape of the human cell cycle'. In this paper the authors identify the genes expressed in each phase of the cell cycle.
-
-
-# IMPORTANT
-# These data have been analysed in the GREIN database GSE94479, but there are only single replicates for the different phases of the cell cycle (G0/G1, S and M phases), therefore it is not possible to perform differential expression analysis using the DESeq2 package.
-# I have accessed the original data in Gene Expression Omnibus (GEO) and I have downloaded the differential gene expression data that are present in the GEO database.
-# In GEO it is also possible to download the gene-level normalized counts of the MCF7 cell line profiled in G0/G1, S and M phases. There are two replicates for each cell cycle phase. However this is useless as DESeq2 requires the raw counts for differential gene expression analysis.
-
-
-# Load the script which gives the differential gene expression data of the cell cycle phases
-source("path_to/Analysis_RNAseq_PNAS_2017.R")
-
-
-## Differential gene expression G0/G1 vs G2/M ####
-# IMPORTANT:
-# The DeSeq2 analysis has been done by contrasting G2M vs G0G1, we need the G0G1 vs G2M. 
-# By multiplying by -1 will invert the direction of the fold changes, effectively switching the comparison.
-# and filter the significant expression changes and join with table containing the MFE values
-GSE94479_G0G1vsG2M <- dplyr::filter(GSE94479_Deseq_G0G1vsG2M_IDs, padj < 0.05) %>%
-  dplyr::left_join(Table_ANNOTATED, by="ensembl_transcript_id") %>%
+GSE94479_G0G1vsG2M <- GSE94479_Deseq_G0G1vsG2M_IDs %>%
+  dplyr::filter(padj < 0.05) %>%
+  dplyr::left_join(Table_ANNOTATED, by = "ensembl_transcript_id") %>%
   dplyr::filter(!is.na(Normalized_MFE))
 
-
-# Generate a scatter plot Log2_FC vs Normalized_MFE
-ggplot(GSE94479_G0G1vsG2M, aes(y=Normalized_MFE, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.3) +
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, linewidth=0.3) +
-  #xlim(-5.5,5.5) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Normalized_MFE",x="Log2_FC_expression",title="G0G1vsG2M_MCF7")
-
-
-# Generate a violin plot of the Normalized_MFE values of the genes up-regulated in G0G1 vs G2M
-MCF7_G0G1_vs_G2M_plot <- ggplot(GSE94479_G0G1vsG2M, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
-  geom_violin(fill = "lightgrey", color = "black", size = 0.5) +  # Set violin fill to grey
-  geom_boxplot(width = 0.1, color = "black", fill = "white", outlier.shape = NA) +  # Add white boxplot inside violins
-  theme_classic() +
-  ylim(-0.6, 0) +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    plot.title = element_text(size = 10),
-    axis.text.x = element_text(size = 16, color = "black")
-  ) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(
-    y = "Normalized_MFE", 
-    x = NULL, 
-    title = "MCF7_G0G1_vs_G2M_Log2_FC_adj.P<0.05"
-  ) +
-  scale_x_discrete(labels = c("log2_FC < 0", "log2_FC > 0"))
-
-print(MCF7_G0G1_vs_G2M_plot)
-
-# Save the combined plot
-ggsave("MCF7_G0G1_vs_G2M_plot.pdf", plot = MCF7_G0G1_vs_G2M_plot, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-
-# Statistical analysis of the MFE values of the genes up-regulated in G0G1 vs G2M
-MFE_MCF7_G0G1vsG2M_UP <- dplyr::filter(GSE94479_G0G1vsG2M, log2FoldChange > 0)
-Mean_MFE_MCF7_G0G1vsG2M_UP <- mean(MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE, na.rm = TRUE)
-
-MFE_MCF7_G0G1vsG2M_DOWN <- dplyr::filter(GSE94479_G0G1vsG2M, log2FoldChange < 0)
-Mean_MFE_MCF7_G0G1vsG2M_DOWN <- mean(MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE, na.rm = TRUE)
-
-TTEST_MFE_MCF7_G0G1vsG2M_all_UP_vs_DOWN <- t.test(MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE, MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE, paired=FALSE)
-print(TTEST_MFE_MCF7_G0G1vsG2M_all_UP_vs_DOWN)
-
-
-
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MCF7_G0G1vsG2M_all_UP_vs_DOWN <- ks.test(MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE, MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE)
-print(ks_test_MCF7_G0G1vsG2M_all_UP_vs_DOWN)
-
-quantile_075_MFE_MCF7_G0G1vsG2M_UP <- quantile(MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE, probs = c(0.75)) 
-quantile_075_MFE_MCF7_G0G1vsG2M_DOWN <- quantile(MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE, probs = c(0.75)) 
-# Values above 0.75 quantile
-ks_test_MFE_MCF7_G0G1vsG2M_075_above <- ks.test(MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE[MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE >= quantile_075_MFE_MCF7_G0G1vsG2M_UP],
-                                           MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE[MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE >= quantile_075_MFE_MCF7_G0G1vsG2M_DOWN])
-print(ks_test_MFE_MCF7_G0G1vsG2M_075_above)
-
-# Look at the differences between the 0.25 quantile 
-quantile_025_MFE_MCF7_G0G1vsG2M_UP <- quantile(MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE, probs = c(0.25)) 
-quantile_025_MFE_MCF7_G0G1vsG2M_DOWN <- quantile(MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE, probs = c(0.25)) 
-# Values below 0.25 quantile
-ks_test_MF_MCF7_G0G1vsG2M_025_below <- ks.test(MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE[MFE_MCF7_G0G1vsG2M_UP$Normalized_MFE <= quantile_025_MFE_MCF7_G0G1vsG2M_UP],
-                                          MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE[MFE_MCF7_G0G1vsG2M_DOWN$Normalized_MFE <= quantile_025_MFE_MCF7_G0G1vsG2M_DOWN])
-print(ks_test_MF_MCF7_G0G1vsG2M_025_below)
-
-
-
-
-
-
-
-# Differential gene expression G0G1 vs G2M heat capacity changes
-
-# This is calculated on the total n. of transcripts with a significant log2 fold change
-# Generate a scatter plot Log2_FC vs heat capacity
-ggplot(GSE94479_G0G1vsG2M, aes(y=Cp_37C, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.1)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  xlim(-12, 12) +
-  ylim(0,400) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Heat capacity (J/C)",x="Log2_FC_expression",title="G0G1vsG2M_MCF7")
-
-
-# Show the data with a box plot
-Plot_GSE94479_G0G1vsG2M_heat_capacity <- ggplot(GSE94479_G0G1vsG2M, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
-  geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  ylim(0, 400) +
-  theme(legend.position = "none", 
-        axis.title = element_text(size = 15), 
-        plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 10, color = "black")) +
-  theme(plot.title = element_text(size = 20)) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(y="Heat capacity (J/C)",x="",title="G0G1vsG2M_MCF7") +
-  scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
-
-print(Plot_GSE94479_G0G1vsG2M_heat_capacity)
-ggsave("Plot_GSE94479_G0G1vsG2M_heat_capacity.pdf", plot = Plot_GSE94479_G0G1vsG2M_heat_capacity, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-
-Mean_heat_capacity_MFE_MCF7_G0G1vsG2M_UP <- mean(MFE_MCF7_G0G1vsG2M_UP$Cp_37C, na.rm = TRUE)
-Mean_heat_capacity_MFE_MCF7_G0G1vsG2M_DOWN <- mean(MFE_MCF7_G0G1vsG2M_DOWN$Cp_37C, na.rm = TRUE)
-TTEST_heat_capacity_MFE_MCF7_G0G1vsG2M_all_UP_vs_DOWN <- t.test(MFE_MCF7_G0G1vsG2M_DOWN$Cp_37C, MFE_MCF7_G0G1vsG2M_UP$Cp_37C, paired=FALSE)
-print(TTEST_heat_capacity_MFE_MCF7_G0G1vsG2M_all_UP_vs_DOWN)
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MFE_MCF7_G0G1vsG2M_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_MCF7_G0G1vsG2M_DOWN$Cp_37C, MFE_MCF7_G0G1vsG2M_UP$Cp_37C)
-print(ks_test_MFE_MCF7_G0G1vsG2M_all_UP_vs_DOWN_heat_capacity)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Differential gene expression S vs G0/G1 ####
-
-# Open the differential gene expression G2M vs S and filter the significant expression changes and join with table containing the MFE values
-GSE94479_SvsG0G1 <- dplyr::filter(GSE94479_Deseq_SvsG0G1_IDs, padj < 0.05) %>%
-  dplyr::left_join(Table_ANNOTATED, by="ensembl_transcript_id") %>%
+GSE94479_SvsG0G1 <- GSE94479_Deseq_SvsG0G1_IDs %>%
+  dplyr::filter(padj < 0.05) %>%
+  dplyr::left_join(Table_ANNOTATED, by = "ensembl_transcript_id") %>%
   dplyr::filter(!is.na(Normalized_MFE))
 
-# Generate a scatter plot Log2_FC vs Normalized_MFE
-library(ggplot2)
-ggplot(GSE94479_SvsG0G1, aes(y=Normalized_MFE, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.3) +
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  #xlim(-5.5,5.5) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Normalized_MFE",x="Log2_FC_expression",title="SvsG0G1_MCF-7")
-
-
-
-# Generate a violin plot of the Normalized_MFE values of the genes up-regulated in G0G1 vs G2M
-MCF7_SvsG0G1_plot <- ggplot(GSE94479_SvsG0G1, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
-  geom_violin(fill = "lightgrey", color = "black", size = 0.5) +  # Set violin fill to grey
-  geom_boxplot(width = 0.1, color = "black", fill = "white", outlier.shape = NA) +  # Add white boxplot inside violins
-  theme_classic() +
-  ylim(-0.6, 0) +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    plot.title = element_text(size = 10),
-    axis.text.x = element_text(size = 16, color = "black")
-  ) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(
-    y = "Normalized_MFE", 
-    x = NULL, 
-    title = "MCF7_S_vsG0G1_Log2_FC_adj.P<0.05"
-  ) +
-  scale_x_discrete(labels = c("log2_FC < 0", "log2_FC > 0"))
-
-print(MCF7_SvsG0G1_plot)
-
-# Save the combined plot
-ggsave("MCF7_SvsG0G1_plot.pdf", plot = MCF7_SvsG0G1_plot, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-
-# Statistical analysis of the MFE values of the genes up-regulated in G0G1 vs G2M
-MFE_MCF7_SvsG0G1_UP <- dplyr::filter(GSE94479_SvsG0G1, log2FoldChange > 0)
-Mean_MFE_MCF7_SvsG0G1_UP <- mean(MFE_MCF7_SvsG0G1_UP$Normalized_MFE)
-
-MFE_MCF7_SvsG0G1_DOWN <- dplyr::filter(GSE94479_SvsG0G1, log2FoldChange < 0)
-Mean_MFE_MCF7_SvsG0G1_DOWN <- mean(MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE)
-
-TTEST_MFE_MCF7_SvsG0G1_all_UP_vs_DOWN <- t.test(MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE, MFE_MCF7_SvsG0G1_UP$Normalized_MFE, paired=FALSE)
-print(TTEST_MFE_MCF7_SvsG0G1_all_UP_vs_DOWN)
-
-
-
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MCF7_SvsG0G1_all_UP_vs_DOWN <- ks.test(MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE, MFE_MCF7_SvsG0G1_UP$Normalized_MFE)
-print(ks_test_MCF7_SvsG0G1_all_UP_vs_DOWN)
-
-quantile_075_MFE_MCF7_SvsG0G1_UP <- quantile(MFE_MCF7_SvsG0G1_UP$Normalized_MFE, probs = c(0.75)) 
-quantile_075_MFE_MCF7_SvsG0G1_DOWN <- quantile(MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE, probs = c(0.75)) 
-# Values above 0.75 quantile
-ks_test_MFE_MCF7_SvsG0G1_075_above <- ks.test(MFE_MCF7_SvsG0G1_UP$Normalized_MFE[MFE_MCF7_SvsG0G1_UP$Normalized_MFE >= quantile_075_MFE_MCF7_SvsG0G1_UP],
-                                             MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE[MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE >= quantile_075_MFE_MCF7_SvsG0G1_DOWN])
-print(ks_test_MFE_MCF7_SvsG0G1_075_above)
-
-# Look at the differences between the 0.25 quantile 
-quantile_025_MFE_MCF7_SvsG0G1_UP <- quantile(MFE_MCF7_SvsG0G1_UP$Normalized_MFE, probs = c(0.25)) 
-quantile_025_MFE_MCF7_SvsG0G1_DOWN <- quantile(MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE, probs = c(0.25)) 
-# Values below 0.25 quantile
-ks_test_MF_MCF7_SvsG0G1_025_below <- ks.test(MFE_MCF7_SvsG0G1_UP$Normalized_MFE[MFE_MCF7_SvsG0G1_UP$Normalized_MFE <= quantile_025_MFE_MCF7_SvsG0G1_UP],
-                                            MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE[MFE_MCF7_SvsG0G1_DOWN$Normalized_MFE <= quantile_025_MFE_MCF7_SvsG0G1_DOWN])
-print(ks_test_MF_MCF7_SvsG0G1_025_below)
-
-
-
-
-
-
-
-
-
-
-
-
-# Differential gene expression S vs G0G1 heat capacity changes
-
-# This is calculated on the total n. of transcripts with a significant log2 fold change
-# Generate a scatter plot Log2_FC vs heat capacity
-ggplot(GSE94479_SvsG0G1, aes(y=Cp_37C, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.1)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  xlim(-12, 12) +
-  ylim(0,400) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Heat capacity (J/C)",x="Log2_FC_expression",title="SvsG0G1_MCF7")
-
-
-# Show the data with a box plot
-Plot_GSE94479_SvsG0G1_heat_capacity <- ggplot(GSE94479_SvsG0G1, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
-  geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  ylim(0, 400) +
-  theme(legend.position = "none", 
-        axis.title = element_text(size = 20), 
-        plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 16, color = "black")) +
-  theme(plot.title = element_text(size = 20)) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(y="Heat capacity (J/C)",x="",title="SvsG0G1_MCF7") +
-  scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
-
-
-print(Plot_GSE94479_SvsG0G1_heat_capacity)
-
-# Save the combined plot
-ggsave("Plot_GSE94479_SvsG0G1_heat_capacity.pdf", plot = Plot_GSE94479_SvsG0G1_heat_capacity, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-Mean_heat_capacity_MFE_MCF7_SvsG0G1_UP <- mean(MFE_MCF7_SvsG0G1_UP$Cp_37C, na.rm = TRUE)
-Mean_heat_capacity_MFE_MCF7_SvsG0G1_DOWN <- mean(MFE_MCF7_SvsG0G1_DOWN$Cp_37C, na.rm = TRUE)
-TTEST_heat_capacity_MFE_MCF7_SvsG0G1_all_UP_vs_DOWN <- t.test(MFE_MCF7_SvsG0G1_DOWN$Cp_37C, MFE_MCF7_SvsG0G1_UP$Cp_37C, paired=FALSE)
-print(TTEST_heat_capacity_MFE_MCF7_SvsG0G1_all_UP_vs_DOWN)
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MFE_MCF7_SvsG0G1_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_MCF7_SvsG0G1_DOWN$Cp_37C, MFE_MCF7_SvsG0G1_UP$Cp_37C)
-print(ks_test_MFE_MCF7_SvsG0G1_all_UP_vs_DOWN_heat_capacity)
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Differential gene expression G2/M vs S ####
-
-# Open the differential gene expression G2M vs S and filter the significant expression changes and join with table containing the MFE values
-GSE94479_G2MvsS <- dplyr::filter(GSE94479_Deseq_G2MvsS_IDs, padj < 0.05) %>%
-  dplyr::left_join(Table_ANNOTATED, by="ensembl_transcript_id") %>%
-  dplyr::filter(!is.na(Normalized_MFE))
-
-
-# Generate a scatter plot Log2_FC vs Normalized_MFE
-library(ggplot2)
-ggplot(GSE94479_G2MvsS, aes(y=Normalized_MFE, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.3) +
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  #xlim(-5.5,5.5) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Normalized_MFE",x="Log2_FC_expression",title="G2MvsS_MCF7")
-
-
-
-# Generate a violin plot of the Normalized_MFE values of the genes up-regulated in G0G1 vs G2M
-MCF7_G2MvsS_plot <- ggplot(GSE94479_G2MvsS, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
-  geom_violin(fill = "lightgrey", color = "black", size = 0.5) +  # Set violin fill to grey
-  geom_boxplot(width = 0.1, color = "black", fill = "white", outlier.shape = NA) +  # Add white boxplot inside violins
-  theme_classic() +
-  ylim(-0.6, 0) +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    plot.title = element_text(size = 10),
-    axis.text.x = element_text(size = 16, color = "black")
-  ) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(
-    y = "Normalized_MFE", 
-    x = NULL, 
-    title = "MCF7_G2M_vs_S_Log2_FC_adj.P<0.05"
-  ) +
-  scale_x_discrete(labels = c("log2_FC < 0", "log2_FC > 0"))
-
-print(MCF7_G2MvsS_plot)
-
-# Save the combined plot
-ggsave("MCF7_G2MvsS_plot.pdf", plot = MCF7_G2MvsS_plot, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-
-
-# Statistical analysis of the MFE values of the genes up-regulated in G0G1 vs G2M
-MFE_MCF7_G2MvsS_UP <- dplyr::filter(GSE94479_G2MvsS, log2FoldChange > 0)
-Mean_MFE_MCF7_G2MvsS_UP <- mean(MFE_MCF7_G2MvsS_UP$Normalized_MFE)
-
-MFE_MCF7_G2MvsS_DOWN <- dplyr::filter(GSE94479_G2MvsS, log2FoldChange < 0)
-Mean_MFE_MCF7_G2MvsS_DOWN <- mean(MFE_MCF7_G2MvsS_DOWN$Normalized_MFE)
-
-TTEST_MFE_MCF7_G2MvsS_all_UP_vs_DOWN <- t.test(MFE_MCF7_G2MvsS_DOWN$Normalized_MFE, MFE_MCF7_G2MvsS_UP$Normalized_MFE, paired=FALSE)
-print(TTEST_MFE_MCF7_G2MvsS_all_UP_vs_DOWN)
-
-
-
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MCF7_G2MvsS_all_UP_vs_DOWN <- ks.test(MFE_MCF7_G2MvsS_DOWN$Normalized_MFE, MFE_MCF7_G2MvsS_UP$Normalized_MFE)
-print(ks_test_MCF7_G2MvsS_all_UP_vs_DOWN)
-
-quantile_075_MFE_MCF7_G2MvsS_UP <- quantile(MFE_MCF7_G2MvsS_UP$Normalized_MFE, probs = c(0.75)) 
-quantile_075_MFE_MCF7_G2MvsS_DOWN <- quantile(MFE_MCF7_G2MvsS_DOWN$Normalized_MFE, probs = c(0.75)) 
-# Values above 0.75 quantile
-ks_test_MFE_MCF7_G2MvsS_075_above <- ks.test(MFE_MCF7_G2MvsS_UP$Normalized_MFE[MFE_MCF7_G2MvsS_UP$Normalized_MFE >= quantile_075_MFE_MCF7_G2MvsS_UP],
-                                             MFE_MCF7_G2MvsS_DOWN$Normalized_MFE[MFE_MCF7_G2MvsS_DOWN$Normalized_MFE >= quantile_075_MFE_MCF7_G2MvsS_DOWN])
-print(ks_test_MFE_MCF7_G2MvsS_075_above)
-
-# Look at the differences between the 0.25 quantile 
-quantile_025_MFE_MCF7_G2MvsS_UP <- quantile(MFE_MCF7_G2MvsS_UP$Normalized_MFE, probs = c(0.25)) 
-quantile_025_MFE_MCF7_G2MvsS_DOWN <- quantile(MFE_MCF7_G2MvsS_DOWN$Normalized_MFE, probs = c(0.25)) 
-# Values below 0.25 quantile
-ks_test_MF_MCF7_G2MvsS_025_below <- ks.test(MFE_MCF7_G2MvsS_UP$Normalized_MFE[MFE_MCF7_G2MvsS_UP$Normalized_MFE <= quantile_025_MFE_MCF7_G2MvsS_UP],
-                                            MFE_MCF7_G2MvsS_DOWN$Normalized_MFE[MFE_MCF7_G2MvsS_DOWN$Normalized_MFE <= quantile_025_MFE_MCF7_G2MvsS_DOWN])
-print(ks_test_MF_MCF7_G2MvsS_025_below)
-
-
-
-
-
-
-
-
-
-
-# Differential gene expression G2MvsS heat capacity changes
-
-# This is calculated on the total n. of transcripts with a significant log2 fold change
-# Generate a scatter plot Log2_FC vs heat capacity
-ggplot(GSE94479_G2MvsS, aes(y=Cp_37C, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.1)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  xlim(-12, 12) +
-  ylim(0,400) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Heat capacity (J/C)",x="Log2_FC_expression",title="G2MvsS_MCF7")
-
-
-# Show the data with a box plot
-Plot_GSE94479_G2MvsS_heat_capacity <- ggplot(GSE94479_G2MvsS, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
-  geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  ylim(0, 400) +
-  theme(legend.position = "none", 
-        axis.title = element_text(size = 20), 
-        plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 16, color = "black")) +
-  theme(plot.title = element_text(size = 20)) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(y="Heat capacity (J/C)",x="",title="G2MvsS_MCF7") +
-  scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
-
-print(Plot_GSE94479_G2MvsS_heat_capacity)
-
-# Save the combined plot
-ggsave("Plot_GSE94479_G2MvsS_heat_capacity.pdf", plot = Plot_GSE94479_G2MvsS_heat_capacity, width = 5, height = 6, path = "path_to/Desktop")
-
-Mean_heat_capacity_MFE_MCF7_G2MvsS_UP <- mean(MFE_MCF7_G2MvsS_UP$Cp_37C, na.rm = TRUE)
-Mean_heat_capacity_MFE_MCF7_G2MvsS_DOWN <- mean(MFE_MCF7_G2MvsS_DOWN$Cp_37C, na.rm = TRUE)
-TTEST_heat_capacity_MFE_MCF7_G2MvsS_all_UP_vs_DOWN <- t.test(MFE_MCF7_G2MvsS_DOWN$Cp_37C, MFE_MCF7_G2MvsS_UP$Cp_37C, paired=FALSE)
-print(TTEST_heat_capacity_MFE_MCF7_G2MvsS_all_UP_vs_DOWN)
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MFE_MCF7_G2MvsS_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_MCF7_G2MvsS_DOWN$Cp_37C, MFE_MCF7_G2MvsS_UP$Cp_37C)
-print(ks_test_MFE_MCF7_G2MvsS_all_UP_vs_DOWN_heat_capacity)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# GSEA cell proliferation and mitogenic signaling cell cycle phases ####
-
-# G2M vs G0G1
-GSE94479_Deseq_G0G1vsG2M_IDs_gene_level_df <- GSE94479_Deseq_G0G1vsG2M_IDs %>%
-  dplyr::filter(!is.na(log2FoldChange), !is.na(baseMean), baseMean > 0) %>%
-  dplyr::group_by(ensembl_gene_id) %>%
-  dplyr::summarise(
-    weighted_log2FC = sum(log2FoldChange * baseMean) / sum(baseMean),
-    min_pvalue = min(pvalue, na.rm = TRUE),
-    mean_baseMean = mean(baseMean, na.rm = TRUE),
-    n_transcripts = n()
+aggregate_transcript_results_to_gene <- function(differential_expression_table) {
+  differential_expression_table %>%
+    dplyr::filter(
+      !is.na(log2FoldChange),
+      !is.na(baseMean),
+      baseMean > 0,
+      !is.na(ensembl_gene_id)
+    ) %>%
+    dplyr::group_by(ensembl_gene_id) %>%
+    dplyr::summarise(
+      weighted_log2FC = sum(log2FoldChange * baseMean) / sum(baseMean),
+      min_pvalue = min(pvalue, na.rm = TRUE),
+      mean_baseMean = mean(baseMean, na.rm = TRUE),
+      n_transcripts = dplyr::n(),
+      .groups = "drop"
+    )
+}
+
+map_ensembl_gene_to_entrez <- function(ensembl_gene_ids, ensembl_mart) {
+  biomaRt::getBM(
+    attributes = c("entrezgene_id", "ensembl_gene_id"),
+    filters = "ensembl_gene_id",
+    values = ensembl_gene_ids,
+    mart = ensembl_mart
   ) %>%
-  ungroup() %>%
-  dplyr::filter(!is.na(ensembl_gene_id))
+    dplyr::distinct(ensembl_gene_id, .keep_all = TRUE) %>%
+    dplyr::filter(!is.na(entrezgene_id))
+}
 
+select_one_gene_per_entrez <- function(expression_table) {
+  expression_table %>%
+    dplyr::group_by(entrezgene_id) %>%
+    dplyr::slice_max(
+      order_by = abs(weighted_log2FC),
+      n = 1,
+      with_ties = FALSE
+    ) %>%
+    dplyr::ungroup()
+}
 
-# Check uniqueness of ensembl_gene_id
-ensembl_unique <- sum(duplicated(GSE94479_Deseq_G0G1vsG2M_IDs_gene_level_df$ensembl_gene_id))
-cat("Number of duplicated ensembl_gene_id:", ensembl_unique, "\n")
+run_kegg_gsea <- function(data_frame, log_fc_columns, analysis_labels) {
+  if (length(log_fc_columns) != length(analysis_labels)) {
+    stop("GSEA column and label counts do not match.", call. = FALSE)
+  }
 
+  gsea_results <- list()
 
+  for (analysis_index in seq_along(log_fc_columns)) {
+    log_fc_column <- log_fc_columns[[analysis_index]]
+    analysis_label <- analysis_labels[[analysis_index]]
 
-# S vs G0G1
-GSE94479_Deseq_SvsG0G1_IDs_gene_level_df <- GSE94479_Deseq_SvsG0G1_IDs %>%
-  dplyr::filter(!is.na(log2FoldChange), !is.na(baseMean), baseMean > 0) %>%
-  dplyr::group_by(ensembl_gene_id) %>%
-  dplyr::summarise(
-    weighted_log2FC = sum(log2FoldChange * baseMean) / sum(baseMean),
-    min_pvalue = min(pvalue, na.rm = TRUE),
-    mean_baseMean = mean(baseMean, na.rm = TRUE),
-    n_transcripts = n()
+    ranked_table <- data_frame %>%
+      dplyr::select(entrezgene_id, !!rlang::sym(log_fc_column)) %>%
+      dplyr::filter(
+        !is.na(entrezgene_id),
+        !is.na(!!rlang::sym(log_fc_column))
+      )
+
+    ranked_values <- ranked_table[[log_fc_column]]
+    names(ranked_values) <- ranked_table$entrezgene_id
+    ranked_values <- ranked_values[!duplicated(names(ranked_values))]
+    ranked_values <- sort(ranked_values, decreasing = TRUE)
+
+    if (length(ranked_values) == 0) {
+      stop("No ranked genes available for ", analysis_label, ".", call. = FALSE)
+    }
+
+    gsea_result <- clusterProfiler::gseKEGG(
+      ranked_values,
+      organism = "hsa",
+      keyType = "kegg",
+      pvalueCutoff = 0.05,
+      pAdjustMethod = "BH",
+      minGSSize = 10,
+      maxGSSize = 500
+    )
+
+    if (!is.null(gsea_result) && nrow(gsea_result) > 0) {
+      gsea_results[[analysis_label]] <- gsea_result
+    }
+  }
+
+  if (length(gsea_results) == 0) {
+    stop("No significant KEGG GSEA results were returned.", call. = FALSE)
+  }
+
+  do.call(
+    rbind,
+    lapply(names(gsea_results), function(analysis_label) {
+      result_table <- as.data.frame(gsea_results[[analysis_label]])
+      result_table$Sample <- analysis_label
+      result_table
+    })
+  )
+}
+
+GSE94479_Deseq_G0G1vsG2M_IDs_gene_level_df <-
+  aggregate_transcript_results_to_gene(GSE94479_Deseq_G0G1vsG2M_IDs)
+GSE94479_Deseq_SvsG0G1_IDs_gene_level_df <-
+  aggregate_transcript_results_to_gene(GSE94479_Deseq_SvsG0G1_IDs)
+GSE94479_Deseq_G2MvsS_IDs_gene_level_df <-
+  aggregate_transcript_results_to_gene(GSE94479_Deseq_G2MvsS_IDs)
+
+mart <- biomaRt::useMart(
+  biomart = "ensembl",
+  dataset = "hsapiens_gene_ensembl",
+  host = "https://useast.ensembl.org"
+)
+
+GSE94479_Deseq_G0G1vsG2M_entrez_IDs <-
+  GSE94479_Deseq_G0G1vsG2M_IDs_gene_level_df %>%
+  dplyr::left_join(
+    map_ensembl_gene_to_entrez(
+      GSE94479_Deseq_G0G1vsG2M_IDs_gene_level_df$ensembl_gene_id,
+      mart
+    ),
+    by = "ensembl_gene_id"
   ) %>%
-  ungroup() %>%
-  dplyr::filter(!is.na(ensembl_gene_id))
+  select_one_gene_per_entrez()
 
-
-# Check uniqueness of ensembl_gene_id
-ensembl_unique <- sum(duplicated(GSE94479_Deseq_SvsG0G1_IDs_gene_level_df$ensembl_gene_id))
-cat("Number of duplicated ensembl_gene_id:", ensembl_unique, "\n")
-
-
-
-
-# G2M vs S
-GSE94479_Deseq_G2MvsS_IDs_gene_level_df <- GSE94479_Deseq_G2MvsS_IDs %>%
-  dplyr::filter(!is.na(log2FoldChange), !is.na(baseMean), baseMean > 0) %>%
-  dplyr::group_by(ensembl_gene_id) %>%
-  dplyr::summarise(
-    weighted_log2FC = sum(log2FoldChange * baseMean) / sum(baseMean),
-    min_pvalue = min(pvalue, na.rm = TRUE),
-    mean_baseMean = mean(baseMean, na.rm = TRUE),
-    n_transcripts = n()
+GSE94479_Deseq_SvsG0G1_entrez_IDs <-
+  GSE94479_Deseq_SvsG0G1_IDs_gene_level_df %>%
+  dplyr::left_join(
+    map_ensembl_gene_to_entrez(
+      GSE94479_Deseq_SvsG0G1_IDs_gene_level_df$ensembl_gene_id,
+      mart
+    ),
+    by = "ensembl_gene_id"
   ) %>%
-  ungroup() %>%
-  dplyr::filter(!is.na(ensembl_gene_id))
+  select_one_gene_per_entrez()
 
+GSE94479_Deseq_G2MvsS_entrez_IDs <-
+  GSE94479_Deseq_G2MvsS_IDs_gene_level_df %>%
+  dplyr::left_join(
+    map_ensembl_gene_to_entrez(
+      GSE94479_Deseq_G2MvsS_IDs_gene_level_df$ensembl_gene_id,
+      mart
+    ),
+    by = "ensembl_gene_id"
+  ) %>%
+  select_one_gene_per_entrez()
 
-# Check uniqueness of ensembl_gene_id
-ensembl_unique <- sum(duplicated(GSE94479_Deseq_G2MvsS_IDs_gene_level_df$ensembl_gene_id))
-cat("Number of duplicated ensembl_gene_id:", ensembl_unique, "\n")
-
-
-
-
-
-
-
-
-
-# Add a column in each data frame with the entrez gene IDs required for the GSEA analysis
-library(biomaRt)
-mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
-
-gene_ids <- (GSE94479_Deseq_G0G1vsG2M_IDs_gene_level_df$ensembl_gene_id) 
-res_gene_entrez_id_G0G1vsG2M <- getBM(attributes = c('entrezgene_id',
-                                           'ensembl_gene_id'),
-                            filters = 'ensembl_gene_id',
-                            values = gene_ids,
-                            mart = mart)
-res_gene_entrez_id_G0G1vsG2M <- dplyr::distinct(res_gene_entrez_id_G0G1vsG2M, ensembl_gene_id, .keep_all = TRUE) %>%
-  dplyr::filter(!is.na(entrezgene_id)) 
-GSE94479_Deseq_G0G1vsG2M_entrez_IDs <- dplyr::left_join(GSE94479_Deseq_G0G1vsG2M_IDs_gene_level_df, res_gene_entrez_id_G0G1vsG2M, by = "ensembl_gene_id")
-# Some entrez_id map on multiple ensembl_gene_id
-# Collapse to one row per entrezgene_id using the highest absolute log2FC
-GSE94479_Deseq_G0G1vsG2M_entrez_IDs <- GSE94479_Deseq_G0G1vsG2M_entrez_IDs %>%
-  group_by(entrezgene_id) %>%
-  slice_max(order_by = abs(weighted_log2FC), n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-
-
-
-
-gene_ids <- (GSE94479_Deseq_SvsG0G1_IDs_gene_level_df$ensembl_gene_id)
-res_gene_entrez_id_SvsG0G1 <- getBM(attributes = c('entrezgene_id',
-                                           'ensembl_gene_id'),
-                            filters = 'ensembl_gene_id',
-                            values = gene_ids,
-                            mart = mart)
-res_gene_entrez_id_SvsG0G1 <- dplyr::distinct(res_gene_entrez_id_SvsG0G1, ensembl_gene_id, .keep_all = TRUE) %>%
-  dplyr::filter(!is.na(entrezgene_id))
-GSE94479_Deseq_SvsG0G1_entrez_IDs <- dplyr::left_join(GSE94479_Deseq_SvsG0G1_IDs_gene_level_df, res_gene_entrez_id_SvsG0G1, by = "ensembl_gene_id")
-# Some entrez_id map on multiple ensembl_gene_id
-# Collapse to one row per entrezgene_id using the highest absolute log2FC
-GSE94479_Deseq_SvsG0G1_entrez_IDs <- GSE94479_Deseq_SvsG0G1_entrez_IDs %>%
-  group_by(entrezgene_id) %>%
-  slice_max(order_by = abs(weighted_log2FC), n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-
-
-
-
-
-
-gene_ids <- (GSE94479_Deseq_G2MvsS_IDs_gene_level_df$ensembl_gene_id)
-res_gene_entrez_id_G2MvsS <- getBM(attributes = c('entrezgene_id',
-                                                   'ensembl_gene_id'),
-                                    filters = 'ensembl_gene_id',
-                                    values = gene_ids,
-                                    mart = mart)
-res_gene_entrez_id_G2MvsS <- dplyr::distinct(res_gene_entrez_id_G2MvsS, ensembl_gene_id, .keep_all = TRUE) %>%
-  dplyr::filter(!is.na(entrezgene_id))
-GSE94479_Deseq_G2MvsS_entrez_IDs <- dplyr::left_join(GSE94479_Deseq_G2MvsS_IDs_gene_level_df, res_gene_entrez_id_G2MvsS, by = "ensembl_gene_id")
-# Some entrez_id map on multiple ensembl_gene_id
-# Collapse to one row per entrezgene_id using the highest absolute log2FC
-GSE94479_Deseq_G2MvsS_entrez_IDs <- GSE94479_Deseq_G2MvsS_entrez_IDs %>%
-  group_by(entrezgene_id) %>%
-  slice_max(order_by = abs(weighted_log2FC), n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-
-
-
-
-
-
-
-
-
-
-# Generate a data frame with the gene-level Log2 FC values for each comparison
-GSE94479_gene_level_Log2_FC_df <- GSE94479_Deseq_G0G1vsG2M_entrez_IDs %>%
+GSE94479_gene_level_Log2_FC_df <-
+  GSE94479_Deseq_G0G1vsG2M_entrez_IDs %>%
   dplyr::select(ensembl_gene_id, entrezgene_id, weighted_log2FC) %>%
   dplyr::rename(G0G1vsG2M_Log_FC = weighted_log2FC) %>%
   dplyr::left_join(
@@ -678,1097 +247,478 @@ GSE94479_gene_level_Log2_FC_df <- GSE94479_Deseq_G0G1vsG2M_entrez_IDs %>%
     by = c("ensembl_gene_id", "entrezgene_id")
   )
 
-
-
-
-
-
-
-
-
-
-# Generate a function which performs GSEA of the samples
-
-library(clusterProfiler)
-library(pathview)
-library(enrichplot)
-
-
-process_and_save_plots <- function(data_frame, log_fc_cols, plot_titles, output_dir) {
-  # Create the output directory if it does not exist
-  if (!dir.exists(output_dir)) {
-    dir.create(output_dir)
-  }
-  plot_list <- list()  # Initialize a list to store the plots
-  kk2_list <- list()  # Initialize a list to store the GSEA results
-  
-  for (i in seq_along(log_fc_cols)) {
-    log_fc_col <- log_fc_cols[i]
-    plot_title <- plot_titles[i]
-    file_name <- paste0(output_dir, "/", plot_title, "_GSEA_KEGG.pdf")
-    
-    # Process data and generate plot
-    all_values_entrez <- data_frame %>%
-      dplyr::select(entrezgene_id, !!sym(log_fc_col)) %>%
-      dplyr::filter(!is.na(!!sym(log_fc_col))) %>%
-      dplyr::filter(!is.na(entrezgene_id))
-    
-    all_values_Log2_FC_entrez <- all_values_entrez[[log_fc_col]]
-    names(all_values_Log2_FC_entrez) <- all_values_entrez$entrezgene_id
-    
-    # Remove duplicates
-    all_values_Log2_FC_entrez <- all_values_Log2_FC_entrez[!duplicated(names(all_values_Log2_FC_entrez))]
-    
-    all_values_Log2_FC_entrez <- na.omit(all_values_Log2_FC_entrez)
-    all_values_Log2_FC_entrez <- sort(all_values_Log2_FC_entrez, decreasing = TRUE)
-    
-    # Debugging: Print the number of genes before and after filtering
-    cat("Sample:", plot_titles[i], "\n")
-    cat("Number of genes:", length(all_values_Log2_FC_entrez), "\n")
-    
-    if (length(all_values_Log2_FC_entrez) == 0) {
-      cat("No genes available for", plot_title, "\n")
-      next
-    }
-    
-    kk2 <- gseKEGG(all_values_Log2_FC_entrez,
-                   organism = "hsa",
-                   keyType = "kegg",
-                   pvalueCutoff = 0.05,
-                   pAdjustMethod = "BH",
-                   minGSSize = 10,
-                   maxGSSize = 500)
-    
-    
-    if (is.null(kk2) || nrow(kk2) == 0) {
-      cat("No significant pathways found for", plot_title, "\n")
-      next
-    }
-    
-    # Add kk2 results to the list
-    kk2_list[[plot_title]] <- kk2
-    
-    p <- dotplot(kk2, 
-                 x = "GeneRatio",
-                 color = "p.adjust",
-                 showCategory = 50,
-                 size = NULL,
-                 split = ".sign",
-                 font.size = 8,
-                 title = plot_title,
-                 orderBy = "x",
-                 label_format = 100) + 
-      facet_grid(~.sign) +
-      theme(panel.spacing = unit(0.5, "cm"))
-    
-    # Save plot
-    ggsave(file_name, plot = p, width = 8, height = 12)
-  }
-  
-  # Combine all kk2 results into a single data frame
-  combined_kk2 <- do.call(rbind, lapply(names(kk2_list), function(name) {
-    df <- as.data.frame(kk2_list[[name]])
-    df$Sample <- name
-    return(df)
-  }))
-  
-  return(combined_kk2)
-}
-# Define your data frame, log FC columns, and plot titles
-data_frame <- GSE94479_gene_level_Log2_FC_df
-log_fc_cols <- c("G0G1vsG2M_Log_FC", "SvsG0G1_Log_FC", "G2MvsS_Log_FC")
-
-plot_titles <- c("GSE94479_G0G1vsG2M", "GSE94479_SvsG0G1", "GSE94479_G2MvsS")
-
-# Define the output directory
-output_dir <- "path_to/GSEA_KEGG_clusterProfiler"
-
-# Call the function to process and save the plots
-# process_and_save_plots(data_frame, log_fc_cols, plot_titles, output_dir)
-
-# Combine all the saved plots into a single supplementary figure
-# library(gridExtra)
-# library(grid)
-# 
-# # Arrange plots in 3 columns and 6 rows (modify as necessary based on the number of plots)
-# combined_plot <- grid.arrange(
-#   grobs = plot_list,
-#   ncol = 3,
-#   nrow = 6
-# )
-# 
-# # Save the combined plot as a PDF
-# ggsave(
-#   filename = paste0(output_dir, "/Supplementary_Fig_2_combined_plots.pdf"), 
-#   plot = combined_plot, 
-#   width = 25, 
-#   height = 40
-# )
-
-# Call the function to get also the combined kk2 results
-combined_kk2_df <- process_and_save_plots(data_frame, log_fc_cols, plot_titles, output_dir)
-# Totally 22 samples of which 14 are GREIN datasets
-
-# Write the file in a csv format
-write.csv(combined_kk2_df, file = "path_to/combined_kk2_df.csv")
-
-
-
-
-
-
-
-
-
-# Generate a heat map with the kk2 results
-library(pheatmap)
-
-# Selected KEGG signaling pathways
-Selected_KEGG_pathways <- c("hsa04150", "hsa04668", "hsa04657", "hsa03030", "hsa03410", "hsa03430", "hsa03420", "hsa04370", "hsa4072",
-                            "hsa03320", "hsa03460", "hsa03440", "hsa04014", "hsa04070", "hsa04020", "hsa01230",
-                            "hsa04310", "hsa03082", "hsa04015", "hsa04625", "hsa04371", "hsa04390", "hsa04010", "hsa04622", "hsa04350",
-                            "hsa04152", "hsa04926", "hsa04630", "hsa04115", "hsa04151", "hsa04910", "hsa04330", "hsa04012",
-                            "hsa03440", "hsa03460") # hsa04110 is the cell cycle gene set
-
-combined_kk2_df_filtered <- dplyr::filter(combined_kk2_df, ID %in% Selected_KEGG_pathways) %>%
-  dplyr::mutate(NES = scales::rescale(NES, to = c(-4, 4))) # set a specific range of values to have the 0 centered to white
-
-
-
-generate_heatmap <- function(kk2_df) {
-  kk2_df <- kk2_df %>%
-    dplyr::select(Description, Sample, NES) %>%
-    tidyr::spread(Sample, NES)
-  
-  kk2_df[is.na(kk2_df)] <- 0
-  rownames(kk2_df) <- kk2_df$Description
-  kk2_df <- kk2_df[, -1]
-  
-  desired_order <- c("GSE94479_G0G1vsG2M", "GSE94479_SvsG0G1", "GSE94479_G2MvsS")
-  kk2_df <- kk2_df[, desired_order]
-  
-  pathway_order <- c(
-    "Wnt signaling pathway",
-    "Ras signaling pathway",
-    "PI3K-Akt signaling pathway",
-    "MAPK signaling pathway",
-    "Rap1 signaling pathway",
-    "VEGF signaling pathway",
-    "Calcium signaling pathway",
-    "p53 signaling pathway",
-    "DNA replication",
-    "Homologous recombination",
-    "Fanconi anemia pathway"
-  )
-  
-  kk2_df <- kk2_df[pathway_order, , drop = FALSE]
-  
-  display_matrix <- as.matrix(kk2_df)
-  display_numbers <- ifelse(display_matrix == 0, "", sprintf("%.2g", display_matrix))
-  
-  heatmap_plot <- pheatmap(as.matrix(kk2_df), 
-                           color = colorRampPalette(c("blue", "white", "red"))(50), 
-                           cluster_rows = FALSE, 
-                           cluster_cols = FALSE, 
-                           display_numbers = display_numbers, 
-                           number_format = "%.2g", 
-                           main = "Heatmap of KEGG signaling pathways",
-                           silent = TRUE)
-  
-  return(list(plot = heatmap_plot, data = kk2_df))
-}
-
-# Now you can access both:
-heatmap_result <- generate_heatmap(combined_kk2_df_filtered)
-
-# Access the plot
-Heatmap_cell_cycle <- heatmap_result$plot
-
-# Access the matrix
-heatmap_df <- heatmap_result$data
-View(heatmap_df)
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Plot the data
-desired_order <- c( "Wnt signaling pathway",
-                    "Ras signaling pathway",
-                    "PI3K-Akt signaling pathway",
-                    "MAPK signaling pathway",
-                    "Rap1 signaling pathway",
-                    "VEGF signaling pathway",
-                    "Calcium signaling pathway",
-                    "p53 signaling pathway",
-                    "DNA replication",
-                    "Homologous recombination",
-                    "Fanconi anemia pathway")
-
-
-# Reorder the 'Description' column based on the desired order
-GSE94479_combined_kk2_df_filtered_plot <- combined_kk2_df_filtered %>%
-  dplyr::mutate(Description = factor(Description, levels = desired_order),
-                neg_log10_p_adjust = -log10(p.adjust))
-
-GSE94479_combined_kk2_df_filtered_plot <- GSE94479_combined_kk2_df_filtered_plot %>%
-  dplyr::mutate(Sample = factor(Sample, levels = c("GSE94479_G0G1vsG2M", "GSE94479_SvsG0G1", "GSE94479_G2MvsS")))
-
-
-# Generate the plot with circles
-Plot_cell_proliferation <- ggplot(GSE94479_combined_kk2_df_filtered_plot, aes(x = Sample, y = Description, fill = NES, size = neg_log10_p_adjust)) +
-  geom_point(shape = 21, color = "black", stroke = 0.5) +  # Use shape = 21 for circles with border color
-  scale_fill_gradient2(low = "dodgerblue4", mid = "white", high = "firebrick3", midpoint = 0, limits = c(-4, 4)) +  # Set colors and midpoint for the fill gradient
-  scale_size_continuous(range = c(2, 10)) +  # Adjust the range of circle sizes as needed
-  theme_bw() +
-  labs(title = "",
-       x = "",
-       y = "",
-       fill = "NES",
-       size = "-log10(p.adjust)") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 16),  # Increase size of x-axis text
-        axis.text.y = element_text(size = 14),  # Increase size of y-axis text
-        axis.title.x = element_text(size = 16),  # Increase size of x-axis title
-        axis.title.y = element_text(size = 10))  # Increase size of y-axis title
-
-print(Plot_cell_proliferation)
-
-# Save the plot
-ggsave("Plot_cell_proliferation.pdf", plot = Plot_cell_proliferation, width = 6, height = 10, path = "path_to/Desktop")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Weighted mean MFE of each cell cycle phase ####
-# Compute the weighted mean MFE of the full transcriptome at each phase of the cell cycle, where the transcript-specific MFE values are weighted by the normalized counts for each transcript
-
-# Load the transcript-level normalized counts
-GSE94479_MCF7_TX_norm_counts <- read.delim("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Analysis_cell_cycle/Analysis_RNAseq_PNAS_2017/GSE94479_raw_and_normalized_counts/GSE94479_TranscriptLevel_TPM_data.csv",
-                                           sep = ",", header = T, stringsAsFactors = F)
-
-# Access the Series Matrix
-library(GEOquery)
-Data_GSE94479 <- getGEO(GEO = "GSE94479")
-
-# Extract the phenotypic/clinical data matrix from the series matrix
-Expdata_GSE94479 <- Data_GSE94479[["GSE94479_series_matrix.txt.gz"]]@phenoData@data
-colnames(Expdata_GSE94479)[colnames(Expdata_GSE94479) == "description"] <- "condition" # Rename the column to have an easier identifier for the conditions
-
-# Select the samples profiled with RNAseq
-Expdata_GSE94479 <- dplyr::filter(Expdata_GSE94479, title %in% c("MCF7 RNA-seq G0/G1", "MCF7 RNA-seq M phase", "MCF7 RNA-seq S phase"))
-
-Expdata_GSE94479 <- Expdata_GSE94479 %>% dplyr::mutate(condition = ifelse(condition =="RNA-seq G0/G1","G0_G1_phase", condition)) %>%
-  dplyr::mutate(condition = ifelse(condition =="RNA-seq S phase","S_phase", condition)) %>%
-  dplyr::mutate(condition = ifelse(condition =="RNA-seq M phase","M_phase", condition))
-
-
-# Rename the columns of the normalised counts with the cell cycle phases in the Expdata_GSE94479 data frame
-GSE94479_MCF7_TX_norm_counts <- dplyr::rename(GSE94479_MCF7_TX_norm_counts, G0_G1_phase = GSM2476255, S_phase = GSM2476256, M_phase = GSM2476257, ensembl_transcript_id = X)
-
-# Join the data with the table containing the MFE values
-GSE94479_MCF7_TX_norm_counts <- dplyr::left_join(GSE94479_MCF7_TX_norm_counts, Table_ANNOTATED, by="ensembl_transcript_id") %>%
-  dplyr::filter(!is.na(Normalized_MFE))
-
-
-
-# Generate a dotplot with the weighted mean MFE of each phase of the cell cycle
-# Function to calculate weighted standard deviation
-weighted_sd <- function(x, w) {
-  sum_w <- sum(w)
-  mean_w <- sum(x * w) / sum_w
-  sqrt(sum(w * (x - mean_w)^2) / sum_w)
-}
-
-# Calculate weighted mean and weighted SD for each phase
-G0_G1_phase_weighted_mean_MFE <- sum(GSE94479_MCF7_TX_norm_counts$Normalized_MFE * GSE94479_MCF7_TX_norm_counts$G0_G1_phase) / sum(GSE94479_MCF7_TX_norm_counts$G0_G1_phase)
-G0_G1_phase_weighted_sd_MFE <- weighted_sd(GSE94479_MCF7_TX_norm_counts$Normalized_MFE, GSE94479_MCF7_TX_norm_counts$G0_G1_phase)
-
-S_phase_weighted_mean_MFE <- sum(GSE94479_MCF7_TX_norm_counts$Normalized_MFE * GSE94479_MCF7_TX_norm_counts$S_phase) / sum(GSE94479_MCF7_TX_norm_counts$S_phase)
-S_phase_weighted_sd_MFE <- weighted_sd(GSE94479_MCF7_TX_norm_counts$Normalized_MFE, GSE94479_MCF7_TX_norm_counts$S_phase)
-
-M_phase_weighted_mean_MFE <- sum(GSE94479_MCF7_TX_norm_counts$Normalized_MFE * GSE94479_MCF7_TX_norm_counts$M_phase) / sum(GSE94479_MCF7_TX_norm_counts$M_phase)
-M_phase_weighted_sd_MFE <- weighted_sd(GSE94479_MCF7_TX_norm_counts$Normalized_MFE, GSE94479_MCF7_TX_norm_counts$M_phase)
-
-# Create a data frame including standard deviations
-weighted_mean_MFE_df <- data.frame(
-  Phase = c("G0/G1 Phase", "S Phase", "M Phase"),
-  Weighted_MFE = c(G0_G1_phase_weighted_mean_MFE, S_phase_weighted_mean_MFE, M_phase_weighted_mean_MFE),
-  SD = c(G0_G1_phase_weighted_sd_MFE, S_phase_weighted_sd_MFE, M_phase_weighted_sd_MFE)
+combined_kk2_df <- run_kegg_gsea(
+  GSE94479_gene_level_Log2_FC_df,
+  c("G0G1vsG2M_Log_FC", "SvsG0G1_Log_FC", "G2MvsS_Log_FC"),
+  c("GSE94479_G0G1vsG2M", "GSE94479_SvsG0G1", "GSE94479_G2MvsS")
 )
 
-# Plot with error bars
-Plot_weighted_MFE <- ggplot(weighted_mean_MFE_df, aes(x = Phase, y = Weighted_MFE)) +
-  geom_point(size = 6, color = "black") +  # Dots
-  geom_errorbar(aes(ymin = Weighted_MFE - SD, ymax = Weighted_MFE + SD), width = 0.2, color = "black") +  # Error bars
-  theme_classic() +
-  ylim(-0.45, -0.22) +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    axis.text.x = element_text(size = 16, color = "black"),
-    plot.title = element_text(size = 20)
-  ) +
-  scale_x_discrete(limits = c("M Phase", "G0/G1 Phase", "S Phase")) +  # Specify Phase order
-  labs(y = "Weighted Mean DGfold / nt (kcal/mol)", x = "", title = "Weighted Mean MFE Across Cell Cycle Phases of MCF7") 
+Selected_KEGG_pathways <- c(
+  "hsa04150", "hsa04668", "hsa04657", "hsa03030", "hsa03410",
+  "hsa03430", "hsa03420", "hsa04370", "hsa4072", "hsa03320",
+  "hsa03460", "hsa03440", "hsa04014", "hsa04070", "hsa04020",
+  "hsa01230", "hsa04310", "hsa03082", "hsa04015", "hsa04625",
+  "hsa04371", "hsa04390", "hsa04010", "hsa04622", "hsa04350",
+  "hsa04152", "hsa04926", "hsa04630", "hsa04115", "hsa04151",
+  "hsa04910", "hsa04330", "hsa04012", "hsa03440", "hsa03460",
+  "hsa05230"
+)
+
+combined_kk2_df_filtered <- combined_kk2_df %>%
+  dplyr::filter(ID %in% Selected_KEGG_pathways) %>%
+  dplyr::mutate(NES = scales::rescale(NES, to = c(-4, 4)))
+
+desired_order <- c(
+  "Wnt signaling pathway",
+  "Ras signaling pathway",
+  "PI3K-Akt signaling pathway",
+  "MAPK signaling pathway",
+  "Rap1 signaling pathway",
+  "VEGF signaling pathway",
+  "Calcium signaling pathway",
+  "p53 signaling pathway",
+  "DNA replication",
+  "Homologous recombination",
+  "Fanconi anemia pathway",
+  "Central carbon metabolism in cancer"
+)
+
+GSE94479_combined_kk2_df_filtered_plot <- combined_kk2_df_filtered %>%
+  dplyr::mutate(
+    Description = factor(Description, levels = desired_order),
+    neg_log10_p_adjust = -log10(p.adjust),
+    Sample = factor(
+      Sample,
+      levels = c(
+        "GSE94479_G0G1vsG2M",
+        "GSE94479_SvsG0G1",
+        "GSE94479_G2MvsS"
+      )
+    )
+  )
+
+GSE94479_TPM_file <- mcf7_transcript_tpm_file
+
+GSE94479_MCF7_TPM_required_samples <- c(
+  "GSM2476255",
+  "GSM2476256",
+  "GSM2476257"
+)
+
+GSE94479_MCF7_TPM_sample_metadata <- tibble::tibble(
+  Sample = GSE94479_MCF7_TPM_required_samples,
+  Phase = factor(
+    c("G1", "S", "G2/M"),
+    levels = c("G1", "S", "G2/M")
+  )
+)
+
+if (!file.exists(GSE94479_TPM_file)) {
+  stop("The GSE94479 transcript-level TPM file was not found.")
+}
+
+GSE94479_MCF7_TranscriptLevel_TPM <- read.csv(
+  GSE94479_TPM_file,
+  header = TRUE,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+colnames(GSE94479_MCF7_TranscriptLevel_TPM)[1] <-
+  "GREIN_transcript_id"
+
+GSE94479_MCF7_TPM_missing_samples <- setdiff(
+  GSE94479_MCF7_TPM_required_samples,
+  colnames(GSE94479_MCF7_TranscriptLevel_TPM)
+)
+
+if (length(GSE94479_MCF7_TPM_missing_samples) > 0) {
+  stop(
+    paste0(
+      "The following GSE94479 TPM samples are missing: ",
+      paste(
+        GSE94479_MCF7_TPM_missing_samples,
+        collapse = ", "
+      )
+    )
+  )
+}
+
+GSE94479_MCF7_TranscriptLevel_TPM <-
+  GSE94479_MCF7_TranscriptLevel_TPM %>%
+  dplyr::mutate(
+    GREIN_transcript_id =
+      as.character(GREIN_transcript_id),
+
+    ensembl_transcript_id = sub(
+      "\\..*$",
+      "",
+      GREIN_transcript_id
+    ),
+
+    dplyr::across(
+      dplyr::all_of(
+        GSE94479_MCF7_TPM_required_samples
+      ),
+      as.numeric
+    )
+  ) %>%
+  dplyr::select(
+    GREIN_transcript_id,
+    ensembl_transcript_id,
+    dplyr::all_of(
+      GSE94479_MCF7_TPM_required_samples
+    )
+  )
+
+if (
+  anyDuplicated(
+    GSE94479_MCF7_TranscriptLevel_TPM$
+    ensembl_transcript_id
+  ) > 0
+) {
+  stop(
+    paste(
+      "Duplicated versionless transcript IDs were found",
+      "in the GSE94479 TPM file."
+    )
+  )
+}
+
+GSE94479_MCF7_TPM_values_are_valid <- vapply(
+  GSE94479_MCF7_TPM_required_samples,
+
+  function(current_sample) {
+
+    current_TPM <- getElement(
+      GSE94479_MCF7_TranscriptLevel_TPM,
+      current_sample
+    )
+
+    all(
+      is.finite(current_TPM) &
+        current_TPM >= 0
+    )
+  },
+
+  logical(1)
+)
+
+if (!all(GSE94479_MCF7_TPM_values_are_valid)) {
+  stop(
+    paste(
+      "At least one GSE94479 TPM sample contains",
+      "missing, non-finite, or negative values."
+    )
+  )
+}
+
+if (
+  !all(
+    c(
+      "ensembl_transcript_id",
+      "Normalized_MFE"
+    ) %in% colnames(Table_ANNOTATED)
+  )
+) {
+  stop(
+    paste(
+      "Table_ANNOTATED lacks ensembl_transcript_id",
+      "or Normalized_MFE."
+    )
+  )
+}
+
+Table_ANNOTATED_for_GSE94479_TPM <-
+  Table_ANNOTATED %>%
+  dplyr::transmute(
+    ensembl_transcript_id = sub(
+      "\\..*$",
+      "",
+      as.character(ensembl_transcript_id)
+    ),
+
+    Normalized_MFE =
+      as.numeric(Normalized_MFE)
+  ) %>%
+  dplyr::filter(
+    !is.na(ensembl_transcript_id),
+    ensembl_transcript_id != "",
+    is.finite(Normalized_MFE)
+  ) %>%
+  dplyr::distinct(
+    ensembl_transcript_id,
+    .keep_all = TRUE
+  )
+
+GSE94479_MCF7_TPM_thermodynamic <-
+  GSE94479_MCF7_TranscriptLevel_TPM %>%
+  dplyr::inner_join(
+    Table_ANNOTATED_for_GSE94479_TPM,
+    by = "ensembl_transcript_id"
+  )
+
+if (
+  nrow(GSE94479_MCF7_TPM_thermodynamic) == 0 ||
+  anyDuplicated(
+    GSE94479_MCF7_TPM_thermodynamic$
+    ensembl_transcript_id
+  ) > 0
+) {
+  stop(
+    paste(
+      "The GSE94479 TPM-to-annotation join is empty",
+      "or generated duplicated transcripts."
+    )
+  )
+}
+
+GSE94479_MCF7_TPM_original_totals <-
+  tibble::tibble(
+    Sample =
+      GSE94479_MCF7_TPM_required_samples,
+
+    Original_total_TPM = vapply(
+      GSE94479_MCF7_TPM_required_samples,
+
+      function(current_sample) {
+        sum(
+          getElement(
+            GSE94479_MCF7_TranscriptLevel_TPM,
+            current_sample
+          )
+        )
+      },
+
+      numeric(1)
+    )
+  )
+
+GSE94479_MCF7_TPM_long <-
+  GSE94479_MCF7_TPM_thermodynamic %>%
+  tidyr::pivot_longer(
+    cols = dplyr::all_of(
+      GSE94479_MCF7_TPM_required_samples
+    ),
+    names_to = "Sample",
+    values_to = "TPM"
+  ) %>%
+  dplyr::left_join(
+    GSE94479_MCF7_TPM_sample_metadata,
+    by = "Sample"
+  ) %>%
+  dplyr::mutate(
+    Dataset = "GSE94479",
+    Cell_line = "MCF7",
+    TPM = as.numeric(TPM)
+  ) %>%
+  dplyr::group_by(
+    Sample,
+    Phase
+  ) %>%
+  dplyr::mutate(
+    retained_TPM_MFE =
+      sum(TPM),
+
+    relative_transcript_abundance_MFE =
+      TPM / retained_TPM_MFE,
+
+    TPM_weighted_DGfold_contribution =
+      relative_transcript_abundance_MFE *
+      Normalized_MFE
+  ) %>%
+  dplyr::ungroup()
+
+GSE94479_MCF7_TPM_weight_validation <-
+  GSE94479_MCF7_TPM_long %>%
+  dplyr::group_by(
+    Dataset,
+    Cell_line,
+    Sample,
+    Phase
+  ) %>%
+  dplyr::summarise(
+    annotated_transcripts =
+      dplyr::n_distinct(
+        ensembl_transcript_id
+      ),
+
+    expressed_annotated_transcripts =
+      dplyr::n_distinct(
+        ensembl_transcript_id[TPM > 0]
+      ),
+
+    retained_TPM_MFE =
+      dplyr::first(retained_TPM_MFE),
+
+    sum_MFE_weights = sum(
+      relative_transcript_abundance_MFE,
+      na.rm = TRUE
+    ),
+
+    TPM_weighted_Normalized_MFE = sum(
+      TPM_weighted_DGfold_contribution,
+      na.rm = TRUE
+    ),
+
+    .groups = "drop"
+  ) %>%
+  dplyr::left_join(
+    GSE94479_MCF7_TPM_original_totals,
+    by = "Sample"
+  ) %>%
+  dplyr::mutate(
+    MFE_coverage_percent =
+      100 *
+      retained_TPM_MFE /
+      Original_total_TPM,
+
+    abundance_measure =
+      "Transcript-level TPM"
+  ) %>%
+  dplyr::select(
+    Dataset,
+    Cell_line,
+    Sample,
+    Phase,
+    annotated_transcripts,
+    expressed_annotated_transcripts,
+    Original_total_TPM,
+    retained_TPM_MFE,
+    MFE_coverage_percent,
+    sum_MFE_weights,
+    TPM_weighted_Normalized_MFE,
+    abundance_measure
+  )
+
+if (
+  any(
+    abs(
+      GSE94479_MCF7_TPM_weight_validation$
+      sum_MFE_weights - 1
+    ) > 1e-8
+  )
+) {
+  stop(
+    paste(
+      "The GSE94479 TPM-derived ΔGfold weights",
+      "do not sum to one."
+    )
+  )
+}
+
+cat(
+  "\nGSE94479 transcriptome-wide TPM-weighted ΔGfold:\n"
+)
+
+print(
+  as.data.frame(
+    GSE94479_MCF7_TPM_weight_validation
+  ),
+  row.names = FALSE,
+  digits = 12
+)
+
+Counts_GSE104736_GREIN <- read.delim(
+  hela_transcript_raw_counts_file,
+  sep = ",",
+  header = TRUE,
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+) %>%
+  tibble::column_to_rownames(var = "X") %>%
+  as.matrix()
+
+Expdata_GSE104736 <- data.frame(
+  condition = rep(c("HeLa_G1", "HeLa_S", "HeLa_G2"), each = 3),
+  Cell_cycle_phase = rep(c("G1", "S", "G2"), each = 3),
+  Cell_line = rep("HeLa", 9),
+  row.names = c(
+    "GSM2806897", "GSM2806898", "GSM2806899",
+    "GSM2806900", "GSM2806901", "GSM2806902",
+    "GSM2806903", "GSM2806904", "GSM2806905"
+  ),
+  stringsAsFactors = FALSE
+)
+
+missing_hela_transcript_samples <- setdiff(
+  rownames(Expdata_GSE104736),
+  colnames(Counts_GSE104736_GREIN)
+)
+
+if (length(missing_hela_transcript_samples) > 0) {
+  stop(
+    "Missing HeLa transcript-count samples: ",
+    paste(missing_hela_transcript_samples, collapse = ", "),
+    call. = FALSE
+  )
+}
+
+Counts_GSE104736_GREIN <- floor(
+  Counts_GSE104736_GREIN[
+    ,
+    rownames(Expdata_GSE104736),
+    drop = FALSE
+  ]
+)
+
+stopifnot(
+  identical(
+    colnames(Counts_GSE104736_GREIN),
+    rownames(Expdata_GSE104736)
+  )
+)
+
+dds_GSE104736 <- DESeq2::DESeqDataSetFromMatrix(
+  countData = Counts_GSE104736_GREIN,
+  colData = Expdata_GSE104736,
+  design = ~condition
+)
+
+dds_GSE104736 <- dds_GSE104736[
+  rowSums(DESeq2::counts(dds_GSE104736)) >= 3,
+]
+dds_GSE104736 <- DESeq2::DESeq(dds_GSE104736)
+
+res_GSE104736_G1_vs_G2 <- DESeq2::results(
+  dds_GSE104736,
+  contrast = c("condition", "HeLa_G1", "HeLa_G2")
+) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("ensembl_transcript_id")
+
+MFE_GSE104736_G1_vs_G2 <- Table_ANNOTATED %>%
+  dplyr::inner_join(
+    res_GSE104736_G1_vs_G2,
+    by = "ensembl_transcript_id"
+  ) %>%
+  dplyr::filter(padj < 0.05)
+
+res_GSE104736_S_vs_G1 <- DESeq2::results(
+  dds_GSE104736,
+  contrast = c("condition", "HeLa_S", "HeLa_G1")
+) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("ensembl_transcript_id")
+
+MFE_GSE104736_S_vs_G1 <- Table_ANNOTATED %>%
+  dplyr::inner_join(
+    res_GSE104736_S_vs_G1,
+    by = "ensembl_transcript_id"
+  ) %>%
+  dplyr::filter(
+    padj < 0.05,
+    log2FoldChange < 15,
+    log2FoldChange > -15
+  )
+
+GSE104736_HeLa_TX_norm_counts <- read.delim(
+  hela_transcript_tpm_file,
+  sep = ",",
+  header = TRUE,
+  stringsAsFactors = FALSE
+)
 
-print(Plot_weighted_MFE)
-
-
-
-
-
-
-
-
-
-
-
-# Generate a boxplot with the transcript-level weighted MFE values for each phase
-# Create a long-format data frame with transcript MFE values weighted by expression
-long_df <- GSE94479_MCF7_TX_norm_counts %>%
-  dplyr::mutate(G0_G1_phase = Normalized_MFE * G0_G1_phase) %>%
-  dplyr::mutate(S_phase = Normalized_MFE * S_phase) %>%
-  dplyr::mutate(M_phase = Normalized_MFE * M_phase) %>%
-  dplyr::select(ensembl_transcript_id, Normalized_MFE, G0_G1_phase, S_phase, M_phase) %>%
-  pivot_longer(cols = c(G0_G1_phase, S_phase, M_phase),
-               names_to = "Phase",
-               values_to = "Weighted_MFE")
-  # dplyr::filter(Weighted_MFE < 0)  # Filter out negative values
-  
-# Plot the distribution as a box plot
-library(ggbreak)
-
-boxplot_weighted_MFE <- ggplot(long_df, aes(x = Phase, y = Weighted_MFE)) +
-  geom_boxplot(fill = "lightgrey", outlier.color = "black", outlier.shape = 1) +
-  theme_classic() +
-  ylim(-50000, 0.25) +
-  theme(
-    axis.title.y = element_text(size = 14),
-    axis.text.x = element_text(size = 8, color = "black", angle = 45, hjust = 1),
-    axis.text.x.top = element_blank(),   # <== removes the top x-axis labels
-    axis.ticks.x.top = element_blank(),  # <== removes the top x-axis ticks
-    axis.line.x.top = element_blank(),        # Remove top x-axis line
-    axis.line.y.right = element_blank(),      # Remove right-side y-axis line
-    axis.text.y.right = element_blank(),        # Remove right-side y-axis labels
-    axis.ticks.y.right = element_blank(),    # emove right-side y-axis ticks
-    plot.title = element_text(size = 20)
-  ) +
-  scale_x_discrete(limits = c("M_phase", "G0_G1_phase", "S_phase")) +
-  labs(y = expression(Delta*G[fold]~"/ nt (kcal/mol)"), x = "", title = "") +
-  scale_y_break(c(-10000, -0.75), scales = 1.5) 
-
-#print(boxplot_weighted_MFE)
-
-# Save the combined plot
-ggsave("boxplot_weighted_MFE.pdf", plot = boxplot_weighted_MFE, width = 3, height = 5, path = "path_to/Desktop")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Cell cycle HeLa cell line ####
-# These data have been obtained from:
-# 'Comparative cell cycle transcriptomics reveals synchronization of developmental transcription factor networks in cancer cells' Johan Bostrom et al. PLOS ONE 2017
-# The raw and normalized counts have been downloaded from: http://www.ilincs.org/apps/grein/?gse=GSE104736
-
-# The transcript-level normalized counts of the HeLa cell line profiled in G1, S and G2 phases are in GREIN. There are three replicates / condition
-
-library(DESeq2)
-library(GEOquery)
-library(canvasXpress)
-library(clinfun)
-library(GGally)
-library(factoextra)
-library(tidyverse)
-library(RColorBrewer)
-library(gplots)
-library(GSVA)
-library(RMySQL)
-library(ggrepel)
-library(ggpubr)
-library(decoupleR)
-library(OmnipathR)
-library(tibble)
-library(tidyr)
-library(pheatmap)
-library(data.table)
-
-
-
-
-# Load the raw counts downloaded from GREIN
-Counts_GSE104736_GREIN <- read.delim("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Analysis_cell_cycle/Analysis_HeLa_and_U2OS_cell_cycle/GSE104736_raw_and\ normalized_counts/GSE104736_TranscriptLevel_Raw_data.csv",
-                                     sep = ",", header = T, stringsAsFactors = F)
-Counts_GSE104736_GREIN <- Counts_GSE104736_GREIN %>% remove_rownames %>% column_to_rownames(var="X") # Convert first column into row names in data frame
-
-
-
-
-# Access the Series Matrix
-Data_GSE104736 <- getGEO(GEO = "GSE104736")
-# Extract the phenotypic/clinical data matrix from the series matrix
-Expdata_GSE104736 <- Data_GSE104736[["GSE104736_series_matrix.txt.gz"]]@phenoData@data
-
-# Select the HeLa cells
-Expdata_GSE104736 = Expdata_GSE104736[c(1:9),] # Remove the samples that are not necessary for the analysis
-colnames(Expdata_GSE104736)[colnames(Expdata_GSE104736) == "phase:ch1"] <- "Cell_cycle_phase"
-colnames(Expdata_GSE104736)[colnames(Expdata_GSE104736) == "cell line:ch1"] <- "Cell_line"
-colnames(Expdata_GSE104736)[colnames(Expdata_GSE104736) == "title"] <- "condition"
-
-# Expdata_GSE104736$condition<-gsub(", 8hr","",as.character(Expdata_GSE104736$condition)) # Remove the last characters from the description of the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_G1_1', 'HeLa_G1', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_G1_2', 'HeLa_G1', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_G1_3', 'HeLa_G1', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_S_1', 'HeLa_S', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_S_2', 'HeLa_S', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_S_3', 'HeLa_S', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_G2_1', 'HeLa_G2', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_G2_2', 'HeLa_G2', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-Expdata_GSE104736$condition <- gsub('HeLa_Fucci_G2_3', 'HeLa_G2', Expdata_GSE104736$condition) # Edit the name of the description in the conditions
-
-
-
-# Analysis HeLa cells
-# Data are converted and organized to the format required
-Counts_GSE104736_GREIN <- as.matrix(Counts_GSE104736_GREIN)
-Counts_GSE104736_GREIN <- Counts_GSE104736_GREIN[,c(1:9)] # Remove the samples that are not necessary for the analysis
-
-# Round counts down to the nearest integer
-Counts_GSE104736_GREIN <- floor(Counts_GSE104736_GREIN)
-
-# IMPORTANT:
-# It is absolutely critical that the columns of the count matrix and the rows of the column data (information about samples) are in the same order.
-
-# Replace the row names of Expdata_GSE104736 (sampleID) with the same sample name [title] of [Counts_GSE104736]. 
-# This will help to match sample names in both matrices.
-# The outcome should be TRUE
-all(rownames(Expdata_GSE104736) %in% colnames(Counts_GSE104736_GREIN))
-all(colnames(Counts_GSE104736_GREIN) %in% rownames(Expdata_GSE104736))
-
-# With the count matrix, Counts_GSE104736_GREIN, and the sample information, Expdata_GSE104736, we can construct a DESeqDataSet:
-dds_GSE104736 <- DESeqDataSetFromMatrix(countData = Counts_GSE104736_GREIN,
-                                        colData = Expdata_GSE104736,
-                                        design = ~ condition)
-dds_GSE104736
-
-
-
-# DATA QUALITY ASSESSMENT
-# Before performing differential expression analysis, we perform data quality assessment by sample clustering and visualization
-library("pheatmap")
-# We log transform the counts
-ntd <- normTransform(dds_GSE104736)
-# Heatmap of the count matrix
-select <- order(rowMeans(counts(dds_GSE104736,normalized=FALSE)),
-                decreasing=TRUE)[1:20]
-df <- as.data.frame(colData(dds_GSE104736)[,c("condition","type")])
-pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
-         cluster_cols=FALSE, annotation_col=df)
-
-
-
-# Heatmap of the sample-to-sample distances
-# A heatmap of this distance matrix gives us an overview over similarities and dissimilarities between samples
-# Transform the values
-vsd <- vst(dds_GSE104736, blind=FALSE)
-# rld <- rlog(dds_GSE104736, blind=FALSE)
-head(assay(vsd), 3)
-
-# Apply the dist function to the transpose of the transformed count matrix to get sample-to-sample distances
-sampleDists <- dist(t(assay(vsd)))
-
-library("RColorBrewer")
-sampleDistMatrix <- as.matrix(sampleDists)
-rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$type, sep="-")
-colnames(sampleDistMatrix) <- NULL
-colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-pheatmap(sampleDistMatrix,
-         clustering_distance_rows=sampleDists,
-         clustering_distance_cols=sampleDists,
-         col=colors)
-
-# Principal component plot of the samples
-plotPCA(vsd, intgroup="condition")
-
-
-# DIFFERENTIAL EXPRESSION ANALYSIS
-# We perform a minimal pre-filtering to keep only rows that have at least 3 reads total
-keep <- rowSums(counts(dds_GSE104736)) >= 3
-dds_GSE104736 <- dds_GSE104736[keep,]
-table(keep) # This shows how many transcripts have been removed after the filtering
-nrow(dds_GSE104736) # to confirm the filtered transcripts
-
-# DIFFERENTIAL EXPRESSION ANALYSIS
-dds_GSE104736 <- DESeq(dds_GSE104736) # The DESeq() function normalizes the read counts, estimates dispersions, and fits the linear model, all in one go
-# dds_GSE104736 <- DESeq(dds_GSE104736, betaPrior = T)  The betaPrior = T opton tells DESeq2 to squeeze the log Fold Changes of lowly expressed genes toward zero.
-
-
-
-
-
-
-
-
-## Differential gene expression G1 vs G2 ####
-
-# Specify the conditions to contrast for differential expression analysis
-res_GSE104736_G1_vs_G2 <- results(dds_GSE104736, contrast=c("condition","HeLa_G1","HeLa_G2")) # to specify the samples to contrast
-res_GSE104736_G1_vs_G2
-# Get a summary of the results
-summary(res_GSE104736_G1_vs_G2)
-
-
-
-# Export results to CSV files
-# write.csv(as.data.frame(res), file="Treated_vs_Controls.csv")
-
-# Plot the log2 Fold Changes as function of expresson:
-plotMA(res_GSE104736_G1_vs_G2,alpha = 0.05)
-abline(h=c(-2,2),col = "red")
-
-# Transform the row names into a column
-res_GSE104736_df <- data.frame(res_GSE104736_G1_vs_G2)
-res_GSE104736_G1_vs_G2 <- tibble::rownames_to_column(res_GSE104736_df, "ensembl_transcript_id")
-
-
-
-# Join the expression change values with the Table_ANNOTATED containing MFE values
-MFE_GSE104736_G1_vs_G2 <- dplyr::inner_join(Table_ANNOTATED, res_GSE104736_G1_vs_G2, by="ensembl_transcript_id") %>%
-  dplyr::filter(padj < 0.05) 
-
-
-# Generate a scatter plot Log2_FC vs Normalized_MFE
-library(ggplot2)
-Plot_GSE104736 <- ggplot(MFE_GSE104736_G1_vs_G2, aes(y=Normalized_MFE, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.2)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  #xlim(-5.5,5.5) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="DGfold / nt (kcal/mol)",x="Log2_FC_expression",
-       title="GSE104736_HeLa_Log2_FC_adj.P<0.05_G1_vs_G2")
-print(Plot_GSE104736)
-
-
-
-# Look at the mean log2_FC
-MFE_GSE104736_G1_vs_G2_UP <- dplyr::filter(MFE_GSE104736_G1_vs_G2, log2FoldChange > 0)
-Mean_MFE_GSE104736_G1_vs_G2_UP <- mean(MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE)
-
-MFE_GSE104736_G1_vs_G2_DOWN <- dplyr::filter(MFE_GSE104736_G1_vs_G2, log2FoldChange < 0)
-Mean_MFE_GSE104736_G1_vs_G2_DOWN <- mean(MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE)
-
-TTEST_MFE_GSE104736_G1_vs_G2_all_UP_vs_DOWN <- t.test(MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE, MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE, paired=FALSE)
-print(TTEST_MFE_GSE104736_G1_vs_G2_all_UP_vs_DOWN)
-
-
-
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE104736_all_UP_vs_DOWN <- ks.test(MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE, MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE)
-print(ks_test_GSE104736_all_UP_vs_DOWN)
-
-
-quantile_075_MFE_GSE104736_G1_vs_G2_UP <- quantile(MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE, probs = c(0.75)) 
-quantile_075_MFE_GSE104736_G1_vs_G2_DOWN <- quantile(MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE, probs = c(0.75)) 
-# Values above 0.75 quantile
-ks_test_MFE_GSE104736_G1_vs_G2_075_above <- ks.test(MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE[MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE >= quantile_075_MFE_GSE104736_G1_vs_G2_UP],
-                                           MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE[MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE >= quantile_075_MFE_GSE104736_G1_vs_G2_DOWN])
-print(ks_test_MFE_GSE104736_G1_vs_G2_075_above)
-
-# Look at the differences between the 0.25 quantile 
-quantile_025_MFE_GSE104736_G1_vs_G2_UP <- quantile(MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE, probs = c(0.25)) 
-quantile_025_MFE_GSE104736_G1_vs_G2_DOWN <- quantile(MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE, probs = c(0.25)) 
-# Values below 0.25 quantile
-ks_test_MF_GSE104736_025_below <- ks.test(MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE[MFE_GSE104736_G1_vs_G2_UP$Normalized_MFE <= quantile_025_MFE_GSE104736_G1_vs_G2_UP],
-                                          MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE[MFE_GSE104736_G1_vs_G2_DOWN$Normalized_MFE <= quantile_025_MFE_GSE104736_G1_vs_G2_DOWN])
-print(ks_test_MF_GSE104736_025_below)
-
-
-
-
-# Violin plots with box plots inside
-GSE104736_HeLa_G1_vs_G2_plot <- ggplot(MFE_GSE104736_G1_vs_G2, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
-  geom_violin(fill = "lightgrey") +  # Set violin plot fill to light grey
-  geom_boxplot(width = 0.1, position = position_dodge(0.9), color = "black", fill = "white", outlier.shape = NA) +  # Set box plot fill to white
-  theme_classic() +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    plot.title = element_text(size = 10),
-    axis.text.x = element_text(size = 16, color = "black")
-  ) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  ylim(-0.6, 0) +
-  labs(
-    y = "Normalized_MFE", 
-    x = NULL, 
-    title = "GSE104736_Log2_FC_adj.P<0.05_G1_vs_G2"
-  ) +
-  scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
-
-print(GSE104736_HeLa_G1_vs_G2_plot)
-
-# Save the combined plot
-ggsave("GSE104736_HeLa_G1_vs_G2_plot.pdf", plot = GSE104736_HeLa_G1_vs_G2_plot, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-
-
-
-# Differential gene expression G1 vs G2 heat capacity changes
-
-# This is calculated on the total n. of transcripts with a significant log2 fold change
-# Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE104736_G1_vs_G2, aes(y=Cp_37C, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.1)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  xlim(-12, 12) +
-  ylim(0,400) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Heat capacity (J/C)",x="Log2_FC_expression",title="MFE_GSE104736_G1_vs_G2")
-
-
-# Show the data with a box plot
-Plot_MFE_GSE104736_G1_vs_G2_heat_capacity <- ggplot(MFE_GSE104736_G1_vs_G2, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
-  geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  ylim(0, 400) +
-  theme(legend.position = "none", 
-        axis.title = element_text(size = 20), 
-        plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 16, color = "black")) +
-  theme(plot.title = element_text(size = 20)) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(y="Heat capacity (J/C)",x="",title="MFE_GSE104736_G1_vs_G2") +
-  scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
-
-print(Plot_MFE_GSE104736_G1_vs_G2_heat_capacity)
-
-ggsave("Plot_MFE_GSE104736_G1_vs_G2_heat_capacity.pdf", plot = Plot_MFE_GSE104736_G1_vs_G2_heat_capacity, width = 5, height = 6, path = "path_to/Desktop")
-
-
-Mean_heat_capacity_MFE_GSE104736_G1_vs_G2_UP <- mean(MFE_GSE104736_G1_vs_G2_UP$Cp_37C, na.rm = TRUE)
-Mean_heat_capacity_MFE_GSE104736_G1_vs_G2_DOWN <- mean(MFE_GSE104736_G1_vs_G2_DOWN$Cp_37C, na.rm = TRUE)
-TTEST_heat_capacity_MFE_GSE104736_G1_vs_G2_all_UP_vs_DOWN <- t.test(MFE_GSE104736_G1_vs_G2_DOWN$Cp_37C, MFE_GSE104736_G1_vs_G2_UP$Cp_37C, paired=FALSE)
-print(TTEST_heat_capacity_MFE_GSE104736_G1_vs_G2_all_UP_vs_DOWN)
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MFE_GSE104736_G1_vs_G2_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE104736_G1_vs_G2_DOWN$Cp_37C, MFE_GSE104736_G1_vs_G2_UP$Cp_37C)
-print(ks_test_MFE_GSE104736_G1_vs_G2_all_UP_vs_DOWN_heat_capacity)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Differential gene expression S vs G1 ####
-
-# Specify the conditions to contrast for differential expression analysis
-res_GSE104736_S_vs_G1 <- results(dds_GSE104736, contrast=c("condition","HeLa_S","HeLa_G1")) # to specify the samples to contrast
-res_GSE104736_S_vs_G1
-# Get a summary of the results
-summary(res_GSE104736_S_vs_G1)
-
-
-
-# Export results to CSV files
-# write.csv(as.data.frame(res), file="Treated_vs_Controls.csv")
-
-# Plot the log2 Fold Changes as function of expresson:
-plotMA(res_GSE104736_S_vs_G1,alpha = 0.05)
-abline(h=c(-2,2),col = "red")
-
-# Transform the row names into a column
-res_GSE104736_df <- data.frame(res_GSE104736_S_vs_G1)
-res_GSE104736_S_vs_G1 <- tibble::rownames_to_column(res_GSE104736_df, "ensembl_transcript_id")
-
-
-
-# Join the expression change values with the Table_ANNOTATED containing MFE values
-MFE_GSE104736_S_vs_G1 <- dplyr::inner_join(Table_ANNOTATED, res_GSE104736_S_vs_G1, by="ensembl_transcript_id") %>%
-  dplyr::filter(padj < 0.05) %>%
-  dplyr::filter(log2FoldChange < 15 & log2FoldChange > -15) # Remove the few transcripts with extreme log2FoldChange values
-
-
-# Generate a scatter plot Log2_FC vs Normalized_MFE
-library(ggplot2)
-Plot_GSE104736 <- ggplot(MFE_GSE104736_S_vs_G1, aes(y=Normalized_MFE, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.2)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  #xlim(-5.5,5.5) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="DGfold / nt (kcal/mol)",x="Log2_FC_expression",
-       title="GSE104736_Log2_FC_adj.P<0.05_S_vs_G1")
-print(Plot_GSE104736)
-
-# Save plot
-# ggsave("Plot_GSE104736.pdf", plot = Plot_GSE104736, path = "path_to/Desktop")
-
-
-# Look at the mean log2_FC
-MFE_GSE104736_S_vs_G1_UP <- dplyr::filter(MFE_GSE104736_S_vs_G1, log2FoldChange > 0)
-Mean_MFE_GSE104736_S_vs_G1_UP <- mean(MFE_GSE104736_S_vs_G1_UP$Normalized_MFE)
-
-MFE_GSE104736_S_vs_G1_DOWN <- dplyr::filter(MFE_GSE104736_S_vs_G1, log2FoldChange < 0)
-Mean_MFE_GSE104736_S_vs_G1_DOWN <- mean(MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE)
-
-TTEST_MFE_GSE104736_S_vs_G1_all_UP_vs_DOWN <- t.test(MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE, MFE_GSE104736_S_vs_G1_UP$Normalized_MFE, paired=FALSE)
-print(TTEST_MFE_GSE104736_S_vs_G1_all_UP_vs_DOWN)
-
-
-
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE104736_all_UP_vs_DOWN <- ks.test(MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE, MFE_GSE104736_S_vs_G1_UP$Normalized_MFE)
-print(ks_test_GSE104736_all_UP_vs_DOWN)
-
-
-quantile_075_MFE_GSE104736_S_vs_G1_UP <- quantile(MFE_GSE104736_S_vs_G1_UP$Normalized_MFE, probs = c(0.75)) 
-quantile_075_MFE_GSE104736_S_vs_G1_DOWN <- quantile(MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE, probs = c(0.75)) 
-# Values above 0.75 quantile
-ks_test_MFE_GSE104736_S_vs_G1_075_above <- ks.test(MFE_GSE104736_S_vs_G1_UP$Normalized_MFE[MFE_GSE104736_S_vs_G1_UP$Normalized_MFE >= quantile_075_MFE_GSE104736_S_vs_G1_UP],
-                                           MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE[MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE >= quantile_075_MFE_GSE104736_S_vs_G1_DOWN])
-print(ks_test_MFE_GSE104736_S_vs_G1_075_above)
-
-# Look at the differences between the 0.25 quantile 
-quantile_025_MFE_GSE104736_S_vs_G1_UP <- quantile(MFE_GSE104736_S_vs_G1_UP$Normalized_MFE, probs = c(0.25)) 
-quantile_025_MFE_GSE104736_S_vs_G1_DOWN <- quantile(MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE, probs = c(0.25)) 
-# Values below 0.25 quantile
-ks_test_MF_GSE104736_025_below <- ks.test(MFE_GSE104736_S_vs_G1_UP$Normalized_MFE[MFE_GSE104736_S_vs_G1_UP$Normalized_MFE <= quantile_025_MFE_GSE104736_S_vs_G1_UP],
-                                          MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE[MFE_GSE104736_S_vs_G1_DOWN$Normalized_MFE <= quantile_025_MFE_GSE104736_S_vs_G1_DOWN])
-print(ks_test_MF_GSE104736_025_below)
-
-
-
-
-# Violin plots with box plots inside
-GSE104736_HeLa_S_vs_G1_plot <- ggplot(MFE_GSE104736_S_vs_G1, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
-  geom_violin(fill = "lightgrey") +  # Set violin plot fill to light grey
-  geom_boxplot(width = 0.1, position = position_dodge(0.9), color = "black", fill = "white", outlier.shape = NA) +  # Set box plot fill to white
-  theme_classic() +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    plot.title = element_text(size = 10),
-    axis.text.x = element_text(size = 16, color = "black")
-  ) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  ylim(-0.6, 0) +
-  labs(
-    y = "Normalized_MFE", 
-    x = NULL, 
-    title = "GSE104736_Log2_FC_adj.P<0.05_S_vs_G1"
-  ) +
-  scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
-
-print(GSE104736_HeLa_S_vs_G1_plot)
-
-# Save the combined plot
-ggsave("GSE104736_HeLa_S_vs_G1_plot.pdf", plot = GSE104736_HeLa_S_vs_G1_plot, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-
-
-
-# Differential gene expression S vs G1 heat capacity changes
-
-# This is calculated on the total n. of transcripts with a significant log2 fold change
-# Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE104736_S_vs_G1, aes(y=Cp_37C, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.1)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  xlim(-12, 12) +
-  ylim(0,400) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Heat capacity (J/C)",x="Log2_FC_expression",title="MFE_GSE104736_S_vs_G1")
-
-
-# Show the data with a box plot
-Plot_MFE_GSE104736_S_vs_G1_heat_capacity <- ggplot(MFE_GSE104736_S_vs_G1, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
-  geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  ylim(0, 400) +
-  theme(legend.position = "none", 
-        axis.title = element_text(size = 20), 
-        plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 16, color = "black")) +
-  theme(plot.title = element_text(size = 20)) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(y="Heat capacity (J/C)",x="",title="MFE_GSE104736_S_vs_G1") +
-  scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
-
-print(Plot_MFE_GSE104736_S_vs_G1_heat_capacity)
-
-ggsave("Plot_MFE_GSE104736_S_vs_G1_heat_capacity.pdf", plot = Plot_MFE_GSE104736_S_vs_G1_heat_capacity, width = 5, height = 6, path = "path_to/Desktop")
-
-
-Mean_heat_capacity_MFE_GSE104736_S_vs_G1_UP <- mean(MFE_GSE104736_S_vs_G1_UP$Cp_37C, na.rm = TRUE)
-Mean_heat_capacity_MFE_GSE104736_S_vs_G1_DOWN <- mean(MFE_GSE104736_S_vs_G1_DOWN$Cp_37C, na.rm = TRUE)
-TTEST_heat_capacity_MFE_GSE104736_S_vs_G1_all_UP_vs_DOWN <- t.test(MFE_GSE104736_S_vs_G1_DOWN$Cp_37C, MFE_GSE104736_S_vs_G1_UP$Cp_37C, paired=FALSE)
-print(TTEST_heat_capacity_MFE_GSE104736_S_vs_G1_all_UP_vs_DOWN)
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MFE_GSE104736_S_vs_G1_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE104736_S_vs_G1_DOWN$Cp_37C, MFE_GSE104736_S_vs_G1_UP$Cp_37C)
-print(ks_test_MFE_GSE104736_S_vs_G1_all_UP_vs_DOWN_heat_capacity)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Differential gene expression G2 vs S ####
-
-# Specify the conditions to contrast for differential expression analysis
-res_GSE104736_G2_vs_S <- results(dds_GSE104736, contrast=c("condition","HeLa_G2","HeLa_S")) # to specify the samples to contrast
-res_GSE104736_G2_vs_S
-# Get a summary of the results
-summary(res_GSE104736_G2_vs_S)
-
-# Export results to CSV files
-# write.csv(as.data.frame(res), file="Treated_vs_Controls.csv")
-
-# Plot the log2 Fold Changes as function of expresson:
-plotMA(res_GSE104736_G2_vs_S,alpha = 0.05)
-abline(h=c(-2,2),col = "red")
-
-# Transform the row names into a column
-res_GSE104736_df <- data.frame(res_GSE104736_G2_vs_S)
-res_GSE104736_G2_vs_S <- tibble::rownames_to_column(res_GSE104736_df, "ensembl_transcript_id")
-
-
-
-# Join the expression change values with the Table_ANNOTATED containing MFE values
-MFE_GSE104736_G2_vs_S <- dplyr::inner_join(Table_ANNOTATED, res_GSE104736_G2_vs_S, by="ensembl_transcript_id") %>%
-  dplyr::filter(padj < 0.05) %>%
-  dplyr::filter(log2FoldChange < 15 & log2FoldChange > -15) # Remove the few transcripts with extreme log2FoldChange values
-
-
-
-# Generate a scatter plot Log2_FC vs Normalized_MFE
-library(ggplot2)
-Plot_GSE104736 <- ggplot(MFE_GSE104736_G2_vs_S, aes(y=Normalized_MFE, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.2)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  #xlim(-5.5,5.5) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="DGfold / nt (kcal/mol)",x="Log2_FC_expression",
-       title="GSE104736_Log2_FC_adj.P<0.05_G2_vs_S")
-print(Plot_GSE104736)
-
-# Save plot
-# ggsave("Plot_GSE104736.pdf", plot = Plot_GSE104736, path = "path_to/Desktop")
-
-
-# Look at the mean log2_FC
-MFE_GSE104736_G2_vs_S_UP <- dplyr::filter(MFE_GSE104736_G2_vs_S, log2FoldChange > 0)
-Mean_MFE_GSE104736_G2_vs_S_UP <- mean(MFE_GSE104736_G2_vs_S_UP$Normalized_MFE)
-
-MFE_GSE104736_G2_vs_S_DOWN <- dplyr::filter(MFE_GSE104736_G2_vs_S, log2FoldChange < 0)
-Mean_MFE_GSE104736_G2_vs_S_DOWN <- mean(MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE)
-
-TTEST_MFE_GSE104736_G2_vs_S_all_UP_vs_DOWN <- t.test(MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE, MFE_GSE104736_G2_vs_S_UP$Normalized_MFE, paired=FALSE)
-print(TTEST_MFE_GSE104736_G2_vs_S_all_UP_vs_DOWN)
-
-
-
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_GSE104736_all_UP_vs_DOWN <- ks.test(MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE, MFE_GSE104736_G2_vs_S_UP$Normalized_MFE)
-print(ks_test_GSE104736_all_UP_vs_DOWN)
-
-
-quantile_075_MFE_GSE104736_G2_vs_S_UP <- quantile(MFE_GSE104736_G2_vs_S_UP$Normalized_MFE, probs = c(0.75)) 
-quantile_075_MFE_GSE104736_G2_vs_S_DOWN <- quantile(MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE, probs = c(0.75)) 
-# Values above 0.75 quantile
-ks_test_MFE_GSE104736_G2_vs_S_075_above <- ks.test(MFE_GSE104736_G2_vs_S_UP$Normalized_MFE[MFE_GSE104736_G2_vs_S_UP$Normalized_MFE >= quantile_075_MFE_GSE104736_G2_vs_S_UP],
-                                           MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE[MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE >= quantile_075_MFE_GSE104736_G2_vs_S_DOWN])
-print(ks_test_MFE_GSE104736_G2_vs_S_075_above)
-
-# Look at the differences between the 0.25 quantile 
-quantile_025_MFE_GSE104736_G2_vs_S_UP <- quantile(MFE_GSE104736_G2_vs_S_UP$Normalized_MFE, probs = c(0.25)) 
-quantile_025_MFE_GSE104736_G2_vs_S_DOWN <- quantile(MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE, probs = c(0.25)) 
-# Values below 0.25 quantile
-ks_test_MF_GSE104736_025_below <- ks.test(MFE_GSE104736_G2_vs_S_UP$Normalized_MFE[MFE_GSE104736_G2_vs_S_UP$Normalized_MFE <= quantile_025_MFE_GSE104736_G2_vs_S_UP],
-                                          MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE[MFE_GSE104736_G2_vs_S_DOWN$Normalized_MFE <= quantile_025_MFE_GSE104736_G2_vs_S_DOWN])
-print(ks_test_MF_GSE104736_025_below)
-
-
-
-
-# Violin plots with box plots inside
-GSE104736_HeLa_G2_vs_S_plot <- ggplot(MFE_GSE104736_G2_vs_S, aes(x = factor(log2FoldChange > 0), y = Normalized_MFE)) +
-  geom_violin(fill = "lightgrey") +  # Set violin plot fill to light grey
-  geom_boxplot(width = 0.1, position = position_dodge(0.9), color = "black", fill = "white", outlier.shape = NA) +  # Set box plot fill to white
-  theme_classic() +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    plot.title = element_text(size = 10),
-    axis.text.x = element_text(size = 16, color = "black")
-  ) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  ylim(-0.6, 0) +
-  labs(
-    y = "Normalized_MFE", 
-    x = NULL, 
-    title = "GSE104736_Log2_FC_adj.P<0.05_G2_vs_S"
-  ) +
-  scale_x_discrete(labels = c("log2FoldChange < 0", "log2FoldChange > 0"))
-
-print(GSE104736_HeLa_G2_vs_S_plot)
-
-# Save the combined plot
-ggsave("GSE104736_HeLa_G2_vs_S_plot.pdf", plot = GSE104736_HeLa_G2_vs_S_plot, width = 5, height = 6, path = "path_to/Desktop")
-
-
-
-
-
-
-
-
-# Differential gene expression G2 vs S heat capacity changes
-
-# This is calculated on the total n. of transcripts with a significant log2 fold change
-# Generate a scatter plot Log2_FC vs heat capacity
-ggplot(MFE_GSE104736_G2_vs_S, aes(y=Cp_37C, x=log2FoldChange)) +
-  geom_point(size=1.5, alpha=0.1)+
-  theme_classic() +
-  theme(legend.position="none") +
-  geom_vline(xintercept = 0, size=0.3) +
-  xlim(-12, 12) +
-  ylim(0,400) +
-  theme(axis.title = element_text(size = 20)) +
-  theme(plot.title = element_text(size = 15)) +
-  labs(y="Heat capacity (J/C)",x="Log2_FC_expression",title="MFE_GSE104736_G2_vs_S")
-
-
-# Show the data with a box plot
-Plot_MFE_GSE104736_G2_vs_S_heat_capacity <- ggplot(MFE_GSE104736_G2_vs_S, aes(x = factor(log2FoldChange > 0), y = Cp_37C)) +
-  geom_boxplot(fill = "lightgrey", alpha = 0.7) +
-  #geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
-  theme_classic() +
-  ylim(0, 400) +
-  theme(legend.position = "none", 
-        axis.title = element_text(size = 20), 
-        plot.title = element_text(size = 10),
-        axis.text.x = element_text(size = 16, color = "black")) +
-  theme(plot.title = element_text(size = 20)) +
-  geom_vline(xintercept = 0, linewidth = 0.3) +
-  labs(y="Heat capacity (J/C)",x="",title="MFE_GSE104736_G2_vs_S") +
-  scale_x_discrete(labels = c("log2FoldChange > 0", "log2FoldChange < 0"))
-
-print(Plot_MFE_GSE104736_G2_vs_S_heat_capacity)
-
-ggsave("Plot_MFE_GSE104736_G2_vs_S_heat_capacity.pdf", plot = Plot_MFE_GSE104736_G2_vs_S_heat_capacity, width = 5, height = 6, path = "path_to/Desktop")
-
-
-Mean_heat_capacity_MFE_GSE104736_G2_vs_S_UP <- mean(MFE_GSE104736_G2_vs_S_UP$Cp_37C, na.rm = TRUE)
-Mean_heat_capacity_MFE_GSE104736_G2_vs_S_DOWN <- mean(MFE_GSE104736_G2_vs_S_DOWN$Cp_37C, na.rm = TRUE)
-TTEST_heat_capacity_MFE_GSE104736_G2_vs_S_all_UP_vs_DOWN <- t.test(MFE_GSE104736_G2_vs_S_DOWN$Cp_37C, MFE_GSE104736_G2_vs_S_UP$Cp_37C, paired=FALSE)
-print(TTEST_heat_capacity_MFE_GSE104736_G2_vs_S_all_UP_vs_DOWN)
-# Add K-S test to look at the differences between the up-regukated and down-regulated genes
-ks_test_MFE_GSE104736_G2_vs_S_all_UP_vs_DOWN_heat_capacity <- ks.test(MFE_GSE104736_G2_vs_S_DOWN$Cp_37C, MFE_GSE104736_G2_vs_S_UP$Cp_37C)
-print(ks_test_MFE_GSE104736_G2_vs_S_all_UP_vs_DOWN_heat_capacity)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Weighted mean MFE of each cell cycle phase ####
-# Compute the weighted mean MFE of the full transcriptome at each phase of the cell cycle, where the transcript-specific MFE values are weighted by the normalized counts for each transcript
-
-# Load the transcript-level normalized counts
-GSE104736_HeLa_TX_norm_counts <- read.delim("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Analysis_cell_cycle/Analysis_HeLa_and_U2OS_cell_cycle/GSE104736_raw_and\ normalized_counts/GSE104736_TranscriptLevel_TPM_data.csv",
-                                           sep = ",", header = T, stringsAsFactors = F)
-
-
-# Based on the Expdata_GSE104736 metadata file, select the samples corresponding to the different phases of the cell cycle
 GSE104736_HeLa_TX_norm_counts <- dplyr::select(GSE104736_HeLa_TX_norm_counts,
                                                X,
                                                GSM2806897,
@@ -1782,647 +732,1425 @@ GSE104736_HeLa_TX_norm_counts <- dplyr::select(GSE104736_HeLa_TX_norm_counts,
                                                GSM2806905) %>%
   dplyr::rename(ensembl_transcript_id = X)
 
-# Samples GSM2806897, GSM2806898, GSM2806899 are the triplicates of the G1 phase
-# Samples GSM2806900, GSM2806901, GSM2806902 are the triplicates of the S phase
-# Samples GSM2806903, GSM2806904, GSM2806905 are the triplicates of the G2 phase
+GSE104736_HeLa_TranscriptLevel_TPM <- GSE104736_HeLa_TX_norm_counts
 
-# Average the counts across the triplicates for each phase of the cell cycle
-GSE104736_HeLa_TX_norm_counts_averaged <- GSE104736_HeLa_TX_norm_counts %>%
-  dplyr::mutate(
-    G1_phase = rowMeans(dplyr::select(., GSM2806897, GSM2806898, GSM2806899), na.rm = TRUE),
-    S_phase  = rowMeans(dplyr::select(., GSM2806900, GSM2806901, GSM2806902), na.rm = TRUE),
-    G2_phase = rowMeans(dplyr::select(., GSM2806903, GSM2806904, GSM2806905), na.rm = TRUE)
-  ) %>%
-  dplyr::select(ensembl_transcript_id, G1_phase, S_phase, G2_phase)  # Keep only the new mean columns
-
-
-# Join the data with the table containing the MFE values
-GSE104736_HeLa_TX_norm_counts <- dplyr::left_join(GSE104736_HeLa_TX_norm_counts_averaged, Table_ANNOTATED, by="ensembl_transcript_id") %>%
-  dplyr::filter(!is.na(Normalized_MFE))
-
-
-
-
-
-
-
-
-
-
-# Generate a dotplot with the weighted mean MFE of each phase of the cell cycle
-# Function to calculate weighted standard deviation
-weighted_sd <- function(x, w) {
-  sum_w <- sum(w)
-  mean_w <- sum(x * w) / sum_w
-  sqrt(sum(w * (x - mean_w)^2) / sum_w)
-}
-
-# Calculate weighted mean and weighted SD for each phase
-G1_phase_weighted_mean_MFE <- sum(GSE104736_HeLa_TX_norm_counts$Normalized_MFE * GSE104736_HeLa_TX_norm_counts$G1_phase) / sum(GSE104736_HeLa_TX_norm_counts$G1_phase)
-G1_phase_weighted_sd_MFE <- weighted_sd(GSE104736_HeLa_TX_norm_counts$Normalized_MFE, GSE104736_HeLa_TX_norm_counts$G1_phase)
-
-S_phase_weighted_mean_MFE <- sum(GSE104736_HeLa_TX_norm_counts$Normalized_MFE * GSE104736_HeLa_TX_norm_counts$S_phase) / sum(GSE104736_HeLa_TX_norm_counts$S_phase)
-S_phase_weighted_sd_MFE <- weighted_sd(GSE104736_HeLa_TX_norm_counts$Normalized_MFE, GSE104736_HeLa_TX_norm_counts$S_phase)
-
-G2_phase_weighted_mean_MFE <- sum(GSE104736_HeLa_TX_norm_counts$Normalized_MFE * GSE104736_HeLa_TX_norm_counts$G2_phase) / sum(GSE104736_HeLa_TX_norm_counts$G2_phase)
-G2_phase_weighted_sd_MFE <- weighted_sd(GSE104736_HeLa_TX_norm_counts$Normalized_MFE, GSE104736_HeLa_TX_norm_counts$G2_phase)
-
-# Create a data frame including standard deviations
-weighted_mean_MFE_df <- data.frame(
-  Phase = c("G1 Phase", "S Phase", "G2 Phase"),
-  Weighted_MFE = c(G1_phase_weighted_mean_MFE, S_phase_weighted_mean_MFE, G2_phase_weighted_mean_MFE),
-  SD = c(G1_phase_weighted_sd_MFE, S_phase_weighted_sd_MFE, G2_phase_weighted_sd_MFE)
+GSE104736_HeLa_TPM_required_samples <- c(
+  "GSM2806897",
+  "GSM2806898",
+  "GSM2806899",
+  "GSM2806900",
+  "GSM2806901",
+  "GSM2806902",
+  "GSM2806903",
+  "GSM2806904",
+  "GSM2806905"
 )
 
-# Plot with error bars
-Plot_weighted_MFE <- ggplot(weighted_mean_MFE_df, aes(x = Phase, y = Weighted_MFE)) +
-  geom_point(size = 6, color = "black") +  # Dots
-  geom_errorbar(aes(ymin = Weighted_MFE - SD, ymax = Weighted_MFE + SD), width = 0.2, color = "black") +  # Error bars
-  theme_classic() +
-  ylim(-0.45, -0.22) +
-  theme(
-    legend.position = "none", 
-    axis.title = element_text(size = 20), 
-    axis.text.x = element_text(size = 16, color = "black"),
-    plot.title = element_text(size = 12)
-  ) +
-  scale_x_discrete(limits = c("G2 Phase", "G1 Phase", "S Phase")) +  # Specify Phase order
-  labs(y = "Weighted Mean DGfold / nt (kcal/mol)", x = "", title = "Weighted Mean MFE Across Cell Cycle Phases of HeLa") 
+GSE104736_HeLa_TPM_sample_metadata <-
+  tibble::tibble(
+    Sample =
+      GSE104736_HeLa_TPM_required_samples,
 
-print(Plot_weighted_MFE)
+    Phase = factor(
+      c(
+        "G1", "G1", "G1",
+        "S", "S", "S",
+        "G2", "G2", "G2"
+      ),
+      levels = c(
+        "G1",
+        "S",
+        "G2"
+      )
+    )
+  )
 
+GSE104736_HeLa_TPM_missing_samples <- setdiff(
+  GSE104736_HeLa_TPM_required_samples,
+  colnames(
+    GSE104736_HeLa_TranscriptLevel_TPM
+  )
+)
 
+if (
+  length(
+    GSE104736_HeLa_TPM_missing_samples
+  ) > 0
+) {
+  stop(
+    paste0(
+      "The following HeLa TPM samples are missing: ",
+      paste(
+        GSE104736_HeLa_TPM_missing_samples,
+        collapse = ", "
+      )
+    )
+  )
+}
 
+GSE104736_HeLa_TranscriptLevel_TPM <-
+  GSE104736_HeLa_TranscriptLevel_TPM %>%
+  dplyr::mutate(
+    GREIN_transcript_id =
+      as.character(
+        ensembl_transcript_id
+      ),
 
+    ensembl_transcript_id = sub(
+      "\\..*$",
+      "",
+      GREIN_transcript_id
+    ),
 
+    dplyr::across(
+      dplyr::all_of(
+        GSE104736_HeLa_TPM_required_samples
+      ),
+      as.numeric
+    )
+  ) %>%
+  dplyr::select(
+    GREIN_transcript_id,
+    ensembl_transcript_id,
+    dplyr::all_of(
+      GSE104736_HeLa_TPM_required_samples
+    )
+  )
 
+if (
+  anyDuplicated(
+    GSE104736_HeLa_TranscriptLevel_TPM$
+    ensembl_transcript_id
+  ) > 0
+) {
+  stop(
+    paste(
+      "Duplicated versionless transcript identifiers",
+      "were found in the GSE104736 TPM table."
+    )
+  )
+}
 
+GSE104736_HeLa_TPM_values_are_valid <- vapply(
+  GSE104736_HeLa_TPM_required_samples,
 
+  function(current_sample) {
 
+    current_TPM <- getElement(
+      GSE104736_HeLa_TranscriptLevel_TPM,
+      current_sample
+    )
 
+    all(
+      is.finite(current_TPM) &
+        current_TPM >= 0
+    )
+  },
 
-# Generate a boxplot with the transcript-level weighted MFE values for each phase
-# Create a long-format data frame with transcript MFE values weighted by expression
-long_df <- GSE104736_HeLa_TX_norm_counts %>%
-  dplyr::mutate(G1_phase = Normalized_MFE * G1_phase) %>%
-  dplyr::mutate(S_phase = Normalized_MFE * S_phase) %>%
-  dplyr::mutate(G2_phase = Normalized_MFE * G2_phase) %>%
-  dplyr::select(ensembl_transcript_id, Normalized_MFE, G1_phase, S_phase, G2_phase) %>%
-  pivot_longer(cols = c(G1_phase, S_phase, G2_phase),
-               names_to = "Phase",
-               values_to = "Weighted_MFE")
-# dplyr::filter(Weighted_MFE < 0)  # Filter out negative values
+  logical(1)
+)
 
-# Plot the distribution as a box plot
-library(ggbreak)
+if (
+  !all(
+    GSE104736_HeLa_TPM_values_are_valid
+  )
+) {
+  stop(
+    paste(
+      "At least one GSE104736 sample contains",
+      "missing, non-finite, or negative TPM values."
+    )
+  )
+}
 
-boxplot_weighted_MFE <- ggplot(long_df, aes(x = Phase, y = Weighted_MFE)) +
-  geom_boxplot(fill = "lightgrey", outlier.color = "black", outlier.shape = 1) +
-  theme_classic() +
-  ylim(-50000, 0.25) +
-  theme(
-    axis.title.y = element_text(size = 14),
-    axis.text.x = element_text(size = 8, color = "black", angle = 45, hjust = 1),
-    axis.text.x.top = element_blank(),   # <== removes the top x-axis labels
-    axis.ticks.x.top = element_blank(),  # <== removes the top x-axis ticks
-    axis.line.x.top = element_blank(),        # Remove top x-axis line
-    axis.line.y.right = element_blank(),      # Remove right-side y-axis line
-    axis.text.y.right = element_blank(),        # Remove right-side y-axis labels
-    axis.ticks.y.right = element_blank(),    # emove right-side y-axis ticks
-    plot.title = element_text(size = 20)
-  ) +
-  scale_x_discrete(limits = c("G2_phase", "G1_phase", "S_phase")) +
-  labs(y = expression(Delta*G[fold]~"/ nt (kcal/mol)"), x = "", title = "") +
-  scale_y_break(c(-10000, -0.75), scales = 1.5) 
+if (
+  !all(
+    c(
+      "ensembl_transcript_id",
+      "Normalized_MFE"
+    ) %in% colnames(Table_ANNOTATED)
+  )
+) {
+  stop(
+    paste(
+      "Table_ANNOTATED lacks ensembl_transcript_id",
+      "or Normalized_MFE."
+    )
+  )
+}
 
-#print(boxplot_weighted_MFE)
+Table_ANNOTATED_for_GSE104736_TPM <-
+  Table_ANNOTATED %>%
+  dplyr::transmute(
+    ensembl_transcript_id = sub(
+      "\\..*$",
+      "",
+      as.character(
+        ensembl_transcript_id
+      )
+    ),
 
-# Save the combined plot
-ggsave("boxplot_weighted_MFE.pdf", plot = boxplot_weighted_MFE, width = 3, height = 5, path = "path_to/Desktop")
+    Normalized_MFE =
+      as.numeric(Normalized_MFE)
+  ) %>%
+  dplyr::filter(
+    !is.na(
+      ensembl_transcript_id
+    ),
 
+    ensembl_transcript_id != "",
 
+    is.finite(
+      Normalized_MFE
+    )
+  ) %>%
+  dplyr::distinct(
+    ensembl_transcript_id,
+    .keep_all = TRUE
+  )
 
+GSE104736_HeLa_TPM_thermodynamic <-
+  GSE104736_HeLa_TranscriptLevel_TPM %>%
+  dplyr::inner_join(
+    Table_ANNOTATED_for_GSE104736_TPM,
+    by = "ensembl_transcript_id"
+  )
 
+if (
+  nrow(
+    GSE104736_HeLa_TPM_thermodynamic
+  ) == 0
+) {
+  stop(
+    "The GSE104736 TPM-to-annotation join produced no transcripts."
+  )
+}
 
+if (
+  anyDuplicated(
+    GSE104736_HeLa_TPM_thermodynamic$
+    ensembl_transcript_id
+  ) > 0
+) {
+  stop(
+    paste(
+      "The GSE104736 annotation join generated",
+      "duplicated transcript identifiers."
+    )
+  )
+}
 
+GSE104736_HeLa_TPM_original_totals <-
+  tibble::tibble(
+    Sample =
+      GSE104736_HeLa_TPM_required_samples,
 
+    Original_total_TPM = vapply(
+      GSE104736_HeLa_TPM_required_samples,
 
+      function(current_sample) {
+        sum(
+          getElement(
+            GSE104736_HeLa_TranscriptLevel_TPM,
+            current_sample
+          )
+        )
+      },
 
+      numeric(1)
+    )
+  )
 
+GSE104736_HeLa_TPM_long <-
+  GSE104736_HeLa_TPM_thermodynamic %>%
+  tidyr::pivot_longer(
+    cols = dplyr::all_of(
+      GSE104736_HeLa_TPM_required_samples
+    ),
+    names_to = "Sample",
+    values_to = "TPM"
+  ) %>%
+  dplyr::left_join(
+    GSE104736_HeLa_TPM_sample_metadata,
+    by = "Sample"
+  ) %>%
+  dplyr::mutate(
+    Dataset = "GSE104736",
 
+    Cell_line = "HeLa",
 
+    TPM =
+      as.numeric(TPM)
+  ) %>%
+  dplyr::group_by(
+    Sample,
+    Phase
+  ) %>%
+  dplyr::mutate(
+    retained_TPM_MFE =
+      sum(TPM),
 
+    relative_transcript_abundance_MFE =
+      TPM / retained_TPM_MFE,
 
+    TPM_weighted_DGfold_contribution =
+      relative_transcript_abundance_MFE *
+      Normalized_MFE
+  ) %>%
+  dplyr::ungroup()
 
-## GSEA HeLa cell line ####
+GSE104736_HeLa_TPM_weight_validation <-
+  GSE104736_HeLa_TPM_long %>%
+  dplyr::group_by(
+    Dataset,
+    Cell_line,
+    Sample,
+    Phase
+  ) %>%
+  dplyr::summarise(
+    annotated_transcripts =
+      dplyr::n_distinct(
+        ensembl_transcript_id
+      ),
 
-# Load the gene-level raw counts downloaded from GREIN
-Counts_GSE104736_GREIN_gene_level <- read.delim("/Volumes/AC_HD_8TB/Exp.\ 277\ Analysis\ of\ Gibbs\ free\ energy\ in\ response\ to\ drug\ selection/Analysis_cell_cycle/Analysis_HeLa_and_U2OS_cell_cycle/GSE104736_raw_and\ normalized_counts/GSE104736_GeneLevel_Raw_data.csv",
-                                     sep = ",", header = T, stringsAsFactors = F)
-Counts_GSE104736_GREIN_gene_level <- Counts_GSE104736_GREIN_gene_level %>% remove_rownames %>% column_to_rownames(var="X") %>% # Convert first column into row names in data frame
-  dplyr::select(-c(gene_symbol, GSM2806906, GSM2806907, GSM2806908, GSM2806909, GSM2806910, GSM2806911)) # Remove the columns that are not necessary for the analysis
+    expressed_annotated_transcripts =
+      dplyr::n_distinct(
+        ensembl_transcript_id[TPM > 0]
+      ),
 
-# Analysis HeLa cells
-# Data are converted and organized to the format required
-Counts_GSE104736_GREIN_gene_level <- as.matrix(Counts_GSE104736_GREIN_gene_level)
+    retained_TPM_MFE =
+      dplyr::first(
+        retained_TPM_MFE
+      ),
 
-# Round counts down to the nearest integer
-Counts_GSE104736_GREIN_gene_level <- floor(Counts_GSE104736_GREIN_gene_level)
+    sum_MFE_weights = sum(
+      relative_transcript_abundance_MFE,
+      na.rm = TRUE
+    ),
 
-# IMPORTANT:
-# It is absolutely critical that the columns of the count matrix and the rows of the column data (information about samples) are in the same order.
+    TPM_weighted_Normalized_MFE = sum(
+      TPM_weighted_DGfold_contribution,
+      na.rm = TRUE
+    ),
 
-# Replace the row names of Expdata_GSE104736 (sampleID) with the same sample name [title] of [Counts_GSE104736]. 
-# This will help to match sample names in both matrices.
-# The outcome should be TRUE
+    .groups = "drop"
+  ) %>%
+  dplyr::left_join(
+    GSE104736_HeLa_TPM_original_totals,
+    by = "Sample"
+  ) %>%
+  dplyr::mutate(
+    MFE_coverage_percent =
+      100 *
+      retained_TPM_MFE /
+      Original_total_TPM,
 
-all(rownames(Expdata_GSE104736) %in% colnames(Counts_GSE104736_GREIN_gene_level))
-all(colnames(Counts_GSE104736_GREIN_gene_level) %in% rownames(Expdata_GSE104736))
+    abundance_measure =
+      "Transcript-level TPM"
+  ) %>%
+  dplyr::select(
+    Dataset,
+    Cell_line,
+    Sample,
+    Phase,
+    annotated_transcripts,
+    expressed_annotated_transcripts,
+    Original_total_TPM,
+    retained_TPM_MFE,
+    MFE_coverage_percent,
+    sum_MFE_weights,
+    TPM_weighted_Normalized_MFE,
+    abundance_measure
+  )
 
-# With the count matrix, Counts_GSE104736_GREIN_gene_level, and the sample information, Expdata_GSE104736, we can construct a DESeqDataSet:
-dds_GSE104736_gene <- DESeqDataSetFromMatrix(countData = Counts_GSE104736_GREIN_gene_level,
-                                        colData = Expdata_GSE104736,
-                                        design = ~ condition)
-dds_GSE104736_gene
+if (
+  any(
+    abs(
+      GSE104736_HeLa_TPM_weight_validation$
+      sum_MFE_weights - 1
+    ) > 1e-8
+  )
+) {
+  stop(
+    paste(
+      "The GSE104736 TPM-derived ΔGfold weights",
+      "do not sum to one."
+    )
+  )
+}
 
+cat(
+  "\nGSE104736 sample-level TPM-weighted ΔGfold:\n"
+)
 
+print(
+  as.data.frame(
+    GSE104736_HeLa_TPM_weight_validation
+  ),
+  row.names = FALSE,
+  digits = 12
+)
 
-# DATA QUALITY ASSESSMENT
-# Before performing differential expression analysis, we perform data quality assessment by sample clustering and visualization
-library("pheatmap")
-# We log transform the counts
-ntd <- normTransform(dds_GSE104736_gene)
-# Heatmap of the count matrix
-select <- order(rowMeans(counts(dds_GSE104736_gene,normalized=FALSE)),
-                decreasing=TRUE)[1:20]
-df <- as.data.frame(colData(dds_GSE104736_gene)[,c("condition","type")])
-pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
-         cluster_cols=FALSE, annotation_col=df)
+Counts_GSE104736_GREIN_gene_level <- read.delim(
+  hela_gene_raw_counts_file,
+  sep = ",",
+  header = TRUE,
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+) %>%
+  tibble::column_to_rownames(var = "X") %>%
+  dplyr::select(
+    -c(
+      gene_symbol,
+      GSM2806906,
+      GSM2806907,
+      GSM2806908,
+      GSM2806909,
+      GSM2806910,
+      GSM2806911
+    )
+  ) %>%
+  as.matrix()
 
+missing_hela_gene_samples <- setdiff(
+  rownames(Expdata_GSE104736),
+  colnames(Counts_GSE104736_GREIN_gene_level)
+)
 
+if (length(missing_hela_gene_samples) > 0) {
+  stop(
+    "Missing HeLa gene-count samples: ",
+    paste(missing_hela_gene_samples, collapse = ", "),
+    call. = FALSE
+  )
+}
 
-# Heatmap of the sample-to-sample distances
-# A heatmap of this distance matrix gives us an overview over similarities and dissimilarities between samples
-# Transform the values
-vsd <- vst(dds_GSE104736_gene, blind=FALSE)
-# rld <- rlog(dds_GSE104736_gene, blind=FALSE)
-head(assay(vsd), 3)
+Counts_GSE104736_GREIN_gene_level <- floor(
+  Counts_GSE104736_GREIN_gene_level[
+    ,
+    rownames(Expdata_GSE104736),
+    drop = FALSE
+  ]
+)
 
-# Apply the dist function to the transpose of the transformed count matrix to get sample-to-sample distances
-sampleDists <- dist(t(assay(vsd)))
+stopifnot(
+  identical(
+    colnames(Counts_GSE104736_GREIN_gene_level),
+    rownames(Expdata_GSE104736)
+  )
+)
 
-library("RColorBrewer")
-sampleDistMatrix <- as.matrix(sampleDists)
-rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$type, sep="-")
-colnames(sampleDistMatrix) <- NULL
-colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-pheatmap(sampleDistMatrix,
-         clustering_distance_rows=sampleDists,
-         clustering_distance_cols=sampleDists,
-         col=colors)
+dds_GSE104736_gene <- DESeq2::DESeqDataSetFromMatrix(
+  countData = Counts_GSE104736_GREIN_gene_level,
+  colData = Expdata_GSE104736,
+  design = ~condition
+)
 
-# Principal component plot of the samples
-plotPCA(vsd, intgroup="condition")
+dds_GSE104736_gene <- dds_GSE104736_gene[
+  rowSums(DESeq2::counts(dds_GSE104736_gene)) >= 3,
+]
+dds_GSE104736_gene <- DESeq2::DESeq(dds_GSE104736_gene)
 
-# Add the names of the samples to the PCA plot
-# Extract PCA data
-pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
-# Add sample names from colnames
-pcaData$sample <- rownames(pcaData)
-# Plot with sample labels
-percentVar <- round(100 * attr(pcaData, "percentVar"))
-ggplot(pcaData, aes(PC1, PC2, color = condition, label = sample)) +
-  geom_point(size = 3) +
-  geom_text_repel(size = 3) +  # Use geom_text() instead if you don't want repel
-  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
-  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
-  theme_minimal()
-
-
-
-
-
-# DIFFERENTIAL EXPRESSION ANALYSIS
-# We perform a minimal pre-filtering to keep only rows that have at least 3 reads total
-keep <- rowSums(counts(dds_GSE104736_gene)) >= 3
-dds_GSE104736_gene <- dds_GSE104736_gene[keep,]
-table(keep) # This shows how many transcripts have been removed after the filtering
-nrow(dds_GSE104736_gene) # to confirm the filtered transcripts
-
-# DIFFERENTIAL EXPRESSION ANALYSIS
-dds_GSE104736_gene <- DESeq(dds_GSE104736_gene) # The DESeq() function normalizes the read counts, estimates dispersions, and fits the linear model, all in one go
-# dds_GSE104736_gene <- DESeq(dds_GSE104736_gene, betaPrior = T)  The betaPrior = T opton tells DESeq2 to squeeze the log Fold Changes of lowly expressed genes toward zero.
-
-
-
-
-
-# Differential gene expression G1 vs G2
-# Specify the conditions to contrast for differential expression analysis
-res_GSE104736_G1_vs_G2_gene <- results(dds_GSE104736_gene, contrast=c("condition","HeLa_G1","HeLa_G2")) # to specify the samples to contrast
-res_GSE104736_G1_vs_G2_gene
-# Get a summary of the results
-summary(res_GSE104736_G1_vs_G2_gene)
-
-# Plot the log2 Fold Changes as function of expresson:
-plotMA(res_GSE104736_G1_vs_G2_gene,alpha = 0.05)
-abline(h=c(-2,2),col = "red")
-
-# Transform the row names into a column
-res_GSE104736_df <- data.frame(res_GSE104736_G1_vs_G2_gene)
-res_GSE104736_G1_vs_G2_gene_df <- tibble::rownames_to_column(res_GSE104736_df, "ensembl_gene_id") %>%
+res_GSE104736_G1_vs_G2_gene_df <- DESeq2::results(
+  dds_GSE104736_gene,
+  contrast = c("condition", "HeLa_G1", "HeLa_G2")
+) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("ensembl_gene_id") %>%
   dplyr::select(ensembl_gene_id, log2FoldChange)
 
-# Add a column in each data frame with the entrez gene IDs required for the GSEA analysis
-library(biomaRt)
-mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
+res_GSE104736_S_vs_G1_gene_df <- DESeq2::results(
+  dds_GSE104736_gene,
+  contrast = c("condition", "HeLa_S", "HeLa_G1")
+) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("ensembl_gene_id") %>%
+  dplyr::select(ensembl_gene_id, log2FoldChange)
 
-gene_ids <- (res_GSE104736_G1_vs_G2_gene_df$ensembl_gene_id) 
-res_GSE104736_gene_entrez_id_G1vsG2 <- getBM(attributes = c('entrezgene_id',
-                                                     'ensembl_gene_id'),
-                                      filters = 'ensembl_gene_id',
-                                      values = gene_ids,
-                                      mart = mart)
-res_GSE104736_gene_entrez_id_G1vsG2 <- dplyr::distinct(res_GSE104736_gene_entrez_id_G1vsG2, ensembl_gene_id, .keep_all = TRUE) %>%
-  dplyr::filter(!is.na(entrezgene_id)) 
-GSE104736_gene_entrez_id_G1vsG2_entrez_IDs <- dplyr::left_join(res_GSE104736_G1_vs_G2_gene_df, res_GSE104736_gene_entrez_id_G1vsG2, by = "ensembl_gene_id") %>%
+res_GSE104736_G2_vs_S_gene_df <- DESeq2::results(
+  dds_GSE104736_gene,
+  contrast = c("condition", "HeLa_G2", "HeLa_S")
+) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("ensembl_gene_id") %>%
+  dplyr::select(ensembl_gene_id, log2FoldChange)
+
+GSE104736_gene_entrez_id_G1vsG2_entrez_IDs <-
+  res_GSE104736_G1_vs_G2_gene_df %>%
+  dplyr::left_join(
+    map_ensembl_gene_to_entrez(
+      res_GSE104736_G1_vs_G2_gene_df$ensembl_gene_id,
+      mart
+    ),
+    by = "ensembl_gene_id"
+  ) %>%
   dplyr::rename(G1vsG2_log2FoldChange = log2FoldChange)
 
-
-
-
-
-
-
-
-
-# Differential gene expression S vs G1
-# Specify the conditions to contrast for differential expression analysis
-res_GSE104736_S_vs_G1_gene <- results(dds_GSE104736_gene, contrast=c("condition","HeLa_S","HeLa_G1")) # to specify the samples to contrast
-res_GSE104736_S_vs_G1_gene
-# Get a summary of the results
-summary(res_GSE104736_S_vs_G1_gene)
-
-# Plot the log2 Fold Changes as function of expresson:
-plotMA(res_GSE104736_S_vs_G1_gene,alpha = 0.05)
-abline(h=c(-2,2),col = "red")
-
-# Transform the row names into a column
-res_GSE104736_df <- data.frame(res_GSE104736_S_vs_G1_gene)
-res_GSE104736_S_vs_G1_gene_df <- tibble::rownames_to_column(res_GSE104736_df, "ensembl_gene_id") %>%
-  dplyr::select(ensembl_gene_id, log2FoldChange)
-
-# Add a column in each data frame with the entrez gene IDs required for the GSEA analysis
-library(biomaRt)
-mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
-
-gene_ids <- (res_GSE104736_S_vs_G1_gene_df$ensembl_gene_id) 
-res_GSE104736_gene_entrez_id_SvsG1 <- getBM(attributes = c('entrezgene_id',
-                                                            'ensembl_gene_id'),
-                                             filters = 'ensembl_gene_id',
-                                             values = gene_ids,
-                                             mart = mart)
-res_GSE104736_gene_entrez_id_SvsG1 <- dplyr::distinct(res_GSE104736_gene_entrez_id_SvsG1, ensembl_gene_id, .keep_all = TRUE) %>%
-  dplyr::filter(!is.na(entrezgene_id)) 
-GSE104736_gene_entrez_id_SvsG1_entrez_IDs <- dplyr::left_join(res_GSE104736_S_vs_G1_gene_df, res_GSE104736_gene_entrez_id_SvsG1, by = "ensembl_gene_id") %>%
+GSE104736_gene_entrez_id_SvsG1_entrez_IDs <-
+  res_GSE104736_S_vs_G1_gene_df %>%
+  dplyr::left_join(
+    map_ensembl_gene_to_entrez(
+      res_GSE104736_S_vs_G1_gene_df$ensembl_gene_id,
+      mart
+    ),
+    by = "ensembl_gene_id"
+  ) %>%
   dplyr::rename(SvsG1_log2FoldChange = log2FoldChange)
 
-
-
-
-
-
-
-
-
-
-# Differential gene expression G2 vs S
-# Specify the conditions to contrast for differential expression analysis
-res_GSE104736_G2_vs_S_gene <- results(dds_GSE104736_gene, contrast=c("condition","HeLa_G2","HeLa_S")) # to specify the samples to contrast
-res_GSE104736_G2_vs_S_gene
-# Get a summary of the results
-summary(res_GSE104736_G2_vs_S_gene)
-
-# Plot the log2 Fold Changes as function of expresson:
-plotMA(res_GSE104736_G2_vs_S_gene,alpha = 0.05)
-abline(h=c(-2,2),col = "red")
-
-# Transform the row names into a column
-res_GSE104736_df <- data.frame(res_GSE104736_G2_vs_S_gene)
-res_GSE104736_G2_vs_S_gene_df <- tibble::rownames_to_column(res_GSE104736_df, "ensembl_gene_id") %>%
-  dplyr::select(ensembl_gene_id, log2FoldChange)
-
-# Add a column in each data frame with the entrez gene IDs required for the GSEA analysis
-library(biomaRt)
-mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
-
-gene_ids <- (res_GSE104736_G2_vs_S_gene_df$ensembl_gene_id) 
-res_GSE104736_gene_entrez_id_G2vsS <- getBM(attributes = c('entrezgene_id',
-                                                           'ensembl_gene_id'),
-                                            filters = 'ensembl_gene_id',
-                                            values = gene_ids,
-                                            mart = mart)
-res_GSE104736_gene_entrez_id_G2vsS <- dplyr::distinct(res_GSE104736_gene_entrez_id_G2vsS, ensembl_gene_id, .keep_all = TRUE) %>%
-  dplyr::filter(!is.na(entrezgene_id)) 
-GSE104736_gene_entrez_id_G2vsS_entrez_IDs <- dplyr::left_join(res_GSE104736_G2_vs_S_gene_df, res_GSE104736_gene_entrez_id_G2vsS, by = "ensembl_gene_id") %>%
+GSE104736_gene_entrez_id_G2vsS_entrez_IDs <-
+  res_GSE104736_G2_vs_S_gene_df %>%
+  dplyr::left_join(
+    map_ensembl_gene_to_entrez(
+      res_GSE104736_G2_vs_S_gene_df$ensembl_gene_id,
+      mart
+    ),
+    by = "ensembl_gene_id"
+  ) %>%
   dplyr::rename(G2vsS_log2FoldChange = log2FoldChange)
 
-
-
-
-
-
-
-
-
-# Generate a data frame with the gene-level Log2 FC values for each comparison
-GSE104736_gene_level_Log2_FC_df <- GSE104736_gene_entrez_id_G1vsG2_entrez_IDs %>%
-  dplyr::select(ensembl_gene_id, entrezgene_id, G1vsG2_log2FoldChange) %>%
+GSE104736_gene_level_Log2_FC_df <-
+  GSE104736_gene_entrez_id_G1vsG2_entrez_IDs %>%
+  dplyr::select(
+    ensembl_gene_id,
+    entrezgene_id,
+    G1vsG2_log2FoldChange
+  ) %>%
   dplyr::left_join(
     GSE104736_gene_entrez_id_SvsG1_entrez_IDs %>%
-      dplyr::select(ensembl_gene_id, entrezgene_id, SvsG1_log2FoldChange),
+      dplyr::select(
+        ensembl_gene_id,
+        entrezgene_id,
+        SvsG1_log2FoldChange
+      ),
     by = c("ensembl_gene_id", "entrezgene_id")
   ) %>%
   dplyr::left_join(
     GSE104736_gene_entrez_id_G2vsS_entrez_IDs %>%
-      dplyr::select(ensembl_gene_id, entrezgene_id, G2vsS_log2FoldChange),
+      dplyr::select(
+        ensembl_gene_id,
+        entrezgene_id,
+        G2vsS_log2FoldChange
+      ),
     by = c("ensembl_gene_id", "entrezgene_id")
   )
 
+combined_kk2_df <- run_kegg_gsea(
+  GSE104736_gene_level_Log2_FC_df,
+  c(
+    "G1vsG2_log2FoldChange",
+    "SvsG1_log2FoldChange",
+    "G2vsS_log2FoldChange"
+  ),
+  c("GSE104736_G1vsG2", "GSE104736_SvsG1", "GSE104736_G2vsS")
+)
 
+Selected_KEGG_pathways <- c(
+  "hsa04150", "hsa04668", "hsa04657", "hsa03030", "hsa03410",
+  "hsa03430", "hsa03420", "hsa04370", "hsa4072", "hsa03320",
+  "hsa03460", "hsa03440", "hsa04014", "hsa04070", "hsa04020",
+  "hsa01230", "hsa04310", "hsa03082", "hsa04015", "hsa04625",
+  "hsa04371", "hsa04390", "hsa04010", "hsa04622", "hsa04350",
+  "hsa04152", "hsa04926", "hsa04630", "hsa04115", "hsa04151",
+  "hsa04910", "hsa04330", "hsa04012", "hsa03440", "hsa03460"
+)
 
+combined_kk2_df_filtered <- combined_kk2_df %>%
+  dplyr::filter(ID %in% Selected_KEGG_pathways) %>%
+  dplyr::mutate(NES = scales::rescale(NES, to = c(-4, 4)))
 
+desired_order <- c(
+  "Biosynthesis of amino acids",
+  "DNA replication",
+  "Homologous recombination",
+  "Fanconi anemia pathway",
+  "Base excision repair"
+)
 
-
-
-
-
-
-
-
-
-
-# Generate a function which performs GSEA of the samples
-
-library(clusterProfiler)
-library(pathview)
-library(enrichplot)
-
-
-process_and_save_plots <- function(data_frame, log_fc_cols, plot_titles, output_dir) {
-  # Create the output directory if it does not exist
-  if (!dir.exists(output_dir)) {
-    dir.create(output_dir)
-  }
-  plot_list <- list()  # Initialize a list to store the plots
-  kk2_list <- list()  # Initialize a list to store the GSEA results
-  
-  for (i in seq_along(log_fc_cols)) {
-    log_fc_col <- log_fc_cols[i]
-    plot_title <- plot_titles[i]
-    file_name <- paste0(output_dir, "/", plot_title, "_GSEA_KEGG.pdf")
-    
-    # Process data and generate plot
-    all_values_entrez <- data_frame %>%
-      dplyr::select(entrezgene_id, !!sym(log_fc_col)) %>%
-      dplyr::filter(!is.na(!!sym(log_fc_col))) %>%
-      dplyr::filter(!is.na(entrezgene_id))
-    
-    all_values_Log2_FC_entrez <- all_values_entrez[[log_fc_col]]
-    names(all_values_Log2_FC_entrez) <- all_values_entrez$entrezgene_id
-    
-    # Remove duplicates
-    all_values_Log2_FC_entrez <- all_values_Log2_FC_entrez[!duplicated(names(all_values_Log2_FC_entrez))]
-    
-    all_values_Log2_FC_entrez <- na.omit(all_values_Log2_FC_entrez)
-    all_values_Log2_FC_entrez <- sort(all_values_Log2_FC_entrez, decreasing = TRUE)
-    
-    # Debugging: Print the number of genes before and after filtering
-    cat("Sample:", plot_titles[i], "\n")
-    cat("Number of genes:", length(all_values_Log2_FC_entrez), "\n")
-    
-    if (length(all_values_Log2_FC_entrez) == 0) {
-      cat("No genes available for", plot_title, "\n")
-      next
-    }
-    
-    kk2 <- gseKEGG(all_values_Log2_FC_entrez,
-                   organism = "hsa",
-                   keyType = "kegg",
-                   pvalueCutoff = 0.05,
-                   pAdjustMethod = "BH",
-                   minGSSize = 10,
-                   maxGSSize = 500)
-    
-    
-    if (is.null(kk2) || nrow(kk2) == 0) {
-      cat("No significant pathways found for", plot_title, "\n")
-      next
-    }
-    
-    # Add kk2 results to the list
-    kk2_list[[plot_title]] <- kk2
-    
-    p <- dotplot(kk2, 
-                 x = "GeneRatio",
-                 color = "p.adjust",
-                 showCategory = 50,
-                 size = NULL,
-                 split = ".sign",
-                 font.size = 8,
-                 title = plot_title,
-                 orderBy = "x",
-                 label_format = 100) + 
-      facet_grid(~.sign) +
-      theme(panel.spacing = unit(0.5, "cm"))
-    
-    # Save plot
-    ggsave(file_name, plot = p, width = 8, height = 12)
-  }
-  
-  # Combine all kk2 results into a single data frame
-  combined_kk2 <- do.call(rbind, lapply(names(kk2_list), function(name) {
-    df <- as.data.frame(kk2_list[[name]])
-    df$Sample <- name
-    return(df)
-  }))
-  
-  return(combined_kk2)
-}
-# Define your data frame, log FC columns, and plot titles
-data_frame <- GSE104736_gene_level_Log2_FC_df
-log_fc_cols <- c("G1vsG2_log2FoldChange", "SvsG1_log2FoldChange", "G2vsS_log2FoldChange")
-
-plot_titles <- c("GSE104736_G1vsG2", "GSE104736_SvsG1", "GSE104736_G2vsS")
-
-# Define the output directory
-output_dir <- "path_to/GSEA_KEGG_clusterProfiler"
-
-# Call the function to process and save the plots
-# process_and_save_plots(data_frame, log_fc_cols, plot_titles, output_dir)
-
-# Combine all the saved plots into a single supplementary figure
-# library(gridExtra)
-# library(grid)
-# 
-# # Arrange plots in 3 columns and 6 rows (modify as necessary based on the number of plots)
-# combined_plot <- grid.arrange(
-#   grobs = plot_list,
-#   ncol = 3,
-#   nrow = 6
-# )
-# 
-# # Save the combined plot as a PDF
-# ggsave(
-#   filename = paste0(output_dir, "/Supplementary_Fig_2_combined_plots.pdf"), 
-#   plot = combined_plot, 
-#   width = 25, 
-#   height = 40
-# )
-
-# Call the function to get also the combined kk2 results
-combined_kk2_df <- process_and_save_plots(data_frame, log_fc_cols, plot_titles, output_dir)
-# Totally 22 samples of which 14 are GREIN datasets
-
-# Write the file in a csv format
-write.csv(combined_kk2_df, file = "path_to/combined_kk2_df.csv")
-
-
-
-
-
-
-
-# Generate a heat map with the kk2 results
-library(pheatmap)
-
-# Additional code to generate the heatmap
-# Filter only the pathways of interest
-
-# Selected KEGG signaling pathways
-Selected_KEGG_pathways <- c("hsa04150", "hsa04668", "hsa04657", "hsa03030", "hsa03410", "hsa03430", "hsa03420", "hsa04370", "hsa4072",
-                            "hsa03320", "hsa03460", "hsa03440", "hsa04014", "hsa04070", "hsa04020", "hsa01230",
-                            "hsa04310", "hsa03082", "hsa04015", "hsa04625", "hsa04371", "hsa04390", "hsa04010", "hsa04622", "hsa04350",
-                            "hsa04152", "hsa04926", "hsa04630", "hsa04115", "hsa04151", "hsa04910", "hsa04330", "hsa04012",
-                            "hsa03440", "hsa03460") # hsa04110 is the cell cycle gene set
-
-combined_kk2_df_filtered <- dplyr::filter(combined_kk2_df, ID %in% Selected_KEGG_pathways) %>%
-  dplyr::mutate(NES = scales::rescale(NES, to = c(-4, 4))) # set a specific range of values to have the 0 centered to white
-
-
-
-generate_heatmap <- function(kk2_df) {
-  kk2_df <- kk2_df %>%
-    dplyr::select(Description, Sample, NES) %>%
-    tidyr::spread(Sample, NES)
-  
-  kk2_df[is.na(kk2_df)] <- 0
-  rownames(kk2_df) <- kk2_df$Description
-  kk2_df <- kk2_df[, -1]
-  
-  desired_order <- c("GSE104736_SvsG1", "GSE104736_G2vsS")
-  kk2_df <- kk2_df[, desired_order]
-  
-  pathway_order <- c(
-    "Biosynthesis of amino acids",
-    "DNA replication",
-    "Homologous recombination",
-    "Fanconi anemia pathway",
-    "Base excision repair"
-  )
-  
-  kk2_df <- kk2_df[pathway_order, , drop = FALSE]
-  
-  display_matrix <- as.matrix(kk2_df)
-  display_numbers <- ifelse(display_matrix == 0, "", sprintf("%.2g", display_matrix))
-  
-  heatmap_plot <- pheatmap(as.matrix(kk2_df), 
-                           color = colorRampPalette(c("blue", "white", "red"))(50), 
-                           cluster_rows = FALSE, 
-                           cluster_cols = FALSE, 
-                           display_numbers = display_numbers, 
-                           number_format = "%.2g", 
-                           main = "Heatmap of KEGG signaling pathways",
-                           silent = TRUE)
-  
-  return(list(plot = heatmap_plot, data = kk2_df))
-}
-
-# Now you can access both:
-heatmap_result <- generate_heatmap(combined_kk2_df_filtered)
-
-# Access the plot
-Heatmap_cell_cycle <- heatmap_result$plot
-
-# Access the matrix
-heatmap_df <- heatmap_result$data
-View(heatmap_df)
-
-
-
-
-
-
-# Plot the data
-desired_order <- c(     "Biosynthesis of amino acids",
-                        "DNA replication",
-                        "Homologous recombination",
-                        "Fanconi anemia pathway",
-                        "Base excision repair"
-                    )
-
-
-# Reorder the 'Description' column based on the desired order
 GSE104736_combined_kk2_df_filtered_plot <- combined_kk2_df_filtered %>%
-  dplyr::mutate(Description = factor(Description, levels = desired_order),
-                neg_log10_p_adjust = -log10(p.adjust))
+  dplyr::mutate(
+    Description = factor(Description, levels = desired_order),
+    neg_log10_p_adjust = -log10(p.adjust),
+    Sample = factor(
+      Sample,
+      levels = c("GSE104736_SvsG1", "GSE104736_G2vsS")
+    )
+  )
 
-GSE104736_combined_kk2_df_filtered_plot <- GSE104736_combined_kk2_df_filtered_plot %>%
-  dplyr::mutate(Sample = factor(Sample, levels = c("GSE104736_SvsG1", "GSE104736_G2vsS")))
+prepare_Fig2D_normalized_phase_counts <- function(
+    raw_count_df,
+    sample_metadata,
+    dataset_label
+) {
 
+  required_metadata_columns <- c(
+    "Sample",
+    "Phase",
+    "Replicate"
+  )
 
-# Generate the plot with circles
-Plot_cell_proliferation <- ggplot(GSE104736_combined_kk2_df_filtered_plot, aes(x = Sample, y = Description, fill = NES, size = neg_log10_p_adjust)) +
-  geom_point(shape = 21, color = "black", stroke = 0.5) +  # Use shape = 21 for circles with border color
-  scale_fill_gradient2(low = "dodgerblue4", mid = "white", high = "firebrick3", midpoint = 0, limits = c(-4, 4)) +  # Set colors and midpoint for the fill gradient
-  scale_size_continuous(range = c(2, 10)) +  # Adjust the range of circle sizes as needed
-  theme_bw() +
-  labs(title = "",
-       x = "",
-       y = "",
-       fill = "NES",
-       size = "-log10(p.adjust)") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 16),  # Increase size of x-axis text
-        axis.text.y = element_text(size = 14),  # Increase size of y-axis text
-        axis.title.x = element_text(size = 16),  # Increase size of x-axis title
-        axis.title.y = element_text(size = 10))  # Increase size of y-axis title
+  stopifnot(
+    all(
+      required_metadata_columns %in%
+        colnames(sample_metadata)
+    )
+  )
 
-print(Plot_cell_proliferation)
+  sample_metadata <- sample_metadata %>%
+    dplyr::mutate(
+      Sample = as.character(Sample),
+      Phase = as.character(Phase),
+      Replicate = as.character(Replicate)
+    )
 
-# Save the plot
-ggsave("Plot_cell_proliferation.pdf", plot = Plot_cell_proliferation, width = 6, height = 10, path = "path_to/Desktop")
+  missing_samples <- setdiff(
+    sample_metadata$Sample,
+    colnames(raw_count_df)
+  )
 
+  if (length(missing_samples) > 0) {
+    stop(
+      paste0(
+        dataset_label,
+        " is missing the following raw-count samples: ",
+        paste(
+          missing_samples,
+          collapse = ", "
+        )
+      )
+    )
+  }
 
+  raw_count_df <- raw_count_df %>%
+    dplyr::mutate(
+      ensembl_transcript_id = sub(
+        "\\..*$",
+        "",
+        as.character(ensembl_transcript_id)
+      )
+    ) %>%
+    dplyr::select(
+      ensembl_transcript_id,
+      dplyr::all_of(
+        sample_metadata$Sample
+      )
+    ) %>%
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::all_of(
+          sample_metadata$Sample
+        ),
+        as.numeric
+      )
+    ) %>%
+    dplyr::group_by(
+      ensembl_transcript_id
+    ) %>%
+    dplyr::summarise(
+      dplyr::across(
+        dplyr::all_of(
+          sample_metadata$Sample
+        ),
+        ~ sum(.x, na.rm = TRUE)
+      ),
+      .groups = "drop"
+    )
 
+  count_matrix <- raw_count_df %>%
+    tibble::column_to_rownames(
+      "ensembl_transcript_id"
+    ) %>%
+    as.matrix()
 
+  if (
+    any(!is.finite(count_matrix)) ||
+    any(count_matrix < 0)
+  ) {
+    stop(
+      paste0(
+        dataset_label,
+        " contains invalid raw-count values."
+      )
+    )
+  }
 
+  count_matrix <- floor(count_matrix)
+  storage.mode(count_matrix) <- "integer"
 
+  sample_metadata <- sample_metadata[
+    match(
+      colnames(count_matrix),
+      sample_metadata$Sample
+    ),
+    ,
+    drop = FALSE
+  ]
 
+  sample_information <- data.frame(
+    Phase = factor(
+      sample_metadata$Phase
+    ),
+    row.names = sample_metadata$Sample
+  )
 
-# To save the environment
-save.image(file = "path_to/Analysis_cell_cycle_genes_MFE_environment.RData")
+  stopifnot(
+    identical(
+      colnames(count_matrix),
+      rownames(sample_information)
+    )
+  )
 
+  dds_Fig2D <- DESeq2::DESeqDataSetFromMatrix(
+    countData = count_matrix,
+    colData = sample_information,
+    design = ~ 1
+  )
 
+  dds_Fig2D <- DESeq2::estimateSizeFactors(
+    dds_Fig2D
+  )
 
+  normalized_count_df <- DESeq2::counts(
+    dds_Fig2D,
+    normalized = TRUE
+  ) %>%
+    as.data.frame(
+      check.names = FALSE
+    ) %>%
+    tibble::rownames_to_column(
+      "ensembl_transcript_id"
+    )
 
+  normalized_count_long <- normalized_count_df %>%
+    tidyr::pivot_longer(
+      cols = dplyr::all_of(
+        sample_metadata$Sample
+      ),
+      names_to = "Sample",
+      values_to = "normalized_counts"
+    ) %>%
+    dplyr::left_join(
+      sample_metadata,
+      by = "Sample"
+    ) %>%
+    dplyr::mutate(
+      Dataset = dataset_label,
+      normalized_counts =
+        as.numeric(normalized_counts)
+    )
 
+  normalized_phase_counts <- normalized_count_long %>%
+    dplyr::group_by(
+      Dataset,
+      ensembl_transcript_id,
+      Phase
+    ) %>%
+    dplyr::summarise(
+      normalized_counts =
+        mean(
+          normalized_counts,
+          na.rm = TRUE
+        ),
 
+      n_biological_samples =
+        dplyr::n_distinct(Sample),
 
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      Sample =
+        paste0(
+          Dataset,
+          "_",
+          Phase,
+          "_phase_mean"
+        ),
 
+      Replicate = dplyr::if_else(
+        n_biological_samples == 1,
+        "single_sample",
+        paste0(
+          "mean_of_",
+          n_biological_samples
+        )
+      )
+    ) %>%
+    dplyr::select(
+      Dataset,
+      ensembl_transcript_id,
+      Sample,
+      Phase,
+      Replicate,
+      n_biological_samples,
+      normalized_counts
+    )
 
+  return(
+    list(
+      sample_level = normalized_count_long,
+      phase_level = normalized_phase_counts
+    )
+  )
+}
 
+GSE94479_Fig2D_raw_count_file <- mcf7_transcript_raw_counts_file
 
+GSE94479_Fig2D_raw_counts <- read.delim(
+  GSE94479_Fig2D_raw_count_file,
+  sep = ",",
+  header = TRUE,
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
 
+colnames(
+  GSE94479_Fig2D_raw_counts
+)[1] <- "ensembl_transcript_id"
 
+GSE94479_Fig2D_sample_metadata <-
+  tibble::tribble(
+    ~Sample,                    ~Phase,  ~Replicate,
+    "SRR5227986_GSM2476255",    "G1",    "1",
+    "SRR5227987_GSM2476256",    "S",     "1",
+    "SRR5227988_GSM2476257",    "G2/M",  "1"
+  )
 
+GSE94479_Fig2D_normalized_counts <-
+  prepare_Fig2D_normalized_phase_counts(
+    raw_count_df =
+      GSE94479_Fig2D_raw_counts,
 
+    sample_metadata =
+      GSE94479_Fig2D_sample_metadata,
+
+    dataset_label =
+      "MCF7"
+  )
+
+if (!exists("Counts_GSE104736_GREIN")) {
+  stop(
+    paste(
+      "Counts_GSE104736_GREIN is missing.",
+      "Run the GSE104736 differential-expression section first."
+    )
+  )
+}
+
+GSE104736_Fig2D_raw_counts <-
+  as.data.frame(
+    Counts_GSE104736_GREIN,
+    check.names = FALSE
+  ) %>%
+  tibble::rownames_to_column(
+    "ensembl_transcript_id"
+  )
+
+GSE104736_Fig2D_sample_metadata <-
+  tibble::tribble(
+    ~Sample,       ~Phase,  ~Replicate,
+    "GSM2806897",  "G1",    "1",
+    "GSM2806898",  "G1",    "2",
+    "GSM2806899",  "G1",    "3",
+    "GSM2806900",  "S",     "1",
+    "GSM2806901",  "S",     "2",
+    "GSM2806902",  "S",     "3",
+    "GSM2806903",  "G2/M",  "1",
+    "GSM2806904",  "G2/M",  "2",
+    "GSM2806905",  "G2/M",  "3"
+  )
+
+GSE104736_Fig2D_normalized_counts <-
+  prepare_Fig2D_normalized_phase_counts(
+    raw_count_df =
+      GSE104736_Fig2D_raw_counts,
+
+    sample_metadata =
+      GSE104736_Fig2D_sample_metadata,
+
+    dataset_label =
+      "HeLa"
+  )
+
+calculate_Fig2D_quartile_fraction <- function(
+    normalized_phase_counts,
+    de_df,
+    dataset_label,
+    transition_label,
+    phase_1,
+    phase_2
+) {
+
+  required_DE_columns <- c(
+    "ensembl_transcript_id",
+    "padj",
+    "Normalized_MFE"
+  )
+
+  stopifnot(
+    all(
+      required_DE_columns %in%
+        colnames(de_df)
+    )
+  )
+
+  de_universe <- de_df %>%
+    dplyr::transmute(
+      ensembl_transcript_id = sub(
+        "\\..*$",
+        "",
+        as.character(ensembl_transcript_id)
+      ),
+
+      padj = as.numeric(padj),
+
+      Normalized_MFE =
+        as.numeric(Normalized_MFE)
+    ) %>%
+    dplyr::filter(
+      !is.na(padj),
+      padj < 0.05,
+      is.finite(Normalized_MFE)
+    ) %>%
+    dplyr::distinct(
+      ensembl_transcript_id,
+      .keep_all = TRUE
+    )
+
+  if (nrow(de_universe) == 0) {
+    stop(
+      paste(
+        "No significant-DE transcripts were retained for",
+        dataset_label,
+        transition_label
+      )
+    )
+  }
+
+  q25 <- as.numeric(
+    stats::quantile(
+      de_universe$Normalized_MFE,
+      probs = 0.25,
+      na.rm = TRUE
+    )
+  )
+
+  q75 <- as.numeric(
+    stats::quantile(
+      de_universe$Normalized_MFE,
+      probs = 0.75,
+      na.rm = TRUE
+    )
+  )
+
+  de_universe <- de_universe %>%
+    dplyr::mutate(
+      DGfold_quartile =
+        dplyr::case_when(
+          Normalized_MFE >= q75 ~
+            "Least stable\nupper DGfold quartile",
+
+          Normalized_MFE <= q25 ~
+            "Most stable\nlower DGfold quartile",
+
+          TRUE ~
+            "Middle 50%"
+        )
+    )
+
+  de_count_data <- normalized_phase_counts %>%
+    dplyr::filter(
+      Phase %in% c(
+        phase_1,
+        phase_2
+      )
+    ) %>%
+    dplyr::inner_join(
+      de_universe,
+      by = "ensembl_transcript_id"
+    ) %>%
+    dplyr::mutate(
+      Dataset = dataset_label,
+      Transition = transition_label,
+      normalized_counts =
+        as.numeric(normalized_counts)
+    ) %>%
+    dplyr::filter(
+      is.finite(normalized_counts),
+      normalized_counts >= 0
+    )
+
+  phase_totals <- de_count_data %>%
+    dplyr::group_by(
+      Dataset,
+      Transition,
+      Phase
+    ) %>%
+    dplyr::summarise(
+      total_normalized_counts_DE_universe =
+        sum(
+          normalized_counts,
+          na.rm = TRUE
+        ),
+
+      n_significant_DE_transcripts =
+        dplyr::n_distinct(
+          ensembl_transcript_id
+        ),
+
+      n_significant_DE_transcripts_with_counts =
+        dplyr::n_distinct(
+          ensembl_transcript_id[
+            normalized_counts > 0
+          ]
+        ),
+
+      .groups = "drop"
+    )
+
+  quartile_fraction <- de_count_data %>%
+    dplyr::filter(
+      DGfold_quartile != "Middle 50%"
+    ) %>%
+    dplyr::group_by(
+      Dataset,
+      Transition,
+      Phase,
+      DGfold_quartile
+    ) %>%
+    dplyr::summarise(
+      normalized_counts_in_quartile =
+        sum(
+          normalized_counts,
+          na.rm = TRUE
+        ),
+
+      n_transcript_species =
+        dplyr::n_distinct(
+          ensembl_transcript_id
+        ),
+
+      n_transcript_species_with_counts =
+        dplyr::n_distinct(
+          ensembl_transcript_id[
+            normalized_counts > 0
+          ]
+        ),
+
+      .groups = "drop"
+    ) %>%
+    dplyr::left_join(
+      phase_totals,
+      by = c(
+        "Dataset",
+        "Transition",
+        "Phase"
+      )
+    ) %>%
+    dplyr::mutate(
+      normalized_count_fraction =
+        normalized_counts_in_quartile /
+        total_normalized_counts_DE_universe,
+
+      q25 = q25,
+      q75 = q75,
+      phase_1 = phase_1,
+      phase_2 = phase_2,
+
+      abundance_measure =
+        "DESeq2-normalized transcript-level read counts"
+    )
+
+  return(quartile_fraction)
+}
+
+MCF7_G1_vs_G2M_DGfold_quartile_fraction <-
+  calculate_Fig2D_quartile_fraction(
+    normalized_phase_counts =
+      GSE94479_Fig2D_normalized_counts$
+      phase_level,
+
+    de_df =
+      GSE94479_G0G1vsG2M,
+
+    dataset_label =
+      "MCF7",
+
+    transition_label =
+      "G1 vs G2/M",
+
+    phase_1 =
+      "G2/M",
+
+    phase_2 =
+      "G1"
+  )
+
+MCF7_S_vs_G1_DGfold_quartile_fraction <-
+  calculate_Fig2D_quartile_fraction(
+    normalized_phase_counts =
+      GSE94479_Fig2D_normalized_counts$
+      phase_level,
+
+    de_df =
+      GSE94479_SvsG0G1,
+
+    dataset_label =
+      "MCF7",
+
+    transition_label =
+      "S vs G1",
+
+    phase_1 =
+      "G1",
+
+    phase_2 =
+      "S"
+  )
+
+HeLa_G1_vs_G2M_DGfold_quartile_fraction <-
+  calculate_Fig2D_quartile_fraction(
+    normalized_phase_counts =
+      GSE104736_Fig2D_normalized_counts$
+      phase_level,
+
+    de_df =
+      MFE_GSE104736_G1_vs_G2,
+
+    dataset_label =
+      "HeLa",
+
+    transition_label =
+      "G1 vs G2/M",
+
+    phase_1 =
+      "G2/M",
+
+    phase_2 =
+      "G1"
+  )
+
+HeLa_S_vs_G1_DGfold_quartile_fraction <-
+  calculate_Fig2D_quartile_fraction(
+    normalized_phase_counts =
+      GSE104736_Fig2D_normalized_counts$
+      phase_level,
+
+    de_df =
+      MFE_GSE104736_S_vs_G1,
+
+    dataset_label =
+      "HeLa",
+
+    transition_label =
+      "S vs G1",
+
+    phase_1 =
+      "G1",
+
+    phase_2 =
+      "S"
+  )
+
+Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction <-
+  dplyr::bind_rows(
+    MCF7_G1_vs_G2M_DGfold_quartile_fraction,
+    MCF7_S_vs_G1_DGfold_quartile_fraction,
+    HeLa_G1_vs_G2M_DGfold_quartile_fraction,
+    HeLa_S_vs_G1_DGfold_quartile_fraction
+  ) %>%
+  dplyr::mutate(
+    Dataset = factor(
+      Dataset,
+      levels = c(
+        "MCF7",
+        "HeLa"
+      )
+    ),
+
+    Transition = factor(
+      Transition,
+      levels = c(
+        "G1 vs G2/M",
+        "S vs G1"
+      )
+    ),
+
+    Phase = factor(
+      Phase,
+      levels = c(
+        "G2/M",
+        "G1",
+        "S"
+      )
+    ),
+
+    DGfold_quartile = factor(
+      DGfold_quartile,
+      levels = c(
+        "Least stable\nupper DGfold quartile",
+        "Most stable\nlower DGfold quartile"
+      )
+    )
+  ) %>%
+  dplyr::arrange(
+    Dataset,
+    Transition,
+    DGfold_quartile,
+    Phase
+  )
+
+Fig2D_required_columns <- c(
+  "Dataset",
+  "Transition",
+  "Phase",
+  "DGfold_quartile",
+  "normalized_count_fraction",
+  "normalized_counts_in_quartile",
+  "total_normalized_counts_DE_universe",
+  "phase_1",
+  "phase_2",
+  "abundance_measure"
+)
+
+stopifnot(
+  all(
+    Fig2D_required_columns %in%
+      colnames(
+        Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction
+      )
+  ),
+
+  nrow(
+    Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction
+  ) == 16,
+
+  all(
+    is.finite(
+      Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction$
+        normalized_count_fraction
+    )
+  ),
+
+  all(
+    dplyr::between(
+      Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction$
+        normalized_count_fraction,
+      0,
+      1
+    )
+  )
+)
+
+cat(
+  "\nFig. 2D DESeq2-normalized read-count fractions:\n"
+)
+
+print(
+  as.data.frame(
+    Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction
+  ),
+  row.names = FALSE,
+  digits = 10
+)
+
+figure2_results <- list(
+  GSE94479_combined_kk2_df_filtered_plot =
+    GSE94479_combined_kk2_df_filtered_plot,
+  GSE104736_combined_kk2_df_filtered_plot =
+    GSE104736_combined_kk2_df_filtered_plot,
+  GSE94479_G0G1vsG2M = GSE94479_G0G1vsG2M,
+  GSE94479_SvsG0G1 = GSE94479_SvsG0G1,
+  MFE_GSE104736_G1_vs_G2 = MFE_GSE104736_G1_vs_G2,
+  MFE_GSE104736_S_vs_G1 = MFE_GSE104736_S_vs_G1,
+  Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction =
+    Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction,
+  GSE94479_MCF7_TPM_long = GSE94479_MCF7_TPM_long,
+  GSE94479_MCF7_TPM_weight_validation =
+    GSE94479_MCF7_TPM_weight_validation,
+  GSE104736_HeLa_TPM_long = GSE104736_HeLa_TPM_long,
+  GSE104736_HeLa_TPM_weight_validation =
+    GSE104736_HeLa_TPM_weight_validation
+)
+
+Fig2_GSEA_objects <- c(
+  "GSE94479_combined_kk2_df_filtered_plot",
+  "GSE104736_combined_kk2_df_filtered_plot"
+)
+
+Fig2_GSEA_required_columns <- c(
+  "ID",
+  "Description",
+  "Sample",
+  "NES",
+  "p.adjust"
+)
+
+for (current_object in Fig2_GSEA_objects) {
+  current_data <- figure2_results[[current_object]]
+  current_missing_columns <- setdiff(
+    Fig2_GSEA_required_columns,
+    colnames(current_data)
+  )
+
+  if (length(current_missing_columns) > 0) {
+    stop(
+      current_object,
+      " lacks the following columns: ",
+      paste(current_missing_columns, collapse = ", "),
+      call. = FALSE
+    )
+  }
+}
+
+Fig2_DE_objects <- c(
+  "GSE94479_G0G1vsG2M",
+  "GSE94479_SvsG0G1",
+  "MFE_GSE104736_G1_vs_G2",
+  "MFE_GSE104736_S_vs_G1"
+)
+
+Fig2_DE_required_columns <- c(
+  "ensembl_transcript_id",
+  "log2FoldChange",
+  "padj",
+  "Normalized_MFE"
+)
+
+for (current_object in Fig2_DE_objects) {
+  current_data <- figure2_results[[current_object]]
+
+  current_missing_columns <- setdiff(
+    Fig2_DE_required_columns,
+    colnames(current_data)
+  )
+
+  if (length(current_missing_columns) > 0) {
+    stop(
+      paste0(
+        current_object,
+        " lacks the following columns: ",
+        paste(
+          current_missing_columns,
+          collapse = ", "
+        )
+      )
+    )
+  }
+}
+
+Fig2_TPM_long_objects <- c(
+  "GSE94479_MCF7_TPM_long",
+  "GSE104736_HeLa_TPM_long"
+)
+
+Fig2_TPM_long_required_columns <- c(
+  "ensembl_transcript_id",
+  "Sample",
+  "Phase",
+  "TPM",
+  "Normalized_MFE",
+  "relative_transcript_abundance_MFE",
+  "TPM_weighted_DGfold_contribution"
+)
+
+for (current_object in Fig2_TPM_long_objects) {
+  current_data <- figure2_results[[current_object]]
+
+  current_missing_columns <- setdiff(
+    Fig2_TPM_long_required_columns,
+    colnames(current_data)
+  )
+
+  if (length(current_missing_columns) > 0) {
+    stop(
+      paste0(
+        current_object,
+        " lacks the following columns: ",
+        paste(
+          current_missing_columns,
+          collapse = ", "
+        )
+      )
+    )
+  }
+}
+
+Fig2_TPM_summary_required_columns <- c(
+  "Sample",
+  "Phase",
+  "annotated_transcripts",
+  "expressed_annotated_transcripts",
+  "retained_TPM_MFE",
+  "sum_MFE_weights",
+  "TPM_weighted_Normalized_MFE"
+)
+
+for (
+  current_object in c(
+    "GSE94479_MCF7_TPM_weight_validation",
+    "GSE104736_HeLa_TPM_weight_validation"
+  )
+) {
+  current_data <- figure2_results[[current_object]]
+
+  current_missing_columns <- setdiff(
+    Fig2_TPM_summary_required_columns,
+    colnames(current_data)
+  )
+
+  if (length(current_missing_columns) > 0) {
+    stop(
+      paste0(
+        current_object,
+        " lacks the following columns: ",
+        paste(
+          current_missing_columns,
+          collapse = ", "
+        )
+      )
+    )
+  }
+}
+
+stopifnot(
+  nrow(
+    GSE94479_MCF7_TPM_weight_validation
+  ) == 3,
+
+  nrow(
+    GSE104736_HeLa_TPM_weight_validation
+  ) == 9,
+
+  setequal(
+    as.character(
+      GSE94479_MCF7_TPM_weight_validation$Phase
+    ),
+    c("G1", "S", "G2/M")
+  ),
+
+  setequal(
+    as.character(
+      GSE104736_HeLa_TPM_weight_validation$Phase
+    ),
+    c("G1", "S", "G2")
+  ),
+
+  all(
+    abs(
+      GSE94479_MCF7_TPM_weight_validation$
+        sum_MFE_weights - 1
+    ) < 1e-8
+  ),
+
+  all(
+    abs(
+      GSE104736_HeLa_TPM_weight_validation$
+        sum_MFE_weights - 1
+    ) < 1e-8
+  )
+)
+
+saveRDS(figure2_results, figure2_results_file)
+
+cat("\nCell-cycle analysis complete.\n")
+cat("Figure 2 input objects written to:\n", figure2_results_file, "\n")
+cat("Other outputs written to:\n", analysis_output_dir, "\n")
