@@ -1,110 +1,65 @@
-# This script performs the complete analysis of the RNA MFE changes and cell proliferation expression changes observed in the iLINCS datasets.
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(biomaRt)
+  library(ggplot2)
+  library(clusterProfiler)
+  library(pheatmap)
+})
 
-# Overview: RNA MFE & Proliferation Analysis of iLINCS Tumour Cell-Line Signatures
-# What this script does (high level)
-# 1) Loads per-signature gene z-scores retrieved from iLINCS (L1000) and a
-#    transcript annotation table that carries Normalized_MFE and Specific_heat
-#    for canonical transcripts (pre-computed elsewhere).
-# 2) Harmonizes historical/alias gene identifiers to current Ensembl IDs /
-#    HGNC symbols (critical for joins and KEGG/GSEA mapping).
-# 3) Curates the signature list:
-#    - Removes pooled lines (XC.*) and lines with unknown cancer type.
-#    - Excludes NORMAL cell lines (this script focuses on tumour lines only).
-#    - Optionally removes non-mitogenic agents.
-#    - Cross-checks signatures against the official iLINCS metadata to keep only
-#      valid 24h / 10 µM signatures.
-# 4) Performs pathway-level QC:
-#    - KEGG GSEA across all signatures to score core pathways.
-#    - GSEA against three proliferation gene sets (Signt_1/2/3) to classify
-#      proliferating vs growth-arrested samples.
-# 5) Selects a subset of signatures consistent with “cell-cycle down” AND
-#    “no active mitogenic signalling”.
-# 6) Thermodynamic footprint:
-#    - Joins each filtered signature to transcript annotations, keeps genes with
-#      significant z-scores (p < 0.05), and compares Normalized_MFE and
-#      Specific_heat between up- vs down-regulated sets.
-#    - Computes a net MFE change metric: sum( -Normalized_MFE * z_score ).
-#    - Summarizes proliferation status using curated gene sets (means, SDs,
-#      violin/box plots).
-# 7) Exports plots and a tidy results table with cell line, drug, disease
-#    metadata, and thermodynamic/proliferation metrics for downstream figures.
-#
-#
-# Required inputs
-# • iLINCS signature tables (.tsv) retrieved by lincs_maayanlab.py
-#   - Expected columns in each .tsv: gene_id, gene_symbol, z_score, p_value
-# • Table_ANNOTATED_iLINCs.csv (comma-separated)
-#   - Required columns: ensembl_gene_id (renamed to ensembl_id), Normalized_MFE,
-#     Specific_heat, gene_symbol (if present)
-# • iLINCS metadata (from clue.io):
-#   - siginfo_beta_LINCS_metadata.csv (to validate sig IDs; 24 h, 10 µM)
-#   - cellinfo_beta.csv (cell line primary_disease/subtype)
-#
-#
-# Data flow (inputs ➜ processing ➜ outputs)
-# 1) Read Table_ANNOTATED_iLINCs ➜ rename(enst to ensembl_id).
-# 2) Read all .tsv into a named list ➜ shorten names to "<CELL>_<DRUG>_<SIGID>".
-# 3) ID harmonization: process_gene_iLINCS() fixes legacy IDs/symbols.
-# 4) Curate signature set:
-#      - Drop pooled lines (XC.*) and unknown-cancer lines.
-#      - Drop normal lines (see STEP 6: Normal_cell_lines vector).
-#      - Keep only signatures present in siginfo_beta_LINCS_metadata (24 h, 10 µM).
-# 5) Pathway screening:
-#      - KEGG GSEA per signature ➜ combined_kk2_results.csv
-#      - GSEA on Signt_1/2/3 ➜ combined_gsea_results.csv
-#      - Keep samples with NES for all of {hsa04110, Signt_1, Signt_2, Signt_3}.
-#      - Define growth arrest: Cell cycle down (hsa04110 NES < 0) AND
-#        NO positive NES in a set of mitogenic/RTK/MAPK/PI3K pathways.
-# 6) Thermodynamics & proliferation summary (for filtered samples only):
-#      - Join with Table_ANNOTATED_iLINCs on ensembl_id.
-#      - Keep p<0.05 genes; split by sign(z_score) to compute:
-#          • Mean Normalized_MFE (UP vs DOWN), tests: t-test, Wilcoxon, KS.
-#          • Mean Specific_heat (UP vs DOWN), tests: Wilcoxon, KS.
-#          • Net_MFE_change = Σ( -Normalized_MFE * z_score ) over p<0.05 genes.
-#      - Compute per-sample mean ± SD z_score across curated gene sets:
-#          MTOR_POS/NEG, Proliferation_Science, Meta_PCNA, Proliferation_GO/STOP,
-#          G1_phase, Essential_cell_cycle (Viner/Breuer 2019), HR, FA, High-fid Pol.
-#      - Export per-sample plots:
-#          • Scatter/violin of z_score vs Normalized_MFE  ➜ *_MFE.pdf
-#          • Proliferation summary dot/box plots          ➜ *_Gene_sets.pdf
-#      - Aggregate to all_results.csv ➜ then merge with iLINCS metadata &
-#        cell info to produce all_results_2_complete.csv with:
-#          {cell_line, Drug, primary_disease, subtype,
-#           Net_MFE_change, Log10_MFE_change, Log10_Specific_heat_change, …}
+annotation_file <- "path_to/Table_ANNOTATED_iLINCs.csv"
+signature_directory <- "path_to/ILINCS_signatures_10uM"
+signature_metadata_file <- "path_to/siginfo_beta_LINCS_metadata.csv"
+cell_metadata_file <- "path_to/cellinfo_beta.csv"
+gene_sets_file <- "path_to/All_gene_sets_AC.R"
+analysis_output_dir <- "path_to/iLINCS_10uM_analysis_outputs"
+intermediate_output_dir <- file.path(analysis_output_dir, "intermediate")
+gsea_output_dir <- file.path(analysis_output_dir, "GSEA")
+analysis_plot_dir <- file.path(analysis_output_dir, "plots")
+final_results_file <- file.path(
+  analysis_output_dir,
+  "Results_all_cancer_cell_lines_10uM.csv"
+)
+zweighted_dgfold_results_file <- file.path(
+  analysis_output_dir,
+  "iLINCS_10uM_z_score_weighted_DGfold_results.csv"
+)
+figure4_results_file <- file.path(
+  analysis_output_dir,
+  "iLINCS_10uM_results_for_Fig_4.rds"
+)
 
+stop_if_missing <- function(path, label) {
+  if (!file.exists(path)) {
+    stop(label, " not found: ", path, call. = FALSE)
+  }
+}
 
+for (input_file in c(
+  annotation_file,
+  signature_metadata_file,
+  cell_metadata_file,
+  gene_sets_file
+)) {
+  stop_if_missing(input_file, "Input file")
+}
 
+if (!dir.exists(signature_directory)) {
+  stop("Signature directory not found: ", signature_directory, call. = FALSE)
+}
 
+for (output_directory in c(
+  analysis_output_dir,
+  intermediate_output_dir,
+  gsea_output_dir,
+  analysis_plot_dir
+)) {
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+}
 
-library(readr)
-library(dplyr)
-library(biomaRt)
-library(ggplot2)
-library(ggpmisc)
-library(ggrepel)
-
-
-
-# STEP 1 ####
-# Open the Table_ANNOTATED_iLINCs
-Table_ANNOTATED_iLINCs <- read.delim("path_to/Table_ANNOTATED_iLINCs.csv",
+Table_ANNOTATED_iLINCs <- read.delim(annotation_file,
                                      sep = ",", header = T, stringsAsFactors = F)
 Table_ANNOTATED_iLINCs <- dplyr::rename(Table_ANNOTATED_iLINCs, ensembl_id = ensembl_gene_id)
-
-
-
-
-
-
-
-
-
-
-# STEP 2 ####
-## Edit the gene IDs of each data frame downloaded from the iLINCS L1000 database ####
-# Several of the gene IDs are old and must the replaced with the current ones
-# This function edits the gene IDs of each data frame downloaded from the iLINCS L1000 database.
-# Load the function
 
 process_gene_iLINCS <- function(iLINCS) {
   iLINCS %>%
@@ -390,322 +345,168 @@ process_gene_iLINCS <- function(iLINCS) {
     dplyr::mutate(gene_symbol = ifelse(gene_symbol == "CYHR1","ZFTRAF1", gene_symbol)) %>%
     dplyr::mutate(gene_symbol = ifelse(gene_symbol == "SSSCA1","ZNRD2", gene_symbol)) %>%
     dplyr::mutate(gene_id = ifelse(gene_symbol == "LINC00341", "161176", gene_id))
-  
+
 }
 
-
-
-
-
-
-
-# STEP 3 ####
-## Load all the iLINCS data sets retrieved with the Python script 'lincs_maayanlab.py' ####
-# The .tsv files are contained in multiple subfolders of the specified directory.
-# All .tsv files will be loaded
-
 process_tsv_files <- function(directory_path) {
-  # List all .tsv files in the specified directory and its subdirectories
+
   tsv_files <- list.files(directory_path, pattern = "\\.tsv$", full.names = TRUE, recursive = TRUE)
-  
-  # Initialize an empty list to store the data frames
+
   data_frames <- list()
-  
-  # Loop through the list of .tsv file paths and read each file
+
   for (tsv_file in tsv_files) {
-    # Read the .tsv file into a data frame and add it to the list
+
     data <- read.delim(tsv_file, header = TRUE, sep = "\t")
     data_frames[[tsv_file]] <- data
   }
-  
-  # Return the list of data frames
+
   return(data_frames)
 }
 
-# Specify the directory path where the .tsv files are located
-directory_path <- "path_to/ILINCS_signatures_10uM"
+directory_path <- signature_directory
 
-# Call the function to process the .tsv files and rename them
-iLINCs_data_frames <- process_tsv_files(directory_path) # This is a list object which contains all the .tsv files with the data frames
+iLINCs_data_frames <- process_tsv_files(directory_path)
 
-# To list all the names of the data frames
 names(iLINCs_data_frames)
-
-# Look at the first data frame
-# A375_dabrafenib_10uM_24h <- iLINCs_data_frames[[1]]
-
 
 data_frames <- iLINCs_data_frames
 names(data_frames)
 
-
-
-
-
-
-# Retain only signatures generated using agents targeting effectors of the cell cycle and mitogenic signaling pathways
-Gents_targeting_non_mitogenic_signaling <- c("obatoclax", "NU-7441", "MLN-4924", "CM03", "bortezomib", 
+Gents_targeting_non_mitogenic_signaling <- c("obatoclax", "NU-7441", "MLN-4924", "CM03", "bortezomib",
                                              "MG-132", "MLN-2238", "MLN-9708", "XMD-1150", "vorinostat", "YM-201636",
                                              "XMD-1150", "entinostat", "TG-101348", "tamoxifen", "fulvestrant",
-                                             "MLN-9708", "MLN-4924", "JQ-1-R", "PF-477736")
+                                             "MLN-9708", "MLN-4924", "JQ-1-R", "PF-477736", "MLN-8054")
 
-# Create a pattern for grep by concatenating Gents_targeting_non_mitogenic_signaling with '|'
 pattern <- paste(Gents_targeting_non_mitogenic_signaling, collapse = "|")
 
-# Remove elements whose name contains any of the Gents_targeting_non_mitogenic_signaling
 data_frames <- data_frames[!grepl(pattern, names(data_frames))]
 
-
-
-
-
-
-
-# STEP 4 ####
-## Edit the name of each data set ####
-# The script automatically assigns the full path of the location as name of each .tsv file - these names are too long and must be replaced with shorter names.
-# This function changes the name of each data set from being the full location of the downloaded file, to a simpler name which contains only the essential information like the cell line and the drug.
 data_frames_names <- unlist(lapply(names(data_frames), function(x) {
-  # Remove "_characteristic_direction.tsv" from the names
+
   cleaned_name <- gsub("_characteristic_direction.tsv", "", x)
-  # Extract the last two elements and concatenate them with "/"
+
   cleaned_name <- paste0(tail(unlist(strsplit(cleaned_name, "/")), n = 2), collapse = "_")
   return(cleaned_name)
 }))
 
-# Delete the text after the last "_" in each name
 data_frames_names <- gsub("_[^_]*$", "", data_frames_names)
 data_frames_names <- gsub("_[^_]*$", "", data_frames_names)
 data_frames_names <- gsub("_[^_]*$", "", data_frames_names)
 
-# Replace ":" with "_"
 data_frames_names <- gsub(":", "_", data_frames_names)
-# Delete "24h_10uM_" from the names
+
 data_frames_names <- gsub("24h_10uM_", "", data_frames_names)
 
 names(data_frames) <- data_frames_names
 
-
-
-
-
-
-
-
-
-
-
-
-
-# STEP 5 ####
-## Run the 'process_data_frame' function which edits the Ensembl gene IDs, of each sample ####
-
 process_data_frame <- function(df) {
-  iLINCS <- process_gene_iLINCS(df)  # Replace with your actual function and parameter
+  iLINCS <- process_gene_iLINCS(df)
   return(iLINCS)
 }
 
-# Apply the function to each data frame in the list
 result_list <- lapply(data_frames, function(x) process_data_frame(x))
 
-
-
-# Save the data_frames list object to a file
-directory <- "path_to/Output_script_cancer_cell_lines_10uM"
+directory <- intermediate_output_dir
 saveRDS(result_list, file = file.path(directory, "iLINCs_data_unfiltered.rds"))
 
-# Read the file
-directory <- "path_to/Output_script_cancer_cell_lines_10uM"
+directory <- intermediate_output_dir
 result_list <- readRDS(file.path(directory, "iLINCs_data_unfiltered.rds"))
-# 4,186 samples
 
-
-
-# Look at the different drugs present in the downloaded data
-# Convert the result_list list to a data frame to view the cell lines and perturbagens
 Complet_iLINCs_datasets_10uM <- bind_rows(result_list, .id = "name")
-# Extract the word between the first and second underscores from the 'name' column
+
 Complet_iLINCs_datasets_10uM$extracted_name <- sub("^[^_]*_([^_]*)_.*$", "\\1", Complet_iLINCs_datasets_10uM$name)
-# Find unique drugs
+
 Drugs_iLINCs_10uM <- unique(Complet_iLINCs_datasets_10uM$extracted_name)
 print(Drugs_iLINCs_10uM)
 length(Drugs_iLINCs_10uM)
 
-# Look at the different cell lines present
 Complet_iLINCs_datasets_10uM$cell_line <- sub("^(.*?)_.*$", "\\1", Complet_iLINCs_datasets_10uM$name)
-# Find unique cell lines
+
 Cell_lines_iLINCs_10uM_complete <- unique(Complet_iLINCs_datasets_10uM$cell_line)
 print(Cell_lines_iLINCs_10uM_complete)
 length(Cell_lines_iLINCs_10uM_complete)
 
-
-
-
-
-
-
-
-
-
-
-# STEP 6 ####
-
-# The iLINCS contain also samples that are pools of different cell lines. These are the samples starting with "XC."
-# In the result_list remove all the objects that start with "XC"
 result_list <- result_list[!grepl("XC", names(result_list))]
 
-# In addition, according to the iLINCS data, there are a few cell lines with an unknown tissue of origin, i.e. the cancer type is unknown.
 Lines_unknown_cancer_types <- c("C42", "HIMG002", "NKDBA", "SKB", "OAW28")
 result_list <- result_list[!grepl(paste(Lines_unknown_cancer_types, collapse = "|"), names(result_list))]
 
-
-# The LINCS data sets contain different human normal cell lines
-# For example, the MCF10A is considered a normal human mammary epithelial cell line
-# Remove all the normal cell lines
-
 Normal_cell_lines <- c("MCF10A", "1HAE", "AALE", "ASC", "CD34", "HA1E", "HEK293", "HEK293T", "HEKTE", "HFL1", "HME", "HPTEC", "HUES3", "HUVEC", "IMR90", "LHSAR", "NAMEC8", "NEU", "NL20", "NPC", "PHH", "SKL", "WA09", "WI38", "HIMG001")
 
-# In the result_list remove all the objects that contain the normal cell lines
 result_list <- result_list[!grepl(paste(Normal_cell_lines, collapse = "|"), names(result_list))]
 
-result_list_2 <- result_list # all_results is renamed to be able to repeat the commands below without having to re-run the code above
-# 2,782
+result_list_2 <- result_list
 
+Sig_info_iLINCs_metadata <- read.csv(signature_metadata_file, header = TRUE, sep = ",", stringsAsFactors = FALSE)
 
-## Filter signatures for those present in iLINCS metadata ####
-# IMPORTANT
-# The Python script retrieves several signatures that are not present in the original iLINCS file downloaded from https://clue.io/.
-# These signatures are removed from the final analysis
-
-# Open the original iLINCS file with the metadata of all the signatures, downloaded from https://clue.io/
-# This file contains the original signatures IDs
-Sig_info_iLINCs_metadata <- read.csv("path_to/siginfo_beta_LINCS_metadata.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
-# Filter the signatures obtained with 10 uM at 24h
 Sig_info_iLINCs_metadata <- dplyr::filter(Sig_info_iLINCs_metadata, pert_idose == "10 uM") %>%
   dplyr::filter(pert_itime == "24 h")
 
-# Replace all"/" with "_" in the sig_id column
-# This is necessary to match the signatures IDs in the result_list_2 data frame
 Sig_info_iLINCs_metadata$sig_id <- gsub("/", "_", Sig_info_iLINCs_metadata$sig_id)
 
-# Add the cmap_name to the name in the sig_id column to the result_list_2 data frame
 Sig_info_iLINCs_metadata$sig_id <- paste0(Sig_info_iLINCs_metadata$cmap_name, "_", Sig_info_iLINCs_metadata$sig_id)
 
-# Add the cell_iname to the name in the sig_id column to the result_list_2 data frame
 Sig_info_iLINCs_metadata$sig_id <- paste0(Sig_info_iLINCs_metadata$cell_iname, "_", Sig_info_iLINCs_metadata$sig_id)
 
-
-
-# Find the names in result_list_2 that are not in Sig_info_iLINCs_metadata$sig_id
 not_in_metadata <- setdiff(names(result_list_2), Sig_info_iLINCs_metadata$sig_id)
-# Find the names in Sig_info_iLINCs_metadata$sig_id that are not in result_list_2
+
 not_in_result_list <- setdiff(Sig_info_iLINCs_metadata$sig_id, names(result_list_2))
 Samples_not_in_metadata <- as.data.frame(not_in_result_list)
 
-
-
-# Filter the result_list_2 list object to keep only the signatures that are present in Sig_info_iLINCs_metadata$sig_id
 result_list_2 <- result_list_2[names(result_list_2) %in% Sig_info_iLINCs_metadata$sig_id]
-# 2,483
 
-
-
-# Save the filtered result_list_2 object to a file
-directory <- "path_to/Output_script_cancer_cell_lines_10uM"
+directory <- intermediate_output_dir
 saveRDS(result_list_2, file = file.path(directory, "iLINCs_filtered_samples.rds"))
 
-
-
-
-
-
-
-
-
-
-# STEP 7 Load the saved list object without running the first part of the script ####
-# Load the list object from the specified directory
-directory <- "path_to/Output_script_cancer_cell_lines_10uM"
+directory <- intermediate_output_dir
 result_list_2 <- readRDS(file.path(directory, "iLINCs_filtered_samples.rds"))
 
-# Test the functions on a few sample
-# result_list_2 <- result_list_2[1:10]
-
-
-
-
-
-# STEP 8 ####
-## GSEA to identify lines that are not proliferating ####
-
-# IMPORTANT:
-# NO NEED TO RUN THIS CODE AGAIN
-# The output has been saved in a csv file
-
-library(biomaRt)
-library(clusterProfiler)
-library(pathview)
-library(enrichplot)
-
-
-
-
-
-# GENERATE A FUNCTION TO PERFORM KEGG PATHWAY GENE SET ENRICHMENT ANALYSIS ON ALL iLINCs SAMPLES
-# This code utilises clusterProfiler to performs GSEA on all iLINCs samples
-# Function to fetch Entrez IDs using biomaRt once
 get_entrez_ids_once <- function(result_list_2) {
-  # Collect all unique gene symbols across the result_list_2
+
   all_gene_symbols <- unique(unlist(lapply(result_list_2, function(df) df$gene_symbol)))
-  
-  # Fetch Entrez IDs for all unique gene symbols
+
   mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host = "https://www.ensembl.org")
   res_gene_entrez_id <- getBM(attributes = c('entrezgene_id', 'external_gene_name'),
                               filters = 'external_gene_name',
                               values = all_gene_symbols,
                               mart = mart)
-  
+
   res_gene_entrez_id <- dplyr::filter(res_gene_entrez_id, !is.na(entrezgene_id)) %>%
     dplyr::rename(gene_symbol = external_gene_name) %>%
     dplyr::distinct(entrezgene_id, .keep_all = TRUE)
-  
+
   return(res_gene_entrez_id)
 }
 
-# Function to process data and perform GSEA using pre-fetched Entrez IDs
 process_and_save_plots_with_entrez <- function(data_frame, z_score_col, plot_title, output_dir, res_gene_entrez_id) {
-  # Create the output directory if it does not exist
+
   if (!dir.exists(output_dir)) {
     dir.create(output_dir)
   }
-  
+
   file_name <- paste0(output_dir, "/", plot_title, "_GSEA_KEGG.pdf")
-  
-  # Merge data frame with pre-fetched Entrez IDs
+
   data_frame <- dplyr::left_join(data_frame, res_gene_entrez_id, by = "gene_symbol")
-  
-  # Prepare data for GSEA
+
   all_values_entrez <- data_frame %>%
     dplyr::select(entrezgene_id, !!sym(z_score_col)) %>%
     dplyr::filter(!is.na(!!sym(z_score_col))) %>%
     dplyr::filter(!is.na(entrezgene_id))
-  
+
   all_values_z_score_entrez <- all_values_entrez[[z_score_col]]
   names(all_values_z_score_entrez) <- all_values_entrez$entrezgene_id
-  
+
   all_values_z_score_entrez <- na.omit(all_values_z_score_entrez)
   all_values_z_score_entrez <- sort(all_values_z_score_entrez, decreasing = TRUE)
-  
-  # Debugging: Print the number of genes before and after filtering
+
   cat("Sample:", plot_title, "\n")
   cat("Number of genes:", length(all_values_z_score_entrez), "\n")
-  
+
   if (length(all_values_z_score_entrez) == 0) {
     cat("No genes available for", plot_title, "\n")
     return(NULL)
   }
-  
-  # Perform GSEA
+
   kk2 <- gseKEGG(all_values_z_score_entrez,
                  organism = "hsa",
                  keyType = "kegg",
@@ -713,14 +514,13 @@ process_and_save_plots_with_entrez <- function(data_frame, z_score_col, plot_tit
                  pAdjustMethod = "BH",
                  minGSSize = 10,
                  maxGSSize = 500)
-  
+
   if (is.null(kk2) || nrow(kk2) == 0) {
     cat("No significant pathways found for", plot_title, "\n")
     return(NULL)
   }
-  
-  # Generate and save plot
-  p <- dotplot(kk2,
+
+  p <- enrichplot::dotplot(kk2,
                x = "GeneRatio",
                color = "p.adjust",
                showCategory = 50,
@@ -731,64 +531,44 @@ process_and_save_plots_with_entrez <- function(data_frame, z_score_col, plot_tit
                orderBy = "x",
                label_format = 100) +
     facet_grid(~.sign) +
-    theme(panel.spacing = unit(0.5, "cm"))
-  
+    theme(panel.spacing = grid::unit(0.5, "cm"))
+
   ggsave(file_name, plot = p, width = 8, height = 12)
-  
+
   return(kk2)
 }
 
-# Main function to iterate over the list and process each element using pre-fetched Entrez IDs
 process_result_list_with_entrez <- function(result_list_2, output_dir, res_gene_entrez_id) {
   plot_titles <- names(result_list_2)
   kk2_list <- list()
-  
+
   for (plot_title in plot_titles) {
     data_frame <- result_list_2[[plot_title]]
     z_score_col <- "z_score"
-    
+
     kk2 <- process_and_save_plots_with_entrez(data_frame, z_score_col, plot_title, output_dir, res_gene_entrez_id)
-    
+
     if (!is.null(kk2)) {
       kk2_list[[plot_title]] <- kk2
     }
   }
-  
-  # Combine all kk2 results into a single data frame
+
   combined_kk2 <- do.call(rbind, lapply(names(kk2_list), function(name) {
     df <- as.data.frame(kk2_list[[name]])
     df$Sample <- name
     return(df)
   }))
-  
+
   return(combined_kk2)
 }
 
-# First, fetch the Entrez IDs once for all gene symbols in the list
 res_gene_entrez_id <- get_entrez_ids_once(result_list_2)
 
-# Then, process the result list with the pre-fetched Entrez IDs
-output_directory <- "path_to/Results_GSEA"
+output_directory <- gsea_output_dir
 combined_results <- process_result_list_with_entrez(result_list_2, output_directory, res_gene_entrez_id)
 
-# Save combined_kk2 results to a file
 write.csv(combined_results, file = paste0(output_directory, "/combined_kk2_results.csv"), row.names = FALSE)
 
-
-
-
-
-
-
-
-
-# # GSEA with specific proliferation gene sets (Signt_1, Signt_2 and Signt_3 used also in the GREIN datasets) ####
-# I use clusterProfiler to determine the enrichment of specific proliferation signatures
-# Load the proliferation signatures
-
-
-# Creating the TERM2GENE data frame
-# Define the gene sets
 proliferation_science_genes <- c(
   "TPX2", "PRC1", "FOXM1", "CDK1", "C20orf24", "MCM2", "H2AFZ", "TOP2A", "PCNA", "UBE2C",
   "MELK", "TRIP13", "NCAPD2", "MCM7", "RNASEH2A", "RAD51AP1", "KIF20A", "CDC45", "MAD2L1", "ESPL1",
@@ -827,7 +607,6 @@ essential_cell_cycle_genes <- c(
   "UPF1", "WDR74", "WEE1", "YME1L1", "ZNF830"
 )
 
-# Create the TERM2GENE data frame
 TERM2GENE <- data.frame(
   term = c(rep("Proliferation_Science_paper", length(proliferation_science_genes)),
            rep("Meta_PCNA", length(meta_pcna_genes)),
@@ -835,20 +614,16 @@ TERM2GENE <- data.frame(
   Gene_symbol = c(proliferation_science_genes, meta_pcna_genes, essential_cell_cycle_genes)
 )
 
-
-# Rename the values in the 'term' column
 TERM2GENE <- TERM2GENE %>%
   mutate(term = recode(term,
                        "Proliferation_Science_paper" = "Signt_1",
                        "Meta_PCNA" = "Signt_2",
                        "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019" = "Signt_3"))
-# View the TERM2GENE data frame
+
 print(TERM2GENE)
 
-
-# Get the Entrez IDs for the genes
 mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host="https://useast.ensembl.org")
-gene_ids <- (TERM2GENE$Gene_symbol) # This reads the Ensembl transcripts IDs in the specific column of the 'Table_ANNOTATED file.
+gene_ids <- (TERM2GENE$Gene_symbol)
 
 res_gene_entrez_id <- getBM(attributes = c('entrezgene_id',
                                            'external_gene_name'),
@@ -865,104 +640,81 @@ TERM2GENE_entrez <- dplyr::left_join(TERM2GENE, res_gene_entrez_id, by = "Gene_s
 TERM2GENE <- TERM2GENE_entrez
 print(TERM2GENE)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-# GENERATE A FUNCTION TO PERFORM GSEA WITH THE PROLIFERATION SIGNATURES Signt_1, Signt_2 and Signt_3 ON ALL iLINCs SAMPLES USING TERM2GENE
-# This code utilizes clusterProfiler to perform GSEA on all iLINCs samples using TERM2GENE
-# Function to fetch Entrez IDs using biomaRt (run once for all data)
 get_entrez_ids_all <- function(result_list_2) {
   all_gene_symbols <- unique(unlist(lapply(result_list_2, function(df) df$gene_symbol)))
-  
+
   mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host = "https://www.ensembl.org")
-  
+
   res_gene_entrez_id <- getBM(attributes = c('entrezgene_id', 'external_gene_name'),
                               filters = 'external_gene_name',
                               values = all_gene_symbols,
                               mart = mart)
-  
+
   res_gene_entrez_id <- dplyr::filter(res_gene_entrez_id, !is.na(entrezgene_id)) %>%
     dplyr::rename(gene_symbol = external_gene_name) %>%
     dplyr::distinct(entrezgene_id, .keep_all = TRUE)
-  
+
   return(res_gene_entrez_id)
 }
 
-# Function to process data and perform GSEA using TERM2GENE
 process_and_save_results <- function(data_frame, z_score_col, plot_title, output_dir, TERM2GENE, res_gene_entrez_id) {
-  # Create the output directory if it does not exist
+
   if (!dir.exists(output_dir)) {
     dir.create(output_dir)
   }
-  
-  # Merge data frame with Entrez IDs
+
   data_frame <- dplyr::left_join(data_frame, res_gene_entrez_id, by = "gene_symbol")
-  
-  # Prepare data for GSEA
+
   all_values_entrez <- data_frame %>%
     dplyr::select(entrezgene_id, !!sym(z_score_col)) %>%
     dplyr::filter(!is.na(!!sym(z_score_col))) %>%
     dplyr::filter(!is.na(entrezgene_id))
-  
+
   all_values_z_score_entrez <- all_values_entrez[[z_score_col]]
   names(all_values_z_score_entrez) <- all_values_entrez$entrezgene_id
-  
+
   all_values_z_score_entrez <- na.omit(all_values_z_score_entrez)
   all_values_z_score_entrez <- sort(all_values_z_score_entrez, decreasing = TRUE)
-  
-  # Debugging: Print the number of genes before and after filtering
+
   cat("Sample:", plot_title, "\n")
   cat("Number of genes:", length(all_values_z_score_entrez), "\n")
-  
+
   if (length(all_values_z_score_entrez) == 0) {
     cat("No genes available for", plot_title, "\n")
     return(NULL)
   }
-  
-  # GSEA using TERM2GENE
+
   gsea_res <- GSEA(geneList = all_values_z_score_entrez,
                    TERM2GENE = TERM2GENE,
                    pvalueCutoff = 0.05,
                    pAdjustMethod = "BH",
                    minGSSize = 10,
                    maxGSSize = 500)
-  
+
   if (is.null(gsea_res) || nrow(as.data.frame(gsea_res)) == 0) {
     cat("No significant enrichment found for GSEA (TERM2GENE) in", plot_title, "\n")
   }
-  
+
   return(list(gsea_res = gsea_res))
 }
 
-# Main function to iterate over the list and process each element
 process_result_list <- function(result_list_2, output_dir, TERM2GENE, res_gene_entrez_id) {
   plot_titles <- names(result_list_2)
   results_list <- list()
-  
+
   for (plot_title in plot_titles) {
     data_frame <- result_list_2[[plot_title]]
     z_score_col <- "z_score"
-    
+
     res <- process_and_save_results(data_frame, z_score_col, plot_title, output_dir, TERM2GENE, res_gene_entrez_id)
-    
+
     if (!is.null(res) && !is.null(res$gsea_res) && nrow(as.data.frame(res$gsea_res)) > 0) {
       results_list[[plot_title]] <- res
     } else {
       cat("No significant GSEA results for:", plot_title, "\n")
     }
   }
-  
-  # Combine all GSEA results into a single data frame
+
   combined_gsea <- do.call(rbind, lapply(names(results_list), function(name) {
     df <- as.data.frame(results_list[[name]]$gsea_res)
     if (!is.null(df) && nrow(df) > 0) {
@@ -970,53 +722,27 @@ process_result_list <- function(result_list_2, output_dir, TERM2GENE, res_gene_e
     }
     return(df)
   }))
-  
+
   return(list(combined_gsea = combined_gsea))
 }
 
-# Fetch Entrez IDs for all samples only once
 res_gene_entrez_id <- get_entrez_ids_all(result_list_2)
 
-# Define the output directory and process the result list
-output_directory <- "path_to/Results_GSEA"
+output_directory <- gsea_output_dir
 results <- process_result_list(result_list_2, output_directory, TERM2GENE, res_gene_entrez_id)
 
-# Save combined results to files
 write.csv(results$combined_gsea, file = paste0(output_directory, "/combined_gsea_results.csv"), row.names = FALSE)
 
-
-
-
-
-
-
-
-
-# STEP 9 load the results of the GSE without re-running the script ####
-
-# Open the combined_kk2 generated using the gseKEGG function of the clusterProfiler package
-GSEA_combined_kk2 <- read.delim("path_to/Results_GSEA/combined_kk2_results.csv",
+GSEA_combined_kk2 <- read.delim(file.path(gsea_output_dir, "combined_kk2_results.csv"),
                                 sep = ",", header = T, stringsAsFactors = F)
 
-
-
-# Open the combined_gsea generated using the GSEA function of the clusterProfiler to assess the proliferation signatures
-GSEA_combined_iLINCs <- read.delim("path_to/Results_GSEA/combined_gsea_results.csv",
+GSEA_combined_iLINCs <- read.delim(file.path(gsea_output_dir, "combined_gsea_results.csv"),
                                 sep = ",", header = T, stringsAsFactors = F)
 
-
-
-# Join the GSEA_combined_kk2 data frame with the results of the proliferation signatures GSEA
 iLINCs_complete_GSEA <- dplyr::bind_rows(GSEA_combined_iLINCs, GSEA_combined_kk2)
 
-
-
-
-
-# Identify Sample with NES values for all three proliferation signatures
 required_ids <- c("hsa04110", "Signt_1", "Signt_2", "Signt_3")
 
-# Get Sample names that have all three IDs
 valid_samples <- iLINCs_complete_GSEA %>%
   filter(ID %in% required_ids) %>%
   group_by(Sample) %>%
@@ -1024,26 +750,9 @@ valid_samples <- iLINCs_complete_GSEA %>%
   pull(Sample) %>%
   unique()
 
-# Filter the original data frame to include only the valid samples
 iLINCs_complete_GSEA <- iLINCs_complete_GSEA %>%
   filter(Sample %in% valid_samples)
 
-
-
-
-
-
-
-
-
-
-# STEP 10 data analysis ####
-# Filter the samples with the down-regulation of cell cycle and generate a heat map with the kk2 results
-library(pheatmap)
-
-
-# Filter only the pathways of interest
-# Selected KEGG signaling pathways and proliferation signatures
 Selected_KEGG_pathways <- c("hsa04150", "hsa04062", "hsa04668", "hsa04657", "hsa04064", "hsa04110", "hsa03030", "hsa03410", "hsa03430", "hsa03420",
                             "hsa03320", "hsa03460", "hsa03440", "hsa04014", "hsa04066", "hsa04218", "hsa04512", "hsa04024", "hsa04071", "hsa04070",
                             "hsa04068", "hsa04310", "hsa03082", "hsa04015", "hsa04625", "hsa04371", "hsa04390", "hsa04010", "hsa04622", "hsa04350",
@@ -1052,254 +761,145 @@ Selected_KEGG_pathways <- c("hsa04150", "hsa04062", "hsa04668", "hsa04657", "hsa
 
 GSEA_combined_kk2_filtered <- dplyr::filter(iLINCs_complete_GSEA, ID %in% Selected_KEGG_pathways)
 
-
-
 generate_heatmap <- function(kk2_df) {
-  # Prepare data for the heatmap
+
   kk2_df <- kk2_df %>%
     dplyr::select(Description, Sample, NES) %>%
     tidyr::spread(Sample, NES)
-  
-  # Replace NA values with 0
+
   kk2_df[is.na(kk2_df)] <- 0
-  
-  # Set rownames and remove the Description column
+
   rownames(kk2_df) <- kk2_df$Description
   kk2_df <- kk2_df[,-1]
-  
-  # Define a custom color palette with white at 0
+
   my_palette <- colorRampPalette(c("blue", "white", "red"))(100)
-  
-  # Define breaks that ensure 0 is mapped to white
+
   max_val <- max(kk2_df)
   min_val <- min(kk2_df)
-  
-  # Create breaks that center around 0
+
   breaks <- c(seq(min_val, -0.001, length.out = 50), 0, seq(0.001, max_val, length.out = 50))
-  
-  # Generate heatmap
-  pheatmap(as.matrix(kk2_df), 
-           color = my_palette, 
+
+  pheatmap(as.matrix(kk2_df),
+           color = my_palette,
            breaks = breaks,
-           cluster_rows = TRUE, 
-           cluster_cols = TRUE, 
-           display_numbers = TRUE, 
-           number_format = "%.2g", 
+           cluster_rows = TRUE,
+           cluster_cols = TRUE,
+           display_numbers = TRUE,
+           number_format = "%.2g",
            main = "Heatmap of KEGG pathways all samples",
-           fontsize_row = 10, 
+           fontsize_row = 10,
            fontsize_col = 2,
            fontsize_number = 0)
 }
 
-# Generate the heatmap using the combined_kk2_df
 generate_heatmap(GSEA_combined_kk2_filtered)
 
-
-# Save the combined kk2 data frame to a file if needed
-# write.csv(GSEA_combined_kk2_filtered, file = "combined_kk2_results.csv", row.names = FALSE)
 Samples_N1 <- unique(GSEA_combined_kk2_filtered$Sample)
-# 268 samples
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Identify all samples with a significant down-regulation of the cell cycle and negative NES values of the proliferation signatures
-# Identify the samples where ID is "hsa04110", "Signt_1", "Signt_2", or "Signt_3" and NES >= 0
 iLINCs_proliferating <- GSEA_combined_kk2_filtered[(GSEA_combined_kk2_filtered$ID %in% c("hsa04110", "Signt_1", "Signt_2", "Signt_3") & GSEA_combined_kk2_filtered$NES >= 0), ]
 iLINCs_proliferating <- dplyr::distinct(iLINCs_proliferating, Sample, .keep_all = TRUE)
 
-# Remove these samples from the complete dataset
 GSEA_combined_kk2_filtered_cell_cycle_arrest <- GSEA_combined_kk2_filtered[!(GSEA_combined_kk2_filtered$Sample %in% iLINCs_proliferating$Sample), ]
 
-
-
-
-
-
-# Generate a heat map with the kk2 results of the samples with a significant down-regulation of the cell cycle, but retaining the signal of all the mitogenic pathways
 generate_heatmap <- function(kk2_df) {
-  # Prepare data for the heatmap
+
   kk2_df <- kk2_df %>%
     dplyr::select(Description, Sample, NES) %>%
     tidyr::spread(Sample, NES)
-  
-  # Replace NA values with 0
+
   kk2_df[is.na(kk2_df)] <- 0
-  
-  # Set rownames and remove the Description column
+
   rownames(kk2_df) <- kk2_df$Description
   kk2_df <- kk2_df[,-1]
-  
-  # Define a custom color palette with white at 0
+
   my_palette <- colorRampPalette(c("blue", "white", "red"))(100)
-  
-  # Define breaks that ensure 0 is mapped to white
+
   max_val <- max(kk2_df, na.rm = TRUE)
   min_val <- min(kk2_df, na.rm = TRUE)
-  
-  # Create breaks that center around 0
-  breaks <- c(seq(min_val, -0.001, length.out = 50), 
-              0, 
+
+  breaks <- c(seq(min_val, -0.001, length.out = 50),
+              0,
               seq(0.001, max_val, length.out = 50))
-  
-  # Generate heatmap
-  pheatmap(as.matrix(kk2_df), 
-           color = my_palette, 
+
+  pheatmap(as.matrix(kk2_df),
+           color = my_palette,
            breaks = breaks,
-           cluster_rows = TRUE, 
-           cluster_cols = TRUE, 
-           display_numbers = TRUE, 
-           number_format = "%.2g", 
+           cluster_rows = TRUE,
+           cluster_cols = TRUE,
+           display_numbers = TRUE,
+           number_format = "%.2g",
            main = "Heatmap of KEGG pathways samples cell cycle arrest",
-           fontsize_row = 10, 
+           fontsize_row = 10,
            fontsize_col = 2,
            fontsize_number = 0)
 }
 
-# Generate the heatmap using the combined_kk2_df
 generate_heatmap(GSEA_combined_kk2_filtered_cell_cycle_arrest)
 
 Samples_N2 <- unique(GSEA_combined_kk2_filtered_cell_cycle_arrest$Sample)
-# 253 samples
 
-
-
-
-
-
-
-
-# Identify the samples with a significant down-regulation of cell cycle and mitogenic signaling pathways
-# Check all the pathways that may foster cell proliferation
 ids_to_check <- c(
-  "hsa04150", "hsa04062", "hsa04668", "hsa04657", "hsa04064", "hsa03320", 
+  "hsa04150", "hsa04062", "hsa04668", "hsa04657", "hsa04064", "hsa03320",
   "hsa04014", "hsa04066", "hsa04068", "hsa04310", "hsa04015", "hsa04070",
-  "hsa04625", "hsa04371", "hsa04390", "hsa04010", "hsa04622", "hsa04350", 
+  "hsa04625", "hsa04371", "hsa04390", "hsa04010", "hsa04622", "hsa04350",
   "hsa04152", "hsa04926", "hsa04630", "hsa04072", "hsa04151", "hsa04512",
   "hsa04910", "hsa04330", "hsa04012", "hsa04022", "hsa04020", "hsa03030",
   "hsa03420", "hsa04071"
 )
 
-# Identify samples with NES > 0 for the specified IDs
 samples_to_exclude <- GSEA_combined_kk2_filtered_cell_cycle_arrest %>%
   dplyr::filter(ID %in% ids_to_check, NES >= 0) %>%
   dplyr::select(Sample) %>%
   dplyr::distinct()
 
-# Remove these samples from the original data frame
-iLINCS_cell_cycle_arrest_mitogenic_signaling <- dplyr::filter(GSEA_combined_kk2_filtered_cell_cycle_arrest, 
+iLINCS_cell_cycle_arrest_mitogenic_signaling <- dplyr::filter(GSEA_combined_kk2_filtered_cell_cycle_arrest,
                                                               !Sample %in% samples_to_exclude$Sample)
 
-
-
 generate_heatmap <- function(kk2_df) {
-  # Prepare data for the heatmap
+
   kk2_df <- kk2_df %>%
     dplyr::select(Description, Sample, NES) %>%
     tidyr::spread(Sample, NES)
-  
-  # Replace NA values with a large number for better visualization in the heatmap
+
   kk2_df[is.na(kk2_df)] <- 0
-  
-  
+
   rownames(kk2_df) <- kk2_df$Description
-  kk2_df <- kk2_df[,-1]  # Remove the Description column
-  
-  # Generate heatmap
-  pheatmap(as.matrix(kk2_df), 
-           color = colorRampPalette(c("blue", "white"))(50), 
-           cluster_rows = TRUE, 
-           cluster_cols = TRUE, 
-           display_numbers = TRUE, 
-           number_format = "%.2g", 
+  kk2_df <- kk2_df[,-1]
+
+  pheatmap(as.matrix(kk2_df),
+           color = colorRampPalette(c("blue", "white"))(50),
+           cluster_rows = TRUE,
+           cluster_cols = TRUE,
+           display_numbers = TRUE,
+           number_format = "%.2g",
            main = "Heatmap of KEGG pathways cell cycle arrest and no mitogenic signaling",
-           fontsize_row = 11, 
+           fontsize_row = 11,
            fontsize_col = 2,
            fontsize_number = 0)
 }
 
-# Generate the heatmap using the combined_kk2_df
 Heatmap_cell_cycle <- generate_heatmap(iLINCS_cell_cycle_arrest_mitogenic_signaling)
 print(Heatmap_cell_cycle)
 
-# Check the n. of samples that show cell cycle arrest and no mitogenic signaling
 Samples_N3 <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
-# 149 samples
 
-# Save the plot
-ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 10, height = 8, path = "path_to/Desktop")
+ggsave("Heatmap_cell_cycle.pdf", plot = Heatmap_cell_cycle, width = 10, height = 8, path = analysis_plot_dir)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# STEP 11 ####
-## Filter the list object result_list_2 for the samples with a significant down-regulation of the cell cycle and the absence of active mitogenic signaling, identified with GSEA ####
-# This generates the list of samples with a significant down-regulation of the cell cycle genes
 sample_names_to_retain <- unique(iLINCS_cell_cycle_arrest_mitogenic_signaling$Sample)
 result_list_2_filtered <- result_list_2[names(result_list_2) %in% sample_names_to_retain]
 
+source(gene_sets_file)
 
-
-
-
-## Load all the gene sets for the analysis of the cell proliferation ####
-source("path_to/All_gene_sets_AC.R")
-
-
-
-
-
-
-
-
-
-
-# STEP 12 ####
-
-
-## Load the function which plots the MFE values of the canonical transcripts with a significant z-score and generates box plots with the mean and SD of different proliferation gene sets ####
-
-# Create an empty data frame to store the results in the global environment
 all_results <- data.frame(
   SampleName = character(0),
   Net_MFE_change = numeric(0),
   MeanMFE_UP = numeric(0),
   MeanMFE_DOWN = numeric(0),
-  TTEST = numeric(0),
-  pValue = numeric(0),
-  ks_test_all_UP_vs_DOWN = numeric(0),
-  ks_test_MFE_075_above = numeric(0),
-  ks_test_MFE_025_below = numeric(0),
-  Mean_Cp_37C_UP = numeric(0),
-  Mean_Cp_37C_DOWN = numeric(0),
-  ks_test_all_UP_vs_DOWN_Cp_37C = numeric(0),
+  TTEST_pValue = numeric(0),
+  wilcox_test_all_UP_vs_DOWN_pValue = numeric(0),
+  ks_test_all_UP_vs_DOWN_pValue = numeric(0),
+  ks_test_MFE_075_above_pValue = numeric(0),
+  ks_test_MFE_025_below_pValue = numeric(0),
   Proliferation_Science = numeric(0),
   PCNA = numeric(0),
   Essential_cell_cycle_genes = numeric(0),
@@ -1308,80 +908,63 @@ all_results <- data.frame(
   High_fid_pol = numeric(0)
 )
 
-# Function to analyze the data
-process_result_list <- function(Sample_name) { 
+process_result_list <- function(Sample_name) {
   message("Processing ", Sample_name)
-  df <- result_list_2_filtered[[Sample_name]] # This command allows access to the individual data frames
-  title_plot_1 <- paste0(Sample_name, "_Analysis MFE 24h p_value < 0.05") # Generate a code which automatically assigns the dataset name to the plot
+  df <- result_list_2_filtered[[Sample_name]]
+  title_plot_1 <- paste0(Sample_name, "_Analysis MFE 24h p_value < 0.05")
   title_plot_2 <- paste0("Analysis cell proliferation iLINCS 24h_", Sample_name)
   Plot_filename_1 <- paste0(Sample_name, "_MFE")
   Plot_filename_2 <- paste0(Sample_name, "_Gene_sets")
   message("Save to ", Plot_filename_1, " and ", Plot_filename_2)
-  
-  # Join the data with Table_ANNOTATED_iLINCs
+
   Sample_name_TX <- dplyr::right_join(df, Table_ANNOTATED_iLINCs, by = "ensembl_id")
-  # Filter only statistically significant z-scores
+
   Sample_name_TX_filtered <- dplyr::filter(Sample_name_TX, p_value < 0.05)
-  
-  
-  # Generate a scatter plot Log2_FC vs Normalized_MFE
+
   plot <- ggplot(Sample_name_TX_filtered, aes(y=Normalized_MFE, x=z_score)) +
     geom_point(size=1.5, alpha=0.3)+
     theme_classic() +
     theme(legend.position="none") +
     geom_vline(xintercept = 0, linewidth=0.3) +
-    #xlim(-5.5,5.5) +
+
     theme(axis.title = element_text(size = 20)) +
     theme(plot.title = element_text(size = 15)) +
     labs(y="DGfold / nt (kcal/mol)",x="z_score",title = title_plot_1)
-  
-  # Look at the mean log2_FC
+
   MFE_Sample_name_UP <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
   Mean_MFE_Sample_name_UP <- mean(MFE_Sample_name_UP$Normalized_MFE, na.rm = TRUE)
-  
+
   MFE_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
   Mean_MFE_Sample_name_DOWN <- mean(MFE_Sample_name_DOWN$Normalized_MFE, na.rm = TRUE)
-  
+
   TTEST <- t.test(MFE_Sample_name_DOWN$Normalized_MFE, MFE_Sample_name_UP$Normalized_MFE, paired=FALSE)
-  
-  # Wilcoxon rank-sum test (two-sided) for Normalized MFE
+
   wilcox_test_all_UP_vs_DOWN <- wilcox.test(
     MFE_Sample_name_DOWN$Normalized_MFE,
     MFE_Sample_name_UP$Normalized_MFE,
     paired = FALSE,
     alternative = "two.sided"
   )
-  
-  # Add K-S test to look at the differences between the up-regukated and down-regulated genes
+
   ks_test_all_UP_vs_DOWN <- ks.test(MFE_Sample_name_DOWN$Normalized_MFE, MFE_Sample_name_UP$Normalized_MFE)
-  
-  
-  
-  quantile_075_MFE_Sample_name_UP <- quantile(MFE_Sample_name_UP$Normalized_MFE, probs = c(0.75), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  quantile_075_MFE_Sample_name_DOWN <- quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = c(0.75), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  # Values above 0.75 quantile
+
+  quantile_075_MFE_Sample_name_UP <- quantile(MFE_Sample_name_UP$Normalized_MFE, probs = c(0.75), na.rm = TRUE)
+  quantile_075_MFE_Sample_name_DOWN <- quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = c(0.75), na.rm = TRUE)
+
   ks_test_MFE_075_above <- ks.test(MFE_Sample_name_UP$Normalized_MFE[MFE_Sample_name_UP$Normalized_MFE >= quantile_075_MFE_Sample_name_UP],
                                    MFE_Sample_name_DOWN$Normalized_MFE[MFE_Sample_name_DOWN$Normalized_MFE >= quantile_075_MFE_Sample_name_DOWN])
-  
-  # Look at the differences between the 0.25 quantile 
-  quantile_025_MFE_Sample_name_UP <- quantile(MFE_Sample_name_UP$Normalized_MFE, probs = c(0.25), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  quantile_025_MFE_Sample_name_DOWN <- quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = c(0.25), na.rm = TRUE) # if necessary, remove NA (missing) values from the data before computing the quantile
-  # Values below 0.25 quantile
+
+  quantile_025_MFE_Sample_name_UP <- quantile(MFE_Sample_name_UP$Normalized_MFE, probs = c(0.25), na.rm = TRUE)
+  quantile_025_MFE_Sample_name_DOWN <- quantile(MFE_Sample_name_DOWN$Normalized_MFE, probs = c(0.25), na.rm = TRUE)
+
   ks_test_MFE_025_below <- ks.test(MFE_Sample_name_UP$Normalized_MFE[MFE_Sample_name_UP$Normalized_MFE <= quantile_025_MFE_Sample_name_UP],
                                    MFE_Sample_name_DOWN$Normalized_MFE[MFE_Sample_name_DOWN$Normalized_MFE <= quantile_025_MFE_Sample_name_DOWN])
-  
-  
-  
-  # Calculate the net MFE change using the z-scores filtered for p-value < 0.05
-  Sample_name_TX_net_MFE_change <- Sample_name_TX_filtered %>% 
+
+  Sample_name_TX_net_MFE_change <- Sample_name_TX_filtered %>%
     dplyr::mutate(Net_MFE_change = (Normalized_MFE * z_score) * (-1))
-  
+
   Net_MFE_change = sum(Sample_name_TX_net_MFE_change$Net_MFE_change, na.rm = TRUE)
-  
-  
-  
-  
-  # Show the data with a violin plot
+
   MFE_Sample_name <- ggplot(Sample_name_TX_filtered, aes(x = factor(z_score > 0), y = Normalized_MFE)) +
     geom_violin(fill = "lightgrey", alpha = 0.7) +
     geom_jitter(width = 0.1, size = 1, alpha = 0.3) +
@@ -1393,132 +976,62 @@ process_result_list <- function(Sample_name) {
     geom_vline(xintercept = 0, linewidth = 0.3) +
     labs(y = "Normalized_MFE", x = NULL, title = title_plot_1) +
     scale_x_discrete(labels = c("z_score < 0", "z_score > 0"))
-  
-  # Save the plot with a unique name based on Sample_name
-  Plot_filename_1 <- paste0("path_to/Results_analysis_RNA_MFE_iLINCS/Plots_all_cancer_cell_lines_10uM/Plot_", Sample_name, "_MFE.pdf")
-  ggsave(filename = Plot_filename_1, plot = MFE_Sample_name, width = 20, height = 15, units = "cm") 
-  
-  
-  
-  
-  # Add the Cp_37C data
-  # Look at the mean log2_FC
-  Cp_37C_Sample_name_UP <- dplyr::filter(Sample_name_TX_filtered, z_score > 0)
-  Mean_Cp_37C_Sample_name_UP <- mean(Cp_37C_Sample_name_UP$Cp_37C, na.rm = TRUE)
-  
-  Cp_37C_Sample_name_DOWN <- dplyr::filter(Sample_name_TX_filtered, z_score < 0)
-  Mean_Cp_37C_Sample_name_DOWN <- mean(Cp_37C_Sample_name_DOWN$Cp_37C, na.rm = TRUE)
-  
-  TTEST_Cp_37C <- t.test(Cp_37C_Sample_name_DOWN$Cp_37C, Cp_37C_Sample_name_UP$Cp_37C, paired=FALSE)
-  
-  # Wilcoxon rank-sum test (two-sided) for Cp_37C
-  wilcox_test_all_UP_vs_DOWN_Cp_37C <- wilcox.test(
-    Cp_37C_Sample_name_DOWN$Cp_37C,
-    Cp_37C_Sample_name_UP$Cp_37C,
-    paired = FALSE,
-    alternative = "two.sided"
-  )
-  
-  # Add K-S test to look at the differences between the up-regukated and down-regulated genes
-  ks_test_all_UP_vs_DOWN_Cp_37C_data <- ks.test(Cp_37C_Sample_name_DOWN$Cp_37C, Cp_37C_Sample_name_UP$Cp_37C)
-  
-  
-  
-  
-  # Analysis cell proliferation
-  # IMPORTANT:
-  # Here I calculate the z-scores mean using all the z-scores, not only those with a significant change vs control.
-  
-  # Filter the proliferation gene sets by using a function
-  # Use a function also to determine the mean and standard deviation of each set and the plot all of them together
-  
-  # Generate the function that filters each gene set in the target data frame
-  # This function will be used in the following commands
+
+  Plot_filename_1 <- file.path(analysis_plot_dir, paste0("Plot_", Sample_name, "_MFE.pdf"))
+  ggsave(filename = Plot_filename_1, plot = MFE_Sample_name, width = 20, height = 15, units = "cm")
+
   filtering <- function(x) {
     Filtering<-dplyr::filter(Sample_name_TX, gene_symbol %in% x)
     return(Filtering)
   }
-  
-  
-  # Generate the list containing all the gene sets to be used for the filtering.
+
   CURATED_PATHWAYS.input <- list(MTOR_positive_regulators, MTOR_negative_regulators, Proliferation_Science_paper, Meta_PCNA, Proliferation_GO_genes_Magill_Sack_2018, Proliferation_STOP_genes_Magill_Sack_2018, Reactome_G1_phase, Proliferation_Carey_2021, Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, Homologous_recombination, Fanconi_anemia, High_fidelity_polymerases)
-  
-  # This creates the names that will be used to for the final data frames of each file resulting from the filtering of the target data frame with each gene set
+
   CURATED_PATHWAYS.output <- c("MTOR_POS", "MTOR_NEG", "Proliferation_Science", "Meta_PCNA", "Proliferation_GO", "Proliferation_STOP", "G1_phase", "Proliferation_Carey", "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "HR", "Fanconi_anemia", "HF_POL")
-  
-  # Assign the names of the gene sets to each entry in the list
+
   names(CURATED_PATHWAYS.input) <- CURATED_PATHWAYS.output
-  
-  # Apply the filtering function to create a list of data.frames
+
   Curated_test_df <- lapply(CURATED_PATHWAYS.input, function(x) filtering(x))
-  
-  # creating a vector with desired names of filtered data.frames
+
   Curated_dfs.output <- c("df_MTOR_POS", "df_MTOR_NEG", "df_Proliferation_Science", "df_Meta_PCNA", "df_Proliferation_GO", "df_Proliferation_STOP", "df_G1_phase", "df_Proliferation_Carey", "df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "df_HR", "df_FA", "df_HF_POL")
-  
-  # loop to assign data.frames to the desired variable name
+
   for (i in (seq_along(Curated_dfs.output))) {
     do.call("<-",list(Curated_dfs.output[i], Curated_test_df[[i]]))
   }
-  
-  # Now simply type a gene set (for example: 'df_MTOR_POS' to have the full table of the filtered data)
-  # Each gene set is a data frame that can be used to generate the plots.
-  
-  
-  
-  
-  
-  # Generate new functions 'mean' and 'sd' and loop them through the 'Normalized_MFE' columns of each data frame generated by the automatc filtering here above
-  # Generate the function for to calculate the MEAN of the normalized_MFE of each gene set resulting from the filtering here above.
+
   Mean_curated <- function(x) {
     mean_curated<-mean(x$z_score)
     return(mean_curated)
   }
-  
-  # Create an input of the data frames generated here above that I will use to calculate the mean of a specific column
+
   Curated_input_dfs <- list(df_MTOR_POS, df_MTOR_NEG, df_Proliferation_Science, df_Meta_PCNA, df_Proliferation_GO, df_Proliferation_STOP, df_G1_phase, df_Proliferation_Carey, df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, df_HR, df_FA, df_HF_POL)
-  
-  # Apply the mean function to create a list of data.frames
+
   Curated_mean_test_df <- lapply(Curated_input_dfs, function(x) Mean_curated(x))
-  
-  # creating a vector with desired names of the files containing the mean of each gene set Normalized MFE
+
   Curated_mean_dfs.output <- c("Mean_MTOR_POS", "Mean_MTOR_NEG", "Mean_Proliferation_Science", "Mean_Meta_PCNA", "Mean_Proliferation_GO", "Mean_Proliferation_STOP", "Mean_G1_phase", "Mean_Proliferation_Carey", "Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "Mean_HR", "Mean_FA", "Mean_HF_POL")
-  
-  # loop to assign data.frames to the desired variable name
+
   for (i in (seq_along(Curated_mean_dfs.output))) {
     do.call("<-",list(Curated_mean_dfs.output[i], Curated_mean_test_df[[i]]))
   }
-  
-  
-  
-  
-  # Generate the function to calculate the STANDRAD DEVIATION of the normalized_MFE of each gene set resulting from the fuiltering here above.
+
   STDEV_curated <- function(x) {
     stdev_curated<-sd(x$z_score)
     return(stdev_curated)
   }
-  
-  # Apply the mean function to create a list of data.frames
+
   Curated_stdev_test_df <- lapply(Curated_input_dfs, function(x) STDEV_curated(x))
-  
-  # creating a vector with desired names of the files containing the mean of each gene set Normalized MFE
+
   Curated_STDEV_dfs.output <- c("STDEV_MTOR_POS", "STDEV_MTOR_NEG", "STDEV_Proliferation_Science", "STDEV_Meta_PCNA", "STDEV_Proliferation_GO", "STDEV_Proliferation_STOP", "STDEV_G1_phase", "STDEV_Proliferation_Carey", "STDEV_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "STDEV_HR", "STDEV_FA", "STDEV_HF_POL")
-  
-  # loop to assign data.frames to the desired variable name
+
   for (i in (seq_along(Curated_STDEV_dfs.output))) {
     do.call("<-",list(Curated_STDEV_dfs.output[i], Curated_stdev_test_df[[i]]))
   }
-  
-  
-  
-  
-  
-  # Generate the data frame for the plot
+
   df_MFE_iLINCS <- data.frame(mean=c(Mean_MTOR_POS, Mean_MTOR_NEG, Mean_Proliferation_Science, Mean_Meta_PCNA, Mean_Proliferation_GO, Mean_Proliferation_STOP, Mean_G1_phase, Mean_Proliferation_Carey, Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, Mean_HR, Mean_FA, Mean_HF_POL),
                               sd=c(STDEV_MTOR_POS, STDEV_MTOR_NEG, STDEV_Proliferation_Science, STDEV_Meta_PCNA, STDEV_Proliferation_GO, STDEV_Proliferation_STOP, STDEV_G1_phase, STDEV_Proliferation_Carey, STDEV_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019, STDEV_HR, STDEV_FA, STDEV_HF_POL),
                               Category=as.factor(c("MTOR_POS", "MTOR_NEG", "Proliferation_Science", "Meta_PCNA", "Proliferation_GO", "Proliferation_STOP", "G1_phase", "Proliferation_Carey", "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "HR", "FA", "HF_POL")))
   df_MFE_iLINCS
-  
-  library(ggplot2)
+
   ggplot(df_MFE_iLINCS, aes(x=reorder(Category, -mean), y=mean)) +
     theme_bw() +
     geom_point(position=position_dodge(width = 1), stat="identity",colour='black') +
@@ -1531,13 +1044,7 @@ process_result_list <- function(Sample_name) {
     labs(x="", y="z-score", title = title_plot_2) +
     scale_x_discrete(limits = c("Proliferation_Science", "Meta_PCNA", "Proliferation_GO", "Proliferation_STOP", "Proliferation_Carey", "Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "G1_phase", "MTOR_POS", "MTOR_NEG", "HR", "FA", "HF_POL")) +
     theme(plot.title = element_text(color="black", size=14, face="bold"))
-  
-  
-  
-  # Merge all the data frames to generate box plots
-  # Add a column with the specific name of the gene set
-  # IMPORTANT:
-  # SOme of the data frames are empty and have to be removed for the final plot
+
   df_MTOR_POS$Gene_set <- "df_MTOR_POS"
   df_MTOR_NEG$Gene_set <- "df_MTOR_NEG"
   df_Proliferation_Science$Gene_set <- "df_Proliferation_Science"
@@ -1550,8 +1057,7 @@ process_result_list <- function(Sample_name) {
   df_HR$Gene_set <- "df_HR"
   df_FA$Gene_set <- "df_FA"
   df_HF_POL$Gene_set <- "df_HF_POL"
-  
-  # Join all the gene sets
+
   iLINCS_gene_sets <- dplyr::bind_rows(df_MTOR_POS, df_MTOR_NEG) %>%
     dplyr::bind_rows(df_Proliferation_Science) %>%
     dplyr::bind_rows(df_Meta_PCNA) %>%
@@ -1563,32 +1069,21 @@ process_result_list <- function(Sample_name) {
     dplyr::bind_rows(df_HR) %>%
     dplyr::bind_rows(df_FA) %>%
     dplyr::bind_rows(df_HF_POL)
-  
-  
-  # Box plot
+
   Gene_sets_plot <- ggplot(iLINCS_gene_sets, aes(Gene_set, z_score)) +
-    geom_boxplot(fill="lightgrey") + 
+    geom_boxplot(fill="lightgrey") +
     theme_bw() +
     theme(axis.text.y = element_text(size=14)) +
     theme(axis.text.x = element_text(size=12, angle=45,hjust=0.95,vjust=0.98)) +
     labs(x="", y="z-score", title = title_plot_2) +
     theme(plot.title = element_text(size = 9)) +
     scale_x_discrete(limits = c("df_Proliferation_Science", "df_Meta_PCNA", "df_Proliferation_GO", "df_Proliferation_STOP", "df_Proliferation_Carey", "df_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019", "df_G1_phase", "df_MTOR_POS", "df_MTOR_NEG", "df_HR", "df_FA", "df_HF_POL"))
-  
-  # Save the plot as pdf  
-  # Save the plot with a unique name based on Sample_name
-  # Plot_filename_2 <- paste0(Sample_name, "_Gene_sets")
-  # ggsave(Plot_filename_2, Gene_sets_plot, path = "path_to/Results_analysis_RNA_MFE_iLINCS/Plots_all_cell_lines") 
-  
-  
-  # Save the plot with a unique name based on Sample_name
-  Plot_filename_2 <- paste0("path_to/Results_analysis_RNA_MFE_iLINCS/Plots_all_cancer_cell_lines_10uM/Plot_", Sample_name, "_Gene_sets.pdf")
-  ggsave(filename = Plot_filename_2, plot = Gene_sets_plot, width = 20, height = 15, units = "cm") 
-  
-  
-  # Create a data frame with the results for the current sample
+
+  Plot_filename_2 <- file.path(analysis_plot_dir, paste0("Plot_", Sample_name, "_Gene_sets.pdf"))
+  ggsave(filename = Plot_filename_2, plot = Gene_sets_plot, width = 20, height = 15, units = "cm")
+
   sample_results <- data.frame(
-    SampleName = Plot_filename_1,
+    SampleName = Sample_name,
     Net_MFE_change = Net_MFE_change,
     MeanMFE_UP = Mean_MFE_Sample_name_UP,
     MeanMFE_DOWN = Mean_MFE_Sample_name_DOWN,
@@ -1597,10 +1092,6 @@ process_result_list <- function(Sample_name) {
     ks_test_all_UP_vs_DOWN_pValue = ks_test_all_UP_vs_DOWN$p.value,
     ks_test_MFE_075_above_pValue = ks_test_MFE_075_above$p.value,
     ks_test_MFE_025_below_pValue = ks_test_MFE_025_below$p.value,
-    Mean_Cp_37C_UP = Mean_Cp_37C_Sample_name_UP,
-    Mean_Cp_37C_DOWN = Mean_Cp_37C_Sample_name_DOWN,
-    ks_test_all_UP_vs_DOWN_Cp_37C = ks_test_all_UP_vs_DOWN_Cp_37C_data$p.value,
-    wilcox_test_all_UP_vs_DOWN_Cp_37C = wilcox_test_all_UP_vs_DOWN_Cp_37C$p.value,
     Proliferation_Science = Mean_Proliferation_Science,
     PCNA = Mean_Meta_PCNA,
     Essential_cell_cycle_genes = Mean_Essential_cell_cycle_Viner_Breuer_Cell_Division_2019,
@@ -1608,325 +1099,580 @@ process_result_list <- function(Sample_name) {
     Fanconi_anemia = Mean_FA,
     High_fid_pol = Mean_HF_POL
   )
-  
-  # Append the sample results to the all_results data frame
+
   all_results <<- rbind(all_results, sample_results)
 }
 
-
-
-
-
-
-
-
-
-# STEP 13 ####
-## Run the function for each iLINCS data frame ####
-# The function will generate a box plot for each gene set
 Data_result_list <- lapply(names(result_list_2_filtered), function(x) process_result_list(x))
 
+write.csv(all_results, file = final_results_file, row.names = FALSE)
 
+iLINCS_DGfold_annotation <- Table_ANNOTATED_iLINCs %>%
+  dplyr::mutate(
+    ensembl_id = trimws(ensembl_id)
+  ) %>%
+  dplyr::select(
+    ensembl_id,
+    Normalized_MFE
+  ) %>%
+  dplyr::filter(
+    is.finite(Normalized_MFE)
+  ) %>%
+  dplyr::distinct(
+    ensembl_id,
+    .keep_all = TRUE
+  )
 
+safe_weighted_mean <- function(x, w) {
 
-# Write all the results to a csv file
-# Delete from all_results$SampleName "path_to/Plot_"
-# Remove the specified text from the SampleName column
-all_results$SampleName <- gsub("path_to/Plot_", "", all_results$SampleName)
+  x <- as.numeric(x)
+  w <- as.numeric(w)
 
-write.csv(all_results, file = "path_to/Results_all_cancer_cell_lines_10uM.csv", row.names = FALSE)
-# 149 samples
+  keep <- is.finite(x) & is.finite(w) & w > 0
 
+  if (sum(keep) == 0) {
+    return(NA_real_)
+  }
 
+  sum(x[keep] * w[keep], na.rm = TRUE) /
+    sum(w[keep], na.rm = TRUE)
+}
 
+safe_spearman_p_value <- function(x, y) {
 
+  x <- as.numeric(x)
+  y <- as.numeric(y)
 
+  keep <- is.finite(x) & is.finite(y)
 
+  if (sum(keep) < 3) {
+    return(NA_real_)
+  }
 
+  suppressWarnings(
+    cor.test(
+      x[keep],
+      y[keep],
+      method = "spearman",
+      exact = FALSE
+    )$p.value
+  )
+}
 
+calculate_z_weighted_DGfold_one_universe <- function(
+    sample_tbl,
+    Sample_name,
+    universe_label,
+    p_cutoff = 0.05,
+    B_perm = 1000,
+    seed = 123
+) {
 
+  if (universe_label == "All finite z-score genes") {
 
+    analysis_tbl <- sample_tbl
 
+  } else if (universe_label == "Significant genes p_value < 0.05") {
 
+    analysis_tbl <- sample_tbl %>%
+      dplyr::filter(
+        is.finite(p_value),
+        p_value < p_cutoff
+      )
 
+  } else {
 
+    stop("Unknown universe_label.")
+  }
 
-# STEP 14 ####
-## Analysis of the thermodynamic footprint in the iLINCS signatures ####
+  analysis_tbl <- analysis_tbl %>%
+    dplyr::filter(
+      is.finite(z_score),
+      is.finite(Normalized_MFE),
+      z_score != 0
+    )
 
+  n_genes_used <- dplyr::n_distinct(analysis_tbl$ensembl_id)
+  n_positive_z <- dplyr::n_distinct(analysis_tbl$ensembl_id[analysis_tbl$z_score > 0])
+  n_negative_z <- dplyr::n_distinct(analysis_tbl$ensembl_id[analysis_tbl$z_score < 0])
 
-# Read the results file
-all_results <- read.csv("path_to/Results_all_cancer_cell_lines_10uM.csv",
-                                     stringsAsFactors = FALSE) 
+  if (n_genes_used < 3 || n_positive_z < 1 || n_negative_z < 1) {
 
-# Generate the complete table with cell lines and drugs
-all_results_2 <- all_results # all_results is renamed to be able to repeat the commands below without having to re-run the code above
+    return(
+      tibble::tibble(
+        SampleName = Sample_name,
+        universe = universe_label,
+        n_genes_used = n_genes_used,
+        n_positive_z = n_positive_z,
+        n_negative_z = n_negative_z,
+        z_weighted_MFE_UP = NA_real_,
+        z_weighted_MFE_DOWN = NA_real_,
+        delta_z_weighted_Normalized_MFE_UP_minus_DOWN = NA_real_,
+        z_weighted_centered_DGfold_perturbation_index = NA_real_,
+        z_weighted_standardized_DGfold_perturbation_index = NA_real_,
+        spearman_z_score_Normalized_MFE = NA_real_,
+        spearman_z_score_Normalized_MFE_p_value = NA_real_,
+        permutation_p_delta_UP_minus_DOWN = NA_real_,
+        permutation_p_centered_index = NA_real_,
+        B_perm = B_perm
+      )
+    )
+  }
 
+  MFE_mean <- mean(analysis_tbl$Normalized_MFE, na.rm = TRUE)
+  MFE_sd <- sd(analysis_tbl$Normalized_MFE, na.rm = TRUE)
 
-# Delete from all_results_2$SampleName "_MFE"
+  analysis_tbl <- analysis_tbl %>%
+    dplyr::mutate(
+      abs_z_score = abs(z_score),
+      Normalized_MFE_centered =
+        Normalized_MFE - MFE_mean
+    )
+
+  if (is.finite(MFE_sd) && MFE_sd > 0) {
+
+    analysis_tbl <- analysis_tbl %>%
+      dplyr::mutate(
+        Normalized_MFE_standardized =
+          (Normalized_MFE - MFE_mean) / MFE_sd
+      )
+
+  } else {
+
+    analysis_tbl <- analysis_tbl %>%
+      dplyr::mutate(
+        Normalized_MFE_standardized = NA_real_
+      )
+  }
+
+  z_weighted_MFE_UP <- analysis_tbl %>%
+    dplyr::filter(
+      z_score > 0
+    ) %>%
+    dplyr::summarise(
+      value = safe_weighted_mean(
+        x = Normalized_MFE,
+        w = abs_z_score
+      )
+    ) %>%
+    dplyr::pull("value")
+
+  z_weighted_MFE_DOWN <- analysis_tbl %>%
+    dplyr::filter(
+      z_score < 0
+    ) %>%
+    dplyr::summarise(
+      value = safe_weighted_mean(
+        x = Normalized_MFE,
+        w = abs_z_score
+      )
+    ) %>%
+    dplyr::pull("value")
+
+  observed_delta_UP_minus_DOWN <-
+    z_weighted_MFE_UP - z_weighted_MFE_DOWN
+
+  observed_centered_index <- sum(
+    analysis_tbl$z_score *
+      analysis_tbl$Normalized_MFE_centered,
+    na.rm = TRUE
+  ) / sum(
+    analysis_tbl$abs_z_score,
+    na.rm = TRUE
+  )
+
+  observed_standardized_index <- sum(
+    analysis_tbl$z_score *
+      analysis_tbl$Normalized_MFE_standardized,
+    na.rm = TRUE
+  ) / sum(
+    analysis_tbl$abs_z_score,
+    na.rm = TRUE
+  )
+
+  spearman_cor <- suppressWarnings(
+    cor(
+      analysis_tbl$z_score,
+      analysis_tbl$Normalized_MFE,
+      method = "spearman",
+      use = "complete.obs"
+    )
+  )
+
+  spearman_p <- safe_spearman_p_value(
+    analysis_tbl$z_score,
+    analysis_tbl$Normalized_MFE
+  )
+
+  set.seed(seed)
+
+  permutation_delta <- replicate(
+    B_perm,
+    {
+      MFE_perm <- sample(
+        analysis_tbl$Normalized_MFE,
+        size = nrow(analysis_tbl),
+        replace = FALSE
+      )
+
+      perm_tbl <- analysis_tbl %>%
+        dplyr::mutate(
+          Normalized_MFE_perm = MFE_perm
+        )
+
+      perm_UP <- perm_tbl %>%
+        dplyr::filter(
+          z_score > 0
+        ) %>%
+        dplyr::summarise(
+          value = safe_weighted_mean(
+            x = Normalized_MFE_perm,
+            w = abs_z_score
+          )
+        ) %>%
+        dplyr::pull("value")
+
+      perm_DOWN <- perm_tbl %>%
+        dplyr::filter(
+          z_score < 0
+        ) %>%
+        dplyr::summarise(
+          value = safe_weighted_mean(
+            x = Normalized_MFE_perm,
+            w = abs_z_score
+          )
+        ) %>%
+        dplyr::pull("value")
+
+      perm_UP - perm_DOWN
+    }
+  )
+
+  set.seed(seed)
+
+  permutation_centered_index <- replicate(
+    B_perm,
+    {
+      MFE_perm <- sample(
+        analysis_tbl$Normalized_MFE,
+        size = nrow(analysis_tbl),
+        replace = FALSE
+      )
+
+      MFE_perm_centered <- MFE_perm - mean(MFE_perm, na.rm = TRUE)
+
+      sum(
+        analysis_tbl$z_score * MFE_perm_centered,
+        na.rm = TRUE
+      ) / sum(
+        analysis_tbl$abs_z_score,
+        na.rm = TRUE
+      )
+    }
+  )
+
+  permutation_p_delta <- (
+    sum(
+      abs(permutation_delta) >= abs(observed_delta_UP_minus_DOWN),
+      na.rm = TRUE
+    ) + 1
+  ) / (B_perm + 1)
+
+  permutation_p_centered_index <- (
+    sum(
+      abs(permutation_centered_index) >= abs(observed_centered_index),
+      na.rm = TRUE
+    ) + 1
+  ) / (B_perm + 1)
+
+  tibble::tibble(
+    SampleName = Sample_name,
+    universe = universe_label,
+    n_genes_used = n_genes_used,
+    n_positive_z = n_positive_z,
+    n_negative_z = n_negative_z,
+    z_weighted_MFE_UP = z_weighted_MFE_UP,
+    z_weighted_MFE_DOWN = z_weighted_MFE_DOWN,
+    delta_z_weighted_Normalized_MFE_UP_minus_DOWN =
+      observed_delta_UP_minus_DOWN,
+    z_weighted_centered_DGfold_perturbation_index =
+      observed_centered_index,
+    z_weighted_standardized_DGfold_perturbation_index =
+      observed_standardized_index,
+    spearman_z_score_Normalized_MFE =
+      spearman_cor,
+    spearman_z_score_Normalized_MFE_p_value =
+      spearman_p,
+    permutation_p_delta_UP_minus_DOWN =
+      permutation_p_delta,
+    permutation_p_centered_index =
+      permutation_p_centered_index,
+    B_perm = B_perm
+  )
+}
+
+calculate_z_weighted_DGfold_one_sample <- function(
+    Sample_name,
+    result_list_object,
+    annotation_tbl,
+    p_cutoff = 0.05,
+    B_perm = 1000,
+    seed = 123
+) {
+
+  message("Processing z-score-weighted DGfold index: ", Sample_name)
+
+  df <- result_list_object[[Sample_name]] %>%
+    dplyr::mutate(
+      ensembl_id = trimws(ensembl_id),
+      z_score = as.numeric(z_score),
+      p_value = as.numeric(p_value)
+    )
+
+  sample_tbl <- df %>%
+    dplyr::inner_join(
+      annotation_tbl,
+      by = "ensembl_id"
+    ) %>%
+    dplyr::filter(
+      is.finite(z_score),
+      is.finite(Normalized_MFE)
+    ) %>%
+    dplyr::group_by(
+      ensembl_id
+    ) %>%
+    dplyr::summarise(
+      z_score = mean(z_score, na.rm = TRUE),
+      p_value = min(p_value, na.rm = TRUE),
+      Normalized_MFE = dplyr::first(Normalized_MFE),
+      .groups = "drop"
+    ) %>%
+    dplyr::filter(
+      is.finite(z_score),
+      is.finite(Normalized_MFE)
+    )
+
+  output_tbl <- dplyr::bind_rows(
+    calculate_z_weighted_DGfold_one_universe(
+      sample_tbl = sample_tbl,
+      Sample_name = Sample_name,
+      universe_label = "All finite z-score genes",
+      p_cutoff = p_cutoff,
+      B_perm = B_perm,
+      seed = seed
+    ),
+    calculate_z_weighted_DGfold_one_universe(
+      sample_tbl = sample_tbl,
+      Sample_name = Sample_name,
+      universe_label = "Significant genes p_value < 0.05",
+      p_cutoff = p_cutoff,
+      B_perm = B_perm,
+      seed = seed
+    )
+  )
+
+  return(output_tbl)
+}
+
+iLINCS_10uM_z_score_weighted_DGfold_results <- dplyr::bind_rows(
+  lapply(
+    names(result_list_2_filtered),
+    function(x) {
+      calculate_z_weighted_DGfold_one_sample(
+        Sample_name = x,
+        result_list_object = result_list_2_filtered,
+        annotation_tbl = iLINCS_DGfold_annotation,
+        p_cutoff = 0.05,
+        B_perm = 1000,
+        seed = 123
+      )
+    }
+  )
+) %>%
+  dplyr::mutate(
+    dose = "10uM",
+    cell_line = sub("_.*", "", SampleName),
+    Drug = sub("^[^_]*_([^_]*).*", "\\1", SampleName),
+    iLINCs_cell_line_drug = paste(
+      cell_line,
+      Drug,
+      sep = "_"
+    ),
+    direction_delta_UP_minus_DOWN = dplyr::case_when(
+      delta_z_weighted_Normalized_MFE_UP_minus_DOWN > 0 ~
+        "Positive z-score genes have higher / less negative DGfold",
+      delta_z_weighted_Normalized_MFE_UP_minus_DOWN < 0 ~
+        "Positive z-score genes have lower / more negative DGfold",
+      TRUE ~
+        "No directional difference"
+    ),
+    direction_centered_index = dplyr::case_when(
+      z_weighted_centered_DGfold_perturbation_index > 0 ~
+        "Positive z-scores enriched for higher-than-average DGfold",
+      z_weighted_centered_DGfold_perturbation_index < 0 ~
+        "Positive z-scores enriched for lower-than-average DGfold",
+      TRUE ~
+        "No directional enrichment"
+    )
+  ) %>%
+  dplyr::relocate(
+    dose,
+    cell_line,
+    Drug,
+    iLINCs_cell_line_drug,
+    .after = SampleName
+  )
+
+iLINCS_10uM_z_score_weighted_DGfold_results_csv <-
+  zweighted_dgfold_results_file
+
+readr::write_csv(
+  iLINCS_10uM_z_score_weighted_DGfold_results,
+  iLINCS_10uM_z_score_weighted_DGfold_results_csv
+)
+
+iLINCS_10uM_z_score_weighted_DGfold_results_for_STEP14 <-
+  iLINCS_10uM_z_score_weighted_DGfold_results %>%
+  dplyr::filter(
+    universe == "Significant genes p_value < 0.05"
+  ) %>%
+  dplyr::select(
+    SampleName,
+    z_weighted_MFE_UP,
+    z_weighted_MFE_DOWN,
+    delta_z_weighted_Normalized_MFE_UP_minus_DOWN,
+    z_weighted_centered_DGfold_perturbation_index,
+    z_weighted_standardized_DGfold_perturbation_index,
+    spearman_z_score_Normalized_MFE,
+    spearman_z_score_Normalized_MFE_p_value,
+    permutation_p_delta_UP_minus_DOWN,
+    permutation_p_centered_index,
+    n_genes_used,
+    n_positive_z,
+    n_negative_z
+  ) %>%
+  dplyr::rename(
+    z_weighted_DGfold_n_genes_used = n_genes_used,
+    z_weighted_DGfold_n_positive_z = n_positive_z,
+    z_weighted_DGfold_n_negative_z = n_negative_z
+  )
+
+print(iLINCS_10uM_z_score_weighted_DGfold_results)
+
+print(iLINCS_10uM_z_score_weighted_DGfold_results_for_STEP14)
+
+all_results <- read.csv(final_results_file,
+                                     stringsAsFactors = FALSE)
+
+all_results_2 <- all_results
+
 all_results_2$SampleName <- gsub("_MFE.pdf", "", all_results_2$SampleName)
 
-
-# # Open the original iLINCS file with the metadata of all the signatures, downloaded from https://clue.io/
-# # This file contains the original signatures IDs
-Sig_info_iLINCs_metadata <- read.csv("path_to/siginfo_beta_LINCS_metadata.csv",
+Sig_info_iLINCs_metadata <- read.csv(signature_metadata_file,
                                      header = TRUE, sep = ",", stringsAsFactors = FALSE)
-# Filter the signatures obtained with 10 uM at 24h
+
 Sig_info_iLINCs_metadata <- dplyr::filter(Sig_info_iLINCs_metadata, pert_idose == "10 uM") %>%
   dplyr::filter(pert_itime == "24 h") %>%
   dplyr::rename(SampleName = sig_id) %>%
   dplyr::rename(Drug = cmap_name, cell_line = cell_iname)
 
-
-
-
-# Replace all"/" with "_" in the SampleName column
-# This is necessary to match the signatures IDs in the all_results_2 data frame
 Sig_info_iLINCs_metadata$SampleName <- gsub("/", "_", Sig_info_iLINCs_metadata$SampleName)
 
-# Add the Drug to the name in the SampleName column to the all_results_2 data frame
 Sig_info_iLINCs_metadata$SampleName <- paste0(Sig_info_iLINCs_metadata$Drug, "_", Sig_info_iLINCs_metadata$SampleName)
 
-# Add the cell_line to the name in the SampleName column to the all_results_2 data frame
 Sig_info_iLINCs_metadata$SampleName <- paste0(Sig_info_iLINCs_metadata$cell_line, "_", Sig_info_iLINCs_metadata$SampleName)
 
-
-
-
-
-
-
-# Add the columns with the cell line name and the drug name to the all_results_2 data frame
 all_results_2 <- dplyr::left_join(all_results_2, Sig_info_iLINCs_metadata, by = "SampleName") %>%
   dplyr::select(SampleName, Net_MFE_change, MeanMFE_UP, MeanMFE_DOWN, TTEST_pValue, ks_test_all_UP_vs_DOWN_pValue, wilcox_test_all_UP_vs_DOWN_pValue, ks_test_MFE_075_above_pValue, ks_test_MFE_025_below_pValue,
-                Mean_Cp_37C_UP, Mean_Cp_37C_DOWN, ks_test_all_UP_vs_DOWN_Cp_37C, wilcox_test_all_UP_vs_DOWN_Cp_37C, Proliferation_Science, PCNA, Essential_cell_cycle_genes, Homologous_recombination, Fanconi_anemia, High_fid_pol, Drug, cell_line)
+                Proliferation_Science, PCNA, Essential_cell_cycle_genes, Homologous_recombination, Fanconi_anemia, High_fid_pol, Drug, cell_line)
 
-
-# Add the cell line tissue of origin 
-# Open the original iLINCS file cellinfo_beta.csv with the metadata of all the cell lines, downloaded from https://clue.io/
-Cell_info_beta <- read.csv("path_to/cellinfo_beta.csv",
+Cell_info_beta <- read.csv(cell_metadata_file,
                            header = TRUE, sep = ",", stringsAsFactors = FALSE) %>%
   dplyr::select(cell_iname, primary_disease, subtype) %>%
   dplyr::rename(cell_line = cell_iname)
 
-# Merge the all_results_2 data frame with the Cell_info_beta data frame
 all_results_2 <- dplyr::left_join(all_results_2, Cell_info_beta, by = "cell_line")
 
-# Remove all SampleName that start with "REP"
-# all_results_2 <- dplyr::filter(all_results_2, !grepl("REP.", SampleName))
- 
-
-# Save the all_results_2 data frame as .csv file and add new columns with Log10_MFE_change and Log10_Cp_37C_change
-all_results_2_complete <- dplyr::mutate(all_results_2, Log10_MFE_change = log10(MeanMFE_DOWN/MeanMFE_UP)) %>% 
-  dplyr::mutate(Log10_Cp_37C_change = log10(Mean_Cp_37C_UP/Mean_Cp_37C_DOWN)) %>% # Higher values of heat capacity correlate with less negative MFE values
-  dplyr::relocate(Log10_MFE_change, .before = TTEST_pValue) %>%
-  dplyr::relocate(Log10_Cp_37C_change, .before = ks_test_all_UP_vs_DOWN_Cp_37C)
-write.csv(all_results_2_complete, file = "path_to/Results_all_cancer_cell_lines_10uM.csv", row.names = FALSE)
-# 149 samples
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Add a new column called 'Log10_MFE_change' containing the log10 of the ratio between the mean MFE of the DOWN-regulated genes and the mean MFE of the UP-regulated genes
-
-all_results_2_complete <- read.csv("path_to/Results_all_cancer_cell_lines_10uM.csv",
-                           header = TRUE, sep = ",", stringsAsFactors = FALSE) 
-
-iLINCS_analysis <- dplyr::mutate(all_results_2_complete, Log10_MFE_change = log10(MeanMFE_DOWN/MeanMFE_UP)) %>%
-  dplyr::relocate(MeanMFE_UP, .after = MeanMFE_DOWN) %>%
-  dplyr::relocate(Log10_MFE_change, .after = MeanMFE_UP)
-  #dplyr::filter(ks_test_all_UP_vs_DOWN_pValue < 0.05) # Here, I filter only signatures with a significant change of MFE between the UP- and DOWN-regulated genes
-
-
-# Generate a ggplot2 scatter plot showing the Proliferation_Science change vs the MFE change
-iLINCS_analysis_plot <- ggplot(iLINCS_analysis, aes(x = Proliferation_Science, y = Log10_MFE_change)) +
-  theme_bw() +
-  geom_point(colour = "blue", size = 2) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +  # Add vertical line at x = 0
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Add horizontal line at y = 0
-  labs(x = "Proliferation_Science", y = "Log10_MFE_change", title = "iLINCS cancer cell lines 10uM all drugs") +
-  theme(plot.title = element_text(color = "black", size = 14, face = "bold")) +
-  xlim(-2.5, 2.5) +
-  ylim(-0.05, 0.05) +
-  # label each dot with a name which combines cell_line and Drug separated by "_"
-  geom_text(aes(label = paste(cell_line, Drug, sep = "_")), hjust = 0, vjust = 0, size = 1.5, nudge_x = 0.001, nudge_y = 0.001) +
-  #geom_smooth(method = "lm") +
-  geom_text(
-    x = 1, y = 0.05,
-    label = paste("R = ", round(cor(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change), 2),
-                  "\n", "p-value = ", format(cor.test(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change)$p.value, digits = 4)),
-    size = 5)
-
-print(iLINCS_analysis_plot)
-
-
-
-
-
-
-
-# Here below, I generate plots with drugs selected based on the classification in the excel spreadsheet "iLINCS_compounds_targets.xlsx"
-# The location of the file is: path_to/iLINCS_compounds_targets.csv
-# Open the file with the classification of the drugs
-iLINCS_compounds_targets <- read.csv("path_to/iLINCS_compounds_targets.csv",
-                                      header = TRUE, sep = ",", stringsAsFactors = FALSE) 
-
-
-
-
-
-
-# Generate a ggplot2 scatter plot showing the Proliferation_Science change vs the MFE change
-iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Proliferation_Science, y = Log10_MFE_change)) +
-  theme_bw() +
-  geom_point(colour = "blue", size = 2) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +  # Add vertical line at x = 0
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Add horizontal line at y = 0
-  labs(x = "Proliferation_Science", y = "Log10_MFE_change", title = "iLINCS cancer lines 10uM drugs targeting membrane receptors MFE changes") +
-  theme(plot.title = element_text(color = "black", size = 14, face = "bold")) +
-  xlim(-2, 2) +
-  ylim(-0.05, 0.05) +
-  # label each dot with a name which combines cell_line and Drug separated by "_"
-  geom_text(aes(label = paste(cell_line, Drug, sep = "_")), hjust = 0, vjust = 0, size = 2, nudge_x = 0.001, nudge_y = 0.001) +
-  #geom_smooth(method = "lm") +
-  geom_text(
-    x = 1, y = 0.05,
-    label = paste("R = ", round(cor(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change), 2),
-                  "\n", "p-value = ", format(cor.test(iLINCS_analysis$Proliferation_Science, iLINCS_analysis$Log10_MFE_change)$p.value, digits = 4)),
-    size = 4)
-
-print(iLINCS_analysis_plot_membrane_receptors)
-
-
-
-
-
-# Generate volcano plot with all the targetd agents
-# Generate a ggplot2 scatter plot showing the Log10_MFE_change vs ks_test_all_UP_vs_DOWN_pValue
-iLINCS_analysis_plot_membrane_receptors <- ggplot(iLINCS_analysis, aes(x = Log10_MFE_change, y = -log10(ks_test_all_UP_vs_DOWN_pValue))) +
-  theme_classic() +
-  geom_point(aes(color = -log10(ks_test_all_UP_vs_DOWN_pValue) > 1.301, alpha = -log10(ks_test_all_UP_vs_DOWN_pValue) < 1.301), size = 3) +
-  scale_color_manual(values = c("black", "blue")) +
-  scale_alpha_manual(values = c(1, 0.5)) +  # Set alpha values: 1 for >= 1.301 and 0.5 for < 1.301
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +  # Add vertical line at x = 0
-  geom_hline(yintercept = 1.301, linetype = "dashed", color = "black") +  # Add horizontal line at y = 1.301
-  labs(x = "Log10_MFE_change", y = "-Log10_ks_test_all_UP_vs_DOWN_pValue", title = "iLINCS cancer lines 10uM drugs targeting membrane receptors") +
-  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
-        legend.position = "none") +
-  xlim(-0.06, 0.06) +
-  geom_text_repel(aes(label = ifelse(-log10(ks_test_all_UP_vs_DOWN_pValue) > 1.301, paste(cell_line, Drug, sep = "_"), "")), 
-                  size = 3, box.padding = 0.5, point.padding = 0.5, nudge_x = 0.004, nudge_y = 0.001, max.overlaps = 15)
-
-print(iLINCS_analysis_plot_membrane_receptors)
-
-# Save the plot
-ggsave("iLINCS_analysis_plot_membrane_receptors.pdf", plot = iLINCS_analysis_plot_membrane_receptors, width = 5, height = 8, path = "path_to/Desktop")
-
-
-
-
-
-
-# Generate the horizontal box plot with reduced box width and adjusted x-axis limits
-iLINCS_analysis_boxplot_horizontal <- ggplot(iLINCS_analysis, aes(y = "", x = Log10_MFE_change)) +
-  theme_classic() +
-  geom_boxplot(fill = "lightgrey", color = "black", width = 0.8) +
-  geom_jitter(height = 0.18, color = "black", size = 3, alpha = 0.5) +
-  geom_vline(xintercept = 0, linetype = 1, linewidth = 1, color = "black") +  # Add vertical line at x = 0
-  labs(y = "", x = "Log10_MFE_change", title = "Distribution of Log10_MFE_change") +
-  xlim(-0.05, 0.05) +  # Adjust x-axis limits here
-  theme(plot.title = element_text(color = "black", size = 14, face = "bold"),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
-
-print(iLINCS_analysis_boxplot_horizontal)
-
-# Save the plot
-ggsave("iLINCS_analysis_boxplot_horizontal.pdf", plot = iLINCS_analysis_boxplot_horizontal, width = 5, height = 3, path = "path_to/Desktop")
-
-
-
-  
-test_result <- t.test(iLINCS_analysis$Log10_MFE_change, mu = 0, alternative = "greater")
-print(test_result)
-
-
-
-
-
-
-
-
-
-# Function to plot all cell lines exposed to the same drug
-
-generate_plots_by_drug <- function(data) {
-  # Group data by Drug
-  grouped_data <- data %>% 
-    group_by(Drug)
-  
-  # Iterate over each drug group
-  for(drug_group in unique(data$Drug)) {
-    drug_data <- grouped_data %>% filter(Drug == drug_group)
-    
-    # Generate plot for the current drug group
-    plot <- ggplot(drug_data, aes(x = Proliferation_Science, y = Log10_MFE_change)) +
-      theme_bw() +
-      geom_point(colour = "blue", size = 3) +
-      geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-      geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-      labs(x = "Proliferation_Science", y = "Log10_MFE_change", title = paste("Drug:", drug_group)) +
-      theme(plot.title = element_text(color = "black", size = 14, face = "bold")) +
-      xlim(-2, 2) +
-      ylim(-0.05, 0.05) +
-      geom_text_repel(aes(label = paste(cell_line, Drug, sep = "_")), 
-                      size = 5, 
-                      box.padding = 0.1) # Adjust as needed
-      #geom_smooth(method = "lm")
-      # geom_text(
-      #   x = 1, y = 0.05,
-      #   label = paste("R = ", round(cor(drug_data$Proliferation_Science, drug_data$Log10_MFE_change), 2),
-      #                 "\n", "p-value = ", format(cor.test(drug_data$Proliferation_Science, drug_data$Log10_MFE_change)$p.value, digits = 4)),
-      #   size = 4)
-    
-    # Define the file name and path
-    file_name <- paste0("plot_", gsub("[^a-zA-Z0-9]", "_", drug_group), ".pdf") # The command  paste0("plot_", gsub("[^a-zA-Z0-9]", "_", drug_group), ".pdf")  is used to sanitize the drug group name 
-    # and create a safe filename is essential to ensure that the filenames used to save the plots do not contain characters that might cause issues in the file system.
-    output_dir <- "path_to/Results_analysis_RNA_MFE_iLINCS/Plots_individual_drugs"
-    file_path <- file.path(output_dir, file_name)
-    
-    # Save the plot
-    ggsave(filename = file_path, plot = plot, width = 8, height = 6)
-    
-    print(plot)
-  }
+all_results_2_complete <- dplyr::mutate(all_results_2, Log10_MFE_change = log10(MeanMFE_DOWN/MeanMFE_UP)) %>%
+  dplyr::relocate(Log10_MFE_change, .before = TTEST_pValue)
+
+if (!exists("iLINCS_10uM_z_score_weighted_DGfold_results_for_STEP14")) {
+
+  iLINCS_10uM_z_score_weighted_DGfold_results_for_STEP14 <-
+    readr::read_csv(
+      zweighted_dgfold_results_file,
+      show_col_types = FALSE
+    ) %>%
+    dplyr::filter(
+      universe == "Significant genes p_value < 0.05"
+    ) %>%
+    dplyr::select(
+      SampleName,
+      z_weighted_MFE_UP,
+      z_weighted_MFE_DOWN,
+      delta_z_weighted_Normalized_MFE_UP_minus_DOWN,
+      z_weighted_centered_DGfold_perturbation_index,
+      z_weighted_standardized_DGfold_perturbation_index,
+      spearman_z_score_Normalized_MFE,
+      spearman_z_score_Normalized_MFE_p_value,
+      permutation_p_delta_UP_minus_DOWN,
+      permutation_p_centered_index,
+      n_genes_used,
+      n_positive_z,
+      n_negative_z
+    ) %>%
+    dplyr::rename(
+      z_weighted_DGfold_n_genes_used = n_genes_used,
+      z_weighted_DGfold_n_positive_z = n_positive_z,
+      z_weighted_DGfold_n_negative_z = n_negative_z
+    )
 }
 
-# Usage
-generate_plots_by_drug(iLINCS_analysis)
+z_weighted_DGfold_columns_to_replace <- setdiff(
+  colnames(iLINCS_10uM_z_score_weighted_DGfold_results_for_STEP14),
+  "SampleName"
+)
 
+all_results_2_complete <- all_results_2_complete %>%
+  dplyr::select(
+    -dplyr::any_of(z_weighted_DGfold_columns_to_replace)
+  ) %>%
+  dplyr::left_join(
+    iLINCS_10uM_z_score_weighted_DGfold_results_for_STEP14,
+    by = "SampleName"
+  )
 
+missing_z_weighted_DGfold_samples <- all_results_2_complete %>%
+  dplyr::filter(
+    is.na(delta_z_weighted_Normalized_MFE_UP_minus_DOWN)
+  ) %>%
+  dplyr::pull(
+    SampleName
+  )
 
+if (length(missing_z_weighted_DGfold_samples) > 0) {
 
+  warning(
+    "Some samples did not receive z-score-weighted DGfold values: ",
+    paste(missing_z_weighted_DGfold_samples, collapse = "; ")
+  )
 
+} else {
 
+  message(
+    "All samples successfully received z-score-weighted DGfold values."
+  )
+}
 
-# Save specific objects to reduce the size of the object
-save(result_list_2, GSEA_combined_kk2, GSEA_combined_iLINCs, iLINCs_complete_GSEA, all_results, all_results_2_complete, file = "path_to/Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines_environment_selected.RData")
+write.csv(all_results_2_complete, file = final_results_file, row.names = FALSE)
 
+figure4_results <- list(
+  iLINCS_10uM_z_score_weighted_DGfold_results =
+    iLINCS_10uM_z_score_weighted_DGfold_results,
+  all_results_2_complete = all_results_2_complete
+)
 
+saveRDS(figure4_results, figure4_results_file)
 
-
-
+cat("\n10 uM iLINCS analysis complete.\n")
+cat("Figure 4 input objects written to:\n", figure4_results_file, "\n")
