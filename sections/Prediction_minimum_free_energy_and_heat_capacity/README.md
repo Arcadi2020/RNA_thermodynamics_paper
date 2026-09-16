@@ -1,1 +1,0 @@
-This section contains the R scripts as well as the bash commands used to predict the minimum free energy and the heat capacity of the Human transcriptome. The isoform-level predicted values are saved in the file "Gencode_TX_norm_MFE_HC_table.csv"
