@@ -12,7 +12,7 @@ These scripts analyze transcriptome-wide predicted RNA folding stability after p
 
 Data repository: **Zenodo**
 
-Place the following file in `../Zenodo_Pharmacologic_inhibition_of_cell_proliferation/`:
+Download it with `./download_zenodo_data.sh` from the repository root; it lands in `data/` and the scripts read it from there:
 
 - `pharmacologic_inhibition_analysis_results_for_Fig_3.rds`
 
@@ -20,17 +20,12 @@ This RDS file is sufficient to rerun the final figure script. The complete upstr
 
 ## Run
 
-In `R_script_Fig_3.R`, use:
-
-```r
-input_dir <- "../Zenodo_Pharmacologic_inhibition_of_cell_proliferation"
-scripts_dir <- "."
-figure_output_dir <- "Figure_3_outputs"
-use_precomputed_workspace <- TRUE
-```
-
-Then run from `GitHub_files`:
+The script reads its input from `data/` by default, so no configuration is needed. Run from this section's directory:
 
 ```bash
 Rscript R_script_Fig_3.R
 ```
+
+Outputs are written to `Figure_3_outputs/`.
+
+`R_script_Fig_3.R` uses the precomputed workspace from Zenodo and does not execute `Cross_validation_MFE.R`, but it does check that the file is present in the same directory, so run it from within this section rather than from a copy of the data alone.

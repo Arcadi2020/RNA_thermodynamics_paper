@@ -1,6 +1,6 @@
-input_dir <- "path_to_input_files"
-scripts_dir <- "path_to_scripts"
-figure_output_dir <- "path_to_figure_3_output_files"
+input_dir <- "../../data"
+scripts_dir <- "."
+figure_output_dir <- "Figure_3_outputs"
 
 configured_paths <- c(input_dir, scripts_dir, figure_output_dir)
 if (any(startsWith(configured_paths, "path_to_"))) {

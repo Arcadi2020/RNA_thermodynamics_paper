@@ -12,7 +12,7 @@ These scripts examine changes in predicted transcript-level RNA folding stabilit
 
 Data repository: **Zenodo**
 
-Place the following file in `../Zenodo_Cell_cycle_analysis/`:
+Download it with `./download_zenodo_data.sh` from the repository root; it lands in `data/` and the scripts read it from there:
 
 - `cell_cycle_analysis_results_for_Fig_2.rds`
 
@@ -20,15 +20,10 @@ The two analysis scripts document the upstream processing of GSE94479 and GSE104
 
 ## Run
 
-In `R_script_Fig_2.R`, set:
-
-```r
-figure2_results_file <- "../Zenodo_Cell_cycle_analysis/cell_cycle_analysis_results_for_Fig_2.rds"
-output_dir <- "Figure_2_outputs"
-```
-
-Then run from `GitHub_files`:
+The script reads its input from `data/` by default, so no configuration is needed. Run from this section's directory:
 
 ```bash
 Rscript R_script_Fig_2.R
 ```
+
+Outputs are written to `Figure_2_outputs/`.

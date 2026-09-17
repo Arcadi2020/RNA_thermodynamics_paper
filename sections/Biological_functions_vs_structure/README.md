@@ -14,7 +14,7 @@ These scripts examine transcript-level predicted RNA folding stability and compa
 
 Data repository: **Zenodo**
 
-Place these files in `../Zenodo_Biological_functions_vs_structure/`:
+Download them with `./download_zenodo_data.sh` from the repository root; they land in `data/` and the scripts read them from there:
 
 - `Gencode_TX_norm_MFE_HC_table.csv`
 - `Compare_ViennaRNA_vs_RNAstructure_MFE.RData`
@@ -28,8 +28,10 @@ These processed files are sufficient for `Fig_1_R_script.R`. The PARIS2 and icSH
 
 ## Run
 
-Confirm that the input variables in `Fig_1_R_script.R` point to the Zenodo directory above, set `output_dir`, and run from `GitHub_files`:
+The script reads its inputs from `data/` by default, so no configuration is needed. Run from this section's directory:
 
 ```bash
 Rscript Fig_1_R_script.R
 ```
+
+Outputs are written to `Figure_1_outputs/`.
