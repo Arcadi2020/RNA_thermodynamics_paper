@@ -85,7 +85,10 @@ GROUPS THIS SCRIPT CAN DOWNLOAD
 
   --lincs        LINCS 2020 beta metadata: cellinfo, geneinfo,
                  siginfo (444 MB), instinfo (644 MB)                    ~1.1 GB
-                 needed by: lincs_maayanlab.py
+                 needed by: lincs_maayanlab.py, and by
+                 Analysis_MFE_iLINCS_*.R which reads cellinfo_beta and
+                 siginfo_beta_LINCS_metadata. These have stable CLUE URLs,
+                 so they are fetched here rather than deposited.
 
   --lincs-gctx   LINCS 2020 level 3 expression matrix                   ~111 GB
                  needed by: lincs_maayanlab.py. Opt-in: it is enormous.
@@ -107,12 +110,23 @@ WHAT THIS SCRIPT CANNOT GET
     mapped_intra_transcript_duplexes.tsv.gz        <- PARIS2 preprocessor
     Analysis_RNAseq_PNAS_2017_environment.RData    <- Analysis_RNAseq_PNAS_2017.R
 
-  Reprocessed by GREIN, not distributed by GEO in this form. Export them
-  per accession from https://www.ilincs.org/apps/grein/
-    GSE*_TranscriptLevel_Raw_data.csv
-    GSE*_TranscriptLevel_TPM_data.csv
-    GSE*_GeneLevel_Raw_data.csv
-    GSE*_GeneLevel_Normalized(CPM.and.TMM)_data.csv
+  GREIN reprocessings of public GEO series. The underlying GEO data is public,
+  but these particular files are not: GEO does not distribute them in this form
+  (it ships GSE94479_Deseq_*/GROCountNorm and GSE104736_RPKM/ReadCounts), and
+  GREIN is an interactive Shiny app with no REST API or stable download URL, so
+  they cannot be fetched by script. A fresh GREIN export is also not guaranteed
+  to match byte-for-byte, since its pipeline and annotation versions move.
+
+  For that reason they belong in the Zenodo deposit rather than here, and most
+  of them are already there:
+    Pharmacologic_..._part1.zip  carries the GREIN_raw_counts and
+                                 GREIN_series_matrices_data trees (46 entries)
+    deposited individually       GSE94479_TranscriptLevel_{Raw,TPM}_data.csv
+                                 GSE104736_TranscriptLevel_{Raw,TPM}_data.csv
+                                 GSE104736_GeneLevel_Raw_data.csv
+
+  If you do need to regenerate one, export it per accession from
+  https://www.ilincs.org/apps/grein/ and expect minor differences.
 
   The two Escherichia coli scripts expect a project directory per accession:
 
