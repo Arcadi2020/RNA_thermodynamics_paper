@@ -41,7 +41,6 @@ CLUE=https://s3.amazonaws.com/macchiato.clue.io/builds/LINCS2020
 MANIFEST=$(cat <<'EOF'
 annotation|gencode|gencode.v47.annotation.gtf.gz|GENCODE/gencode.v47.annotation.gtf.gz|yes
 annotation|gencode|gencode.v47.tRNAs.gtf.gz|GENCODE/gencode.v47.tRNAs.gtf.gz|no
-annotation|ucsc|refFlat_hg19.gz|UCSC/refFlat.txt.gz|no
 geo|GSE94479|GSM2476255_RNA_G0G1.bw|GEO/samples/GSM2476nnn/GSM2476255/suppl/GSM2476255_RNA_G0G1.bw|no
 geo|GSE94479|GSM2476256_RNA_S.bw|GEO/samples/GSM2476nnn/GSM2476256/suppl/GSM2476256_RNA_S.bw|no
 geo|GSE94479|GSM2476257_RNA_M.bw|GEO/samples/GSM2476nnn/GSM2476257/suppl/GSM2476257_RNA_M.bw|no
@@ -73,9 +72,8 @@ show_list() {
 GROUPS THIS SCRIPT CAN DOWNLOAD
 ===============================
 
-  --annotation   GENCODE v47 GTF + tRNA GTF, UCSC hg19 refFlat          ~63 MB
-                 needed by: icSHAPE 02_map_*, PARIS2 preprocessor,
-                            Analysis_RNAseq_PNAS_2017.R
+  --annotation   GENCODE v47 GTF + tRNA GTF                              ~56 MB
+                 needed by: icSHAPE 02_map_*, PARIS2 preprocessor
 
   --geo          GSE94479  three GSM bigwigs + four DESeq/GRO tables
                  GSE104736 ReadCounts + RPKM
@@ -100,6 +98,14 @@ WHAT THIS SCRIPT CANNOT GET
   Already in the repository
     All_gene_sets_AC.R
       -> sections/Pharmacologic_inhibition_of_cell_proliferation/
+
+  NOT UCSC's refFlat, despite the name. Analysis_RNAseq_PNAS_2017.R reads
+  refFlat_hg19.gz with readGFFAsGRanges(), so it needs the UCSC refFlat table
+  converted to GTF (9 columns, source "hg19_refFlat", gene_id/transcript_id
+  attributes) -- not the raw 11-column genePred that UCSC serves as
+  refFlat.txt.gz. This script previously downloaded the raw table under that
+  name, which fails with "line 1 has more than 9 tab-separated columns". The
+  GTF-format file is deposited on Zenodo as refFlat_hg19_gtf.gz instead.
 
   Intermediates produced by earlier scripts in the same pipeline.
   Run the stages in order rather than downloading these.
