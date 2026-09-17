@@ -24,7 +24,27 @@ Download them with `./download_zenodo_data.sh` from the repository root; they la
 - `02_analyse_full_shuffle_vs_native_master_tables.RData`
 - `02_analyse_full_shuffle_vs_native_selected_objects.rds`
 
-These processed files are sufficient for `Fig_1_R_script.R`. The PARIS2 and icSHAPE folders document the upstream analyses and require the original public inputs named in their configuration sections.
+These processed files are sufficient for `Fig_1_R_script.R`. The PARIS2 and icSHAPE folders document the upstream analyses and need additional inputs, described below.
+
+### Upstream inputs for `icSHAPE_data_analysis/`
+
+The three RNAfold outputs (`Prediction_MFE_Gencode_37C.txt.gz`, `GENCODE_filtered_transcripts.txt.gz`, `GENCODE_filtered_transcripts_the_last_one.txt.gz`) come from Zenodo with the rest, and `gencode.v47.annotation.gtf` is fetched by `./download_upstream_data.sh --annotation`.
+
+The icSHAPE measurements themselves must be **downloaded manually** from the RASP database at <http://rasp.zhanglab.net/>. RASP assembles archives per request through its web interface, so there is no stable URL and `download_upstream_data.sh` cannot fetch them. Retrieve one archive per cell line and place them where the stage-01 scripts expect:
+
+| File | Read by |
+|---|---|
+| `RASP_files_H9.tar` | `01_prepare_H9_CellResearch_icSHAPE_bed.R:7` |
+| `RASP_files_HEK293T.tar` | `01_prepare_HEK293T_icSHAPE_bed.R:7` |
+| `RASP_files_HeLa_icSHAPE.tar` | `01_prepare_HeLa_CellResearch_icSHAPE_bed.R:7` |
+| `RASP_files_HepG2.tar` | `01_prepare_HepG2_CellResearch_icSHAPE_bed.R:7` |
+| `RASP_files_K562_Cell_Research.tar` | `01_prepare_K562_CellResearch_icSHAPE_bed.R:7` |
+
+The stages must then be run in order, because each reads what the previous one wrote: `01_prepare_*` → `02_map_*` → `03_join_*` (or `04_join_HEK293T`) → `05_HEK293T_..._followup` / `Analysis_icSHAPE_ViennaRNA_across_five_cell_lines.R`. The intermediate files named in each script's configuration block are produced by the preceding stage, not downloaded.
+
+### Upstream inputs for `PARIS2_data_analysis/`
+
+`combined_CRSSANT_DG.bedpe` and `ViennaRNA_structures_recovered.tsv` are not currently published anywhere. Request them from the authors.
 
 ## Run
 
