@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
   library(ggplot2)
 })
 
-bedpe_file <- "path_to/combined_CRSSANT_DG.bedpe"
+bedpe_file <- "../../../data/HEK293T_Amo_mRNA_enriched_CRSSANT_combined_128shards_dg.bedpe"
 gtf_file <- "path_to/gencode.v47.annotation.gtf"
 vienna_master_pairs_file <- "path_to/ViennaRNA_transcript_level_pairs.tsv.gz"
 outdir <- "path_to/PARIS2_enriched_mRNA_ViennaRNA_precomparison_output_HEK293T"

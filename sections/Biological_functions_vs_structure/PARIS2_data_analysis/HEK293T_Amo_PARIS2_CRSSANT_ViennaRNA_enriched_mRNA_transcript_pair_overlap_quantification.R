@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
 
 mapped_duplex_file <- "path_to/mapped_intra_transcript_duplexes.tsv.gz"
 vienna_pairs_file <- "path_to/ViennaRNA_transcript_level_pairs.tsv.gz"
-vienna_struct_file <- "path_to/ViennaRNA_structures_recovered.tsv"
+vienna_struct_file <- "../../../data/ViennaRNA_structures_recovered.tsv.gz"
 outdir <- "path_to/PARIS2_enriched_mRNA_ViennaRNA_pair_overlap_analysis_output_HEK293T"
 
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)

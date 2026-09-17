@@ -17,7 +17,7 @@ suppressPackageStartupMessages({
 })
 
 GSE226643_project_dir <- "path_to/GSE226643"
-GSE226643_prediction_file <- "path_to/Prediction_Ecoli_MFE.csv"
+GSE226643_prediction_file <- "../../data/Prediction_Ecoli_MFE_HC_df.csv"
 GSE226643_dir <- GSE226643_project_dir
 
 GSE226643_metadata_dir <- file.path(GSE226643_dir, "metadata")
