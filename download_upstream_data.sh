@@ -119,12 +119,13 @@ WHAT THIS SCRIPT CANNOT GET
       GSE224463/  metadata/  GEO_download/  Zenodo_8083605/  SRA_selected_samples/
       GSE226643/  metadata/  GEO_download/  author_GitHub_repository/  SRA_selected_samples/
 
-  This script fills GEO_download/ only. The scripts fetch Zenodo_8083605/ and
-  author_GitHub_repository/ themselves at run time (they call the Zenodo API
-  and the GitHub zipball endpoint for hyungyulim/Ecoli_transition_stationary),
-  so those need no action. Still missing, and not publicly available:
-    metadata/*.tsv                 hand-curated sample manifests
-    SRA_selected_samples/FASTQ/    raw reads, fetch from SRA per manifest
+  This script fills GEO_download/ only, and that is all it needs to do. The
+  scripts are otherwise self-sufficient: they fetch Zenodo_8083605/ and
+  author_GitHub_repository/ at run time (Zenodo API, and the GitHub zipball
+  endpoint for hyungyulim/Ecoli_transition_stationary), write their own
+  metadata/*.tsv manifests, and resolve SRA_selected_samples/FASTQ/ from ENA
+  themselves. The only external inputs they still lack are
+  Prediction_Ecoli_MFE.csv and MG1655_gene_info.csv, listed below.
 
   Assembled through the RASP web interface; no stable direct URL.
   Fetch from http://rasp.zhanglab.net/ per cell line.
