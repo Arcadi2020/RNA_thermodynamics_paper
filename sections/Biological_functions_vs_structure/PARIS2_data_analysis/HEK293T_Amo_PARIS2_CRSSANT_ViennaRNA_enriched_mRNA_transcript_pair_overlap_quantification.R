@@ -3,10 +3,10 @@ suppressPackageStartupMessages({
   library(ggplot2)
 })
 
-mapped_duplex_file <- "path_to/mapped_intra_transcript_duplexes.tsv.gz"
-vienna_pairs_file <- "path_to/ViennaRNA_transcript_level_pairs.tsv.gz"
+mapped_duplex_file <- "../PARIS2_data_analysis/PARIS2_precomparison_output_HEK293T/mapped_intra_transcript_duplexes.tsv.gz"
+vienna_pairs_file <- "../../../data/ViennaRNA_transcript_level_pairs.tsv.gz"
 vienna_struct_file <- "../../../data/ViennaRNA_structures_recovered.tsv.gz"
-outdir <- "path_to/PARIS2_enriched_mRNA_ViennaRNA_pair_overlap_analysis_output_HEK293T"
+outdir <- "PARIS2_pair_overlap_output_HEK293T"
 
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 

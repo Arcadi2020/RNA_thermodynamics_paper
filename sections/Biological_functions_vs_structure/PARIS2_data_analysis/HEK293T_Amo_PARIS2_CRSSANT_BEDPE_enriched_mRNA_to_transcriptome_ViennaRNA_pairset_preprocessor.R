@@ -7,8 +7,8 @@ suppressPackageStartupMessages({
 
 bedpe_file <- "../../../data/HEK293T_Amo_mRNA_enriched_CRSSANT_combined_128shards_dg.bedpe"
 gtf_file <- "../../../data/upstream/gencode/gencode.v47.annotation.gtf"
-vienna_master_pairs_file <- "path_to/ViennaRNA_transcript_level_pairs.tsv.gz"
-outdir <- "path_to/PARIS2_enriched_mRNA_ViennaRNA_precomparison_output_HEK293T"
+vienna_master_pairs_file <- "../../../data/ViennaRNA_transcript_level_pairs.tsv.gz"
+outdir <- "PARIS2_precomparison_output_HEK293T"
 
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
