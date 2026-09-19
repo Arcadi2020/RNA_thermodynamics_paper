@@ -44,7 +44,22 @@ The stages must then be run in order, because each reads what the previous one w
 
 ### Upstream inputs for `PARIS2_data_analysis/`
 
-`combined_CRSSANT_DG.bedpe` and `ViennaRNA_structures_recovered.tsv` are not currently published anywhere. Request them from the authors.
+All three come from Zenodo via `./download_zenodo_data.sh`, alongside `gencode.v47.annotation.gtf` from `./download_upstream_data.sh --annotation`:
+
+| File | Read by |
+|---|---|
+| `HEK293T_Amo_mRNA_enriched_CRSSANT_combined_128shards_dg.bedpe` | preprocessor `:8` |
+| `ViennaRNA_transcript_level_pairs.tsv.gz` | preprocessor `:10`, quantification `:7` |
+| `ViennaRNA_structures_recovered.tsv.gz` | quantification `:8` |
+
+Run the two stages in order — the quantification reads `mapped_intra_transcript_duplexes.tsv.gz` from the preprocessor's output directory:
+
+```bash
+Rscript HEK293T_Amo_PARIS2_CRSSANT_BEDPE_enriched_mRNA_to_transcriptome_ViennaRNA_pairset_preprocessor.R
+Rscript HEK293T_Amo_PARIS2_CRSSANT_ViennaRNA_enriched_mRNA_transcript_pair_overlap_quantification.R
+```
+
+Note the preprocessor writes a ~900 MB copy of the pairs table into its own output directory, so allow roughly 2 GB of scratch beyond the inputs.
 
 ## Run
 

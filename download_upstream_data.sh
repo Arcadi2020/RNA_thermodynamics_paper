@@ -14,15 +14,16 @@
 #   ./download_upstream_data.sh --lincs-gctx  ALSO the 111 GB level 3 matrix
 #   ./download_upstream_data.sh --check       report what is present
 #
-# IMPORTANT -- this script cannot fetch everything the upstream scripts want.
-# Run --list for the full picture. In summary, of the 50 non-Zenodo inputs:
+# IMPORTANT -- this script does not fetch everything the upstream scripts want,
+# but nothing is unobtainable any more. Run --list for the full picture:
 #
-#   fetchable here      the GEO, GENCODE, UCSC and LINCS files below
+#   fetchable here      the GEO, GENCODE and LINCS files below
+#   on Zenodo           the authors' own ViennaRNA outputs and the GREIN count
+#                       tables -- use download_zenodo_data.sh
 #   in the repo already All_gene_sets_AC.R
-#   regenerable        ~20 intermediates that earlier scripts in the same
-#                      pipeline produce (run the icSHAPE/PARIS2 stages in order)
-#   NOT AVAILABLE      GREIN-reprocessed count tables, and the authors' own
-#                      ViennaRNA prediction outputs, which were never deposited
+#   regenerable         ~18 intermediates that earlier scripts in the same
+#                       pipeline produce (run the icSHAPE/PARIS2 stages in order)
+#   manual download     the five RASP icSHAPE archives, which have no stable URL
 #
 # Nothing here is verified against a checksum, because these sources do not
 # publish one. Sizes are checked against the server's Content-Length instead.
@@ -152,23 +153,32 @@ WHAT THIS SCRIPT CANNOT GET
     RASP_files_H9.tar  RASP_files_HEK293T.tar  RASP_files_HeLa_icSHAPE.tar
     RASP_files_HepG2.tar  RASP_files_K562_Cell_Research.tar
 
-  NOT PUBLICLY AVAILABLE. These are the authors' own upstream outputs and
-  are in neither the Zenodo deposit nor any public archive. Without them the
-  corresponding upstream scripts cannot be rerun from scratch.
-    ViennaRNA_transcript_level_pairs.tsv.gz
-    ViennaRNA_structures_recovered.tsv
-    Prediction_MFE_Gencode_37C.txt
-    Prediction_Ecoli_MFE.csv
-    GENCODE_filtered_transcripts.txt
-    GENCODE_filtered_transcripts_the_last_one.txt
-    Table_ANNOTATED_iLINCs.csv
-    MG1655_gene_info.csv
-    combined_CRSSANT_DG.bedpe
+  DEPOSITED ON ZENODO -- no longer a gap. These are the authors' own upstream
+  outputs. They were absent from both the deposit and every public archive
+  until the authors supplied them, and they are now in the deposit, so
+  download_zenodo_data.sh fetches them into data/ with the rest. Several are
+  deposited under a different name from the one the scripts originally
+  declared; the scripts have been updated to match.
 
-  Note: the ViennaRNA prediction outputs above were produced by the
-  Prediction_minimum_free_energy_and_heat_capacity section, which the
-  2026-09-09 revision retired. The five figure scripts do not need them --
-  only the upstream provenance scripts do.
+    declared originally                         deposited as
+    combined_CRSSANT_DG.bedpe                   HEK293T_Amo_mRNA_enriched_CRSSANT_
+                                                combined_128shards_dg.bedpe
+                                                (the original was a placeholder name)
+    Prediction_Ecoli_MFE.csv                    Prediction_Ecoli_MFE_HC_df.csv
+    ViennaRNA_structures_recovered.tsv          ViennaRNA_structures_recovered.tsv.gz
+    Prediction_MFE_Gencode_37C.txt              Prediction_MFE_Gencode_37C.txt.gz
+    GENCODE_filtered_transcripts.txt            GENCODE_filtered_transcripts.txt.gz
+    GENCODE_filtered_transcripts_the_last_one   ...the_last_one.txt.gz
+    ViennaRNA_transcript_level_pairs.tsv.gz     (same)
+    MG1655_gene_info.csv                        (same)
+    Table_ANNOTATED_iLINCs.csv                  (same)
+
+  The .gz forms are read directly: read.delim() and data.table::fread() both
+  decompress transparently, and the parsed result is identical.
+
+  Verified end to end after these were deposited: the PARIS2 preprocessor and
+  the pair-overlap quantification both run to completion from data/ alone.
+
 EOF
 }
 
