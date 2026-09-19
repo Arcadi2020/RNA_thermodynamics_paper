@@ -1,37 +1,37 @@
-filename,size_bytes,size_mb,figures,scripts,note
-02_analyse_full_shuffle_vs_native_master_tables.RData,6879244,6.56,Figure 1,Fig_1_R_script.R,
-02_analyse_full_shuffle_vs_native_selected_objects.rds,2186704,2.09,Figure 1,Fig_1_R_script.R,
-cell_cycle_analysis_results_for_Fig_2.rds,33507348,31.96,Figure 2,Analysis_cell_cycle_genes_MFE.R; R_script_Fig_2.R,
-Compare_ViennaRNA_vs_RNAstructure_MFE.RData,14489168,13.82,Figure 1,Fig_1_R_script.R,
-GENCODE_filtered_transcripts.txt.gz,8005757,7.63,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
-GENCODE_filtered_transcripts_the_last_one.txt.gz,8265559,7.88,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
-Gencode_TX_norm_MFE_HC_table.csv,27649452,26.37,Figure 1; Figure 2; Figure 3,Analysis_cell_cycle_genes_MFE.R; Cross_validation_MFE.R; Fig_1_R_script.R,
-GSE104736_GeneLevel_Raw_data.csv,3737736,3.56,Figure 2,Analysis_cell_cycle_genes_MFE.R,
-GSE104736_TranscriptLevel_Raw_data.csv,37676378,35.93,Figure 2,Analysis_cell_cycle_genes_MFE.R,
-GSE104736_TranscriptLevel_TPM_data.csv,22329236,21.29,Figure 2,Analysis_cell_cycle_genes_MFE.R,
-GSE224463_analysis_results_for_Fig_5.rds,2351080,2.24,Figure 5,Analysis_GSE224463_stationary_phase.R; R_script_Fig_5.R,
-GSE226643_analysis_results_for_Fig_5.rds,445272,0.42,Figure 5,Analysis_GSE226643_stationary_phase.R; R_script_Fig_5.R,
-GSE94479_TranscriptLevel_Raw_data.csv,6866106,6.55,Figure 2,Analysis_cell_cycle_genes_MFE.R,
-GSE94479_TranscriptLevel_TPM_data.csv,7438390,7.09,Figure 2,Analysis_cell_cycle_genes_MFE.R,
-HEK293T_Amo_mRNA_enriched_CRSSANT_combined_128shards_dg.bedpe,2814187,2.68,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_BEDPE_enriched_mRNA_to_transcriptome_ViennaRNA_pairset_preprocessor.R,
-iLINCS_analysis_results_for_Fig_4.rds,72424,0.07,Figure 4,R_script_Fig_4.R,
-MG1655_gene_info.csv,538519,0.51,Figure 5,Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R,
-PARIS2_enriched_mRNA_ViennaRNA_pair_overlap_analysis_final_environment.rds,890440,0.85,Figure 1,Fig_1_R_script.R,
-pharmacologic_inhibition_analysis_results_for_Fig_3.rds,60123984,57.34,Figure 3,R_script_Fig_3.R,
-Pharmacologic_inhibition_of_cell_proliferation_part1.zip,40435137,38.56,Figure 3,,"upstream GREIN inputs, read from the unpacked archive"
-Pharmacologic_inhibition_of_cell_proliferation_part2.zip,5948428,5.67,Figure 3,,"upstream GREIN inputs, read from the unpacked archive"
-plot2_transcript_level_shift_summary.csv,1048,0.00,Figure 1,Analysis_icSHAPE_ViennaRNA_across_five_cell_lines.R; Fig_1_R_script.R,
-Prediction_Ecoli_MFE_HC_df.csv,2173610,2.07,Figure 5,Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R,
-Prediction_MFE_Gencode_37C.txt.gz,108965901,103.92,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
-refFlat_hg19_gtf.gz,9648078,9.20,Figure 2,Analysis_RNAseq_PNAS_2017.R,
-Supplementary_table_1.csv,61490191,58.64,--,,"manuscript supplementary table, not read by any script"
-Supplementary_table_2.csv,16610170,15.84,--,,"manuscript supplementary table, not read by any script"
-Supplementary_Table_3.xlsx,29272,0.03,--,,"manuscript supplementary table, not read by any script"
-Supplementary_Table_4.csv,10280,0.01,--,,"manuscript supplementary table, not read by any script"
-Supplementary_table_5.csv,3583,0.00,--,,"manuscript supplementary table, not read by any script"
-Supplementary_table_6.csv,120472,0.11,--,,"manuscript supplementary table, not read by any script"
-Supplementary_Table_7.csv,1293103,1.23,--,,"manuscript supplementary table, not read by any script"
-Table_ANNOTATED_iLINCs.csv,2881559,2.75,Figure 4,Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines.R; Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines.R,
-transcript_summary_filtered_all_cell_lines.tsv.gz,16359726,15.60,Figure 1,Analysis_icSHAPE_ViennaRNA_across_five_cell_lines.R; Fig_1_R_script.R,
-ViennaRNA_structures_recovered.tsv.gz,181169217,172.78,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_ViennaRNA_enriched_mRNA_transcript_pair_overlap_quantification.R,
-ViennaRNA_transcript_level_pairs.tsv.gz,926308899,883.40,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_BEDPE_enriched_mRNA_to_transcriptome_ViennaRNA_pairset_preprocessor.R; HEK293T_Amo_PARIS2_CRSSANT_ViennaRNA_enriched_mRNA_transcript_pair_overlap_quantification.R,
+filename,size_bytes,md5,figures,scripts,note
+02_analyse_full_shuffle_vs_native_master_tables.RData,6879244,c8184a40fc7357f71fa6c8a9e8c8e87d,Figure 1,Fig_1_R_script.R,
+02_analyse_full_shuffle_vs_native_selected_objects.rds,2186704,92af9d687896bcdf8aa19d969a2a82ee,Figure 1,Fig_1_R_script.R,
+cell_cycle_analysis_results_for_Fig_2.rds,33507348,dd5a78247012ea579b20bbb6f1657126,Figure 2,Analysis_cell_cycle_genes_MFE.R; R_script_Fig_2.R,
+Compare_ViennaRNA_vs_RNAstructure_MFE.RData,14489168,250bb9b3e5a976e4f6b3f368be3efc8f,Figure 1,Fig_1_R_script.R,
+GENCODE_filtered_transcripts.txt.gz,8005757,b27cd404d7f1c937aef299df093f410e,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
+GENCODE_filtered_transcripts_the_last_one.txt.gz,8265559,2b612eeae23be8261adbd9dc7d938403,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
+Gencode_TX_norm_MFE_HC_table.csv,27649452,42d7218027fe57a69889cac8d3139a4a,Figure 1; Figure 2; Figure 3,Analysis_cell_cycle_genes_MFE.R; Cross_validation_MFE.R; Fig_1_R_script.R,
+GSE104736_GeneLevel_Raw_data.csv,3737736,165c406f0e8641d3d7ae6ee82315e0c3,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE104736_TranscriptLevel_Raw_data.csv,37676378,78dd9cdb212d3756ca550697059fd9fe,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE104736_TranscriptLevel_TPM_data.csv,22329236,d4bcc414d78de21cf6bd030ea7faee39,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE224463_analysis_results_for_Fig_5.rds,2351080,4b4b717f5079d72c6e1d65db393abc5e,Figure 5,Analysis_GSE224463_stationary_phase.R; R_script_Fig_5.R,
+GSE226643_analysis_results_for_Fig_5.rds,445272,a156be9cbadb1f1c42a9329b85e92041,Figure 5,Analysis_GSE226643_stationary_phase.R; R_script_Fig_5.R,
+GSE94479_TranscriptLevel_Raw_data.csv,6866106,1ec78ec5ed1dc6ce0d345860de9b69bd,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE94479_TranscriptLevel_TPM_data.csv,7438390,b3794721954be9514ebb67b2af4f613d,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+HEK293T_Amo_mRNA_enriched_CRSSANT_combined_128shards_dg.bedpe,2814187,cb085c20caa38bf6ede8cfe189ae61e3,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_BEDPE_enriched_mRNA_to_transcriptome_ViennaRNA_pairset_preprocessor.R,
+iLINCS_analysis_results_for_Fig_4.rds,72424,8ae1fd18be011d2200fdfceeaff510ab,Figure 4,R_script_Fig_4.R,
+MG1655_gene_info.csv,538519,e3d46935226b1e4e7726bd98c61d61fe,Figure 5,Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R,
+PARIS2_enriched_mRNA_ViennaRNA_pair_overlap_analysis_final_environment.rds,890440,f84d89e04e35be97b23e868faa363c35,Figure 1,Fig_1_R_script.R,
+pharmacologic_inhibition_analysis_results_for_Fig_3.rds,60123984,6ea8f3524c1233cdea7c9a36c64bc450,Figure 3,R_script_Fig_3.R,
+Pharmacologic_inhibition_of_cell_proliferation_part1.zip,40435137,90585448d7369d92518dcf122591ca09,Figure 3,,"upstream GREIN inputs, read from the unpacked archive"
+Pharmacologic_inhibition_of_cell_proliferation_part2.zip,5948428,66fb37728441488fd0e2ac6938b6d64a,Figure 3,,"upstream GREIN inputs, read from the unpacked archive"
+plot2_transcript_level_shift_summary.csv,1048,4c933a8b2a5e07dd230b90c34f156e96,Figure 1,Analysis_icSHAPE_ViennaRNA_across_five_cell_lines.R; Fig_1_R_script.R,
+Prediction_Ecoli_MFE_HC_df.csv,2173610,38a598c3bed0dcbcecc8ed616345e40c,Figure 5,Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R,
+Prediction_MFE_Gencode_37C.txt.gz,108965901,7237bede8d6adff9b651832be93a935c,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
+refFlat_hg19_gtf.gz,9648078,8fc2c2e8c24fe78889920582dbf6801a,Figure 2,Analysis_RNAseq_PNAS_2017.R,
+Supplementary_table_1.csv,61490191,b3b94a344db83609912a42df4048771d,--,,"manuscript supplementary table, not read by any script"
+Supplementary_table_2.csv,16610170,d6dbbba8cc995845ba93ffc1547dcf08,--,,"manuscript supplementary table, not read by any script"
+Supplementary_Table_3.xlsx,29272,a3b8fa65aa71f44f64959444eba43c75,--,,"manuscript supplementary table, not read by any script"
+Supplementary_Table_4.csv,10280,3c354431dfedee88999165f6e33cb477,--,,"manuscript supplementary table, not read by any script"
+Supplementary_table_5.csv,3583,45952ef94156bf7c73e6a2bb2ba562f6,--,,"manuscript supplementary table, not read by any script"
+Supplementary_table_6.csv,120472,f3c6377a8df3bdb2a9f6876cfb890b1e,--,,"manuscript supplementary table, not read by any script"
+Supplementary_Table_7.csv,1293103,9c0e85b3e61c00d35c422c59ddee592e,--,,"manuscript supplementary table, not read by any script"
+Table_ANNOTATED_iLINCs.csv,2881559,0e6cf9795842d1be126223e1c122f442,Figure 4,Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines.R; Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines.R,
+transcript_summary_filtered_all_cell_lines.tsv.gz,16359726,1e4e0256d6a8d1e6ca8a40be23e0dec1,Figure 1,Analysis_icSHAPE_ViennaRNA_across_five_cell_lines.R; Fig_1_R_script.R,
+ViennaRNA_structures_recovered.tsv.gz,181169217,163eae62a90c0d5f415b5ec2f1c24379,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_ViennaRNA_enriched_mRNA_transcript_pair_overlap_quantification.R,
+ViennaRNA_transcript_level_pairs.tsv.gz,926308899,1e0417b9aa3497ac761d560b5f740c5b,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_BEDPE_enriched_mRNA_to_transcriptome_ViennaRNA_pairset_preprocessor.R; HEK293T_Amo_PARIS2_CRSSANT_ViennaRNA_enriched_mRNA_transcript_pair_overlap_quantification.R,
