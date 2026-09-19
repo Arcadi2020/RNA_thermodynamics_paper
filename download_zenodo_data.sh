@@ -9,6 +9,26 @@
 # already present and match are skipped, so re-running is cheap and a partial
 # download is repaired rather than left truncated.
 #
+# If an upload appears stuck as "pending (checksum not yet calculated)":
+# Zenodo runs two APIs. This script reads the legacy deposit API, but the web
+# UI uses the InvenioRDM one, and a file whose transfer never completed is left
+# there as a zero-byte entry with status "pending". That entry holds the key, so
+# every later attempt to upload the same filename conflicts with it and fails --
+# including attempts that look like server throttling. The legacy API does not
+# show pending entries at all, so the deposit looks clean while uploads keep
+# failing. Check for and clear them before retrying:
+#
+#   curl -H "Authorization: Bearer $ZENODO_TOKEN" \
+#     https://zenodo.org/api/records/17363927/draft/files \
+#     | python3 -c 'import json,sys; [print(e["key"], e["status"], e["size"]) \
+#         for e in json.load(sys.stdin)["entries"] if e["status"] != "completed"]'
+#
+#   curl -X DELETE -H "Authorization: Bearer $ZENODO_TOKEN" \
+#     https://zenodo.org/api/records/17363927/draft/files/<filename>
+#
+# Clearing one such entry took an 883 MB upload from ten consecutive failures
+# (best 66%, degrading to 196 B/s) to succeeding first time at 1.7 MB/s.
+#
 # The record is currently an UNPUBLISHED DRAFT, which the public API cannot
 # see. Until it is published you need a Zenodo token with deposit:write from
 # an account that owns the record:
