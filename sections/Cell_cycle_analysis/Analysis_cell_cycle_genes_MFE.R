@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
   library(DESeq2)
 })
 
-gencode_mfe_file <- "path_to/Gencode_TX_norm_MFE_HC_table.csv"
+gencode_mfe_file <- "../../data/Gencode_TX_norm_MFE_HC_table.csv"
 mcf7_differential_expression_rdata_file <- "path_to/Analysis_RNAseq_PNAS_2017_environment.RData"
 mcf7_transcript_tpm_file <- "path_to/GSE94479_TranscriptLevel_TPM_data.csv"
 mcf7_transcript_raw_counts_file <- "path_to/GSE94479_TranscriptLevel_Raw_data.csv"

@@ -11,13 +11,13 @@ arguments <- commandArgs(trailingOnly = TRUE)
 figure4_data_file <- if (length(arguments) >= 1L) {
   arguments[[1]]
 } else {
-  "path_to/iLINCS_analysis_results_for_Fig_4.rds"
+  "../../data/iLINCS_analysis_results_for_Fig_4.rds"
 }
 
 output_dir <- if (length(arguments) >= 2L) {
   arguments[[2]]
 } else {
-  "path_to/Figure_4_outputs"
+  "Figure_4_outputs"
 }
 
 if (!file.exists(figure4_data_file)) {

@@ -6,8 +6,8 @@ suppressPackageStartupMessages({
   library(scales)
 })
 
-figure2_results_file <- "path_to/cell_cycle_analysis_outputs/cell_cycle_analysis_results_for_Fig_2.rds"
-output_dir <- "path_to/Figure_2_outputs"
+figure2_results_file <- "../../data/cell_cycle_analysis_results_for_Fig_2.rds"
+output_dir <- "Figure_2_outputs"
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 

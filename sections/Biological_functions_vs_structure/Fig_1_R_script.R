@@ -4,14 +4,14 @@ suppressPackageStartupMessages({
   library(ggplot2)
 })
 
-gencode_mfe_file <- "path_to/Gencode_TX_norm_MFE_HC_table.csv"
-rna_comparison_rdata_file <- "path_to/Compare_ViennaRNA_vs_RNAstructure_MFE.RData"
-paris2_results_rds_file <- "path_to/PARIS2_enriched_mRNA_ViennaRNA_pair_overlap_analysis_final_environment.rds"
-icshape_transcript_summary_file <- "path_to/transcript_summary_filtered_all_cell_lines.tsv.gz"
-icshape_plot_summary_file <- "path_to/plot2_transcript_level_shift_summary.csv"
-shuffle_master_rdata_file <- "path_to/02_analyse_full_shuffle_vs_native_master_tables.RData"
-shuffle_selected_objects_rds_file <- "path_to/02_analyse_full_shuffle_vs_native_selected_objects.rds"
-output_dir <- "path_to/Figure_1_outputs"
+gencode_mfe_file <- "../../data/Gencode_TX_norm_MFE_HC_table.csv"
+rna_comparison_rdata_file <- "../../data/Compare_ViennaRNA_vs_RNAstructure_MFE.RData"
+paris2_results_rds_file <- "../../data/PARIS2_enriched_mRNA_ViennaRNA_pair_overlap_analysis_final_environment.rds"
+icshape_transcript_summary_file <- "../../data/transcript_summary_filtered_all_cell_lines.tsv.gz"
+icshape_plot_summary_file <- "../../data/plot2_transcript_level_shift_summary.csv"
+shuffle_master_rdata_file <- "../../data/02_analyse_full_shuffle_vs_native_master_tables.RData"
+shuffle_selected_objects_rds_file <- "../../data/02_analyse_full_shuffle_vs_native_selected_objects.rds"
+output_dir <- "Figure_1_outputs"
 
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 

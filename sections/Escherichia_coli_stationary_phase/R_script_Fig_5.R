@@ -21,19 +21,19 @@ if (length(arguments) > 0L && length(arguments) < 3L) {
 Fig5_GSE224463_analysis_rds_file <- if (length(arguments) >= 3L) {
   arguments[[1]]
 } else {
-  "path_to/GSE224463_analysis_results_for_Fig_5.rds"
+  "../../data/GSE224463_analysis_results_for_Fig_5.rds"
 }
 
 Fig5_GSE226643_analysis_rds_file <- if (length(arguments) >= 3L) {
   arguments[[2]]
 } else {
-  "path_to/GSE226643_analysis_results_for_Fig_5.rds"
+  "../../data/GSE226643_analysis_results_for_Fig_5.rds"
 }
 
 Fig5_output_dir <- if (length(arguments) >= 3L) {
   arguments[[3]]
 } else {
-  "path_to/Figure_5_outputs"
+  "Figure_5_outputs"
 }
 
 dir.create(Fig5_output_dir, recursive = TRUE, showWarnings = FALSE)

@@ -6,9 +6,9 @@ suppressPackageStartupMessages({
 outdir <- "path_to/ViennaRNA_position_table_for_icSHAPE"
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
-rnafold_job1 <- "path_to/Prediction_MFE_Gencode_37C.txt"
-rnafold_job2 <- "path_to/GENCODE_filtered_transcripts.txt"
-rnafold_job3 <- "path_to/GENCODE_filtered_transcripts_the_last_one.txt"
+rnafold_job1 <- "../../../data/Prediction_MFE_Gencode_37C.txt.gz"
+rnafold_job2 <- "../../../data/GENCODE_filtered_transcripts.txt.gz"
+rnafold_job3 <- "../../../data/GENCODE_filtered_transcripts_the_last_one.txt.gz"
 
 message2 <- function(...) cat(sprintf(...), "\n")
 
@@ -16,6 +16,9 @@ stop_if_missing <- function(x, label) {
   if (!file.exists(x)) stop(label, " not found: ", x, call. = FALSE)
 }
 
+# The three RNAfold outputs are distributed gzipped (they compress ~87%).
+# read.delim() decompresses .gz transparently, so no explicit gunzip is
+# needed and the parsed result is identical to the uncompressed input.
 parse_rnafold_triplets <- function(file_path) {
   x <- read.delim(
     file_path,

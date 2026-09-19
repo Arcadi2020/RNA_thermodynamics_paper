@@ -14,8 +14,8 @@ suppressPackageStartupMessages({
 })
 
 GSE224463_project_dir <- "path_to/GSE224463"
-GSE224463_prediction_file <- "path_to/Prediction_Ecoli_MFE.csv"
-GSE224463_gene_info_file <- "path_to/MG1655_gene_info.csv"
+GSE224463_prediction_file <- "../../data/Prediction_Ecoli_MFE_HC_df.csv"
+GSE224463_gene_info_file <- "../../data/MG1655_gene_info.csv"
 GSE224463_dir <- GSE224463_project_dir
 
 GSE224463_metadata_dir <- file.path(GSE224463_dir, "metadata")

@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 })
 
 icshape_clean_file <- "path_to/H9_CellResearch_icSHAPE_bed_clean_sorted.tsv.gz"
-gencode_gtf <- "path_to/gencode.v47.annotation.gtf"
+gencode_gtf <- "../../../data/upstream/gencode/gencode.v47.annotation.gtf"
 output_dir <- "path_to/H9_CellResearch_icSHAPE_mapped_to_transcripts"
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 

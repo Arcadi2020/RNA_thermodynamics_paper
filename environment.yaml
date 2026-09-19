@@ -1,0 +1,103 @@
+# Conda environment for the RNA_thermodynamics_paper analysis scripts.
+#
+#   conda env create -f environment.yaml
+#   conda activate rna-thermo
+#   Rscript post_install.R        # two packages conda cannot supply (see below)
+#
+# R is pinned to 4.4.2 because every serialized data file in the Zenodo deposit
+# (10.5281/zenodo.17363927) records R 4.4.2 as its writer. R 4.4 pairs with
+# Bioconductor 3.20, so all Bioconductor packages are pinned to their 3.20
+# release. Do not relax the r-base pin without also repinning the bioconductor-*
+# entries: the current bioconda defaults are Bioconductor 3.22, which requires
+# R >= 4.5 and will either drag R forward or fail to solve.
+#
+# CRAN packages are deliberately left unpinned. conda-forge builds them per R
+# minor version (build strings r44*), so the r-base pin already constrains them
+# to R 4.4-compatible builds. Pinning them as well makes the solve brittle for
+# no reproducibility gain.
+#
+# Apple Silicon note: GSVA and clinfun are absent from this file on purpose.
+# Neither has an osx-arm64 build on its channel at any version (gsva: linux-64,
+# linux-aarch64, osx-64 only; r-clinfun: linux-64, osx-64, win-64 only), so
+# pinning either makes the environment unsolvable on arm64 Macs. post_install.R
+# builds both from source instead, which is why the clang/gfortran compilers are
+# listed below. Both are needed only by R_script_Fig_3.R and
+# Cross_validation_MFE.R. If you would rather take everything prebuilt from
+# conda, create the environment as x86_64 under Rosetta and add
+# bioconductor-gsva=2.0.0 and r-clinfun back:
+#
+#   CONDA_SUBDIR=osx-64 conda env create -f environment.yaml
+#
+# That trades native speed for completeness, which is a poor deal here: the two
+# scripts needing GSVA are also the two that cannot run from the Zenodo deposit.
+
+# Locale: the environment must run under a UTF-8 locale. conda leaves LC_CTYPE
+# as "C", under which R fails to match the UTF-8 micro sign in the iLINCS dose
+# labels ("3.33 microM") and R_script_Fig_4.R aborts with
+# "No z-score-weighted rows for 3.33 microM". After creating the environment run:
+#
+#   conda env config vars set LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 -n rna-thermo
+#
+# (already applied to an environment created from this file on this machine).
+
+name: rna-thermo
+
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  # ---- interpreter -----------------------------------------------------------
+  - r-base=4.4.2
+
+  # ---- Bioconductor 3.20 (pinned: tied to R 4.4) -----------------------------
+  - bioconductor-biomart=2.62.0
+  - bioconductor-clusterprofiler=4.14.0
+  - bioconductor-decoupler=2.12.0          # provides decoupleR
+  - bioconductor-derfinder=1.40.0
+  - bioconductor-deseq2=1.46.0
+  - bioconductor-enrichplot=1.26.1
+  - bioconductor-genomicranges=1.58.0
+  - bioconductor-geoquery=2.74.0
+  - bioconductor-iranges=2.40.0
+  - bioconductor-spatialexperiment=1.16.0  # GSVA build dependency
+  - bioconductor-pathview=1.46.0
+  - bioconductor-rtracklayer=1.66.0
+  - bioconductor-summarizedexperiment=1.36.0
+
+  # ---- CRAN (unpinned; constrained to r44 builds by the r-base pin) ----------
+  - r-data.table
+  - r-dplyr
+  - r-ggplot2
+  - r-ggpubr
+  - r-ggrepel
+  - r-ggally
+  - r-gplots
+  - r-gridextra
+  - r-patchwork
+  - r-pheatmap
+  - r-rcolorbrewer
+  - r-scales
+  - r-purrr
+  - r-readr
+  - r-rlang
+  - r-stringr
+  - r-tibble
+  - r-tidyr
+  - r-tidyverse
+  - r-enrichr
+  - r-factoextra
+  - r-httr
+  - r-jsonlite
+
+  # ---- needed only for the post-install step ---------------------------------
+  - r-biocmanager
+  - r-remotes
+  # toolchain for the post-install packages that compile from source
+  - clang_osx-arm64
+  - gfortran_osx-arm64
+  # GSVA -> SpatialExperiment -> magick needs the ImageMagick C library, which
+  # r-magick cannot build against without it. Supplying both from conda avoids
+  # a source build of magick entirely.
+  - r-magick
+  - imagemagick
