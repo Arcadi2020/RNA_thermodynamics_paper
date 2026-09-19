@@ -4,6 +4,13 @@
 #
 #   ./download_zenodo_data.sh              # download everything, skip what is current
 #   ./download_zenodo_data.sh --check      # verify what is already there, download nothing
+#   ./download_zenodo_data.sh --jobs 8     # more parallel transfers (default 4)
+#
+# On a healthy link --jobs makes no measurable difference: 6 files / 90 MB took
+# 5s serial and 6s at --jobs 6, because a single connection already saturates
+# the link at ~18 MB/s. It is worth raising only when per-connection throughput
+# is the bottleneck -- Zenodo's download path was measured at 462 KB/s during a
+# degraded spell, and that is the case parallelism helps with.
 #
 # Every file is checked against the MD5 recorded by Zenodo. Files that are
 # already present and match are skipped, so re-running is cheap and a partial
@@ -45,7 +52,15 @@ API=https://zenodo.org/api
 DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data"
 
 CHECK_ONLY=0
-[ "${1:-}" = "--check" ] && CHECK_ONLY=1
+JOBS=4
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check) CHECK_ONLY=1 ;;
+    --jobs)  JOBS="${2:?--jobs needs a number}"; shift ;;
+    *) echo "Unknown option: $1"; exit 2 ;;
+  esac
+  shift
+done
 
 mkdir -p "$DEST"
 
@@ -107,44 +122,69 @@ echo
 
 md5_of() { md5 -q "$1" 2>/dev/null || md5sum "$1" 2>/dev/null | cut -d' ' -f1; }
 
-ok=0; fetched=0; failed=0
+# Pass 1: decide what actually needs fetching, so the parallel pass is pure I/O.
+todo=$(mktemp); trap 'rm -f "$meta" "$list" "$todo"' EXIT
+ok=0; failed=0
 while IFS=$'\t' read -r name size sum url; do
   target="$DEST/$name"
-
   if [ -f "$target" ] && [ "$(md5_of "$target")" = "$sum" ]; then
     printf "  current  %9.1f MB  %s\n" "$(echo "scale=1; $size/1048576" | bc)" "$name"
     ok=$((ok + 1))
     continue
   fi
-
   if [ "$CHECK_ONLY" -eq 1 ]; then
-    if [ -f "$target" ]; then
-      printf "  STALE    %9.1f MB  %s\n" "$(echo "scale=1; $size/1048576" | bc)" "$name"
-    else
-      printf "  absent   %9.1f MB  %s\n" "$(echo "scale=1; $size/1048576" | bc)" "$name"
-    fi
+    if [ -f "$target" ]; then st=STALE; else st=absent; fi
+    printf "  %-8s %9.1f MB  %s\n" "$st" "$(echo "scale=1; $size/1048576" | bc)" "$name"
     failed=$((failed + 1))
     continue
   fi
-
-  printf "  fetching %9.1f MB  %s ... " "$(echo "scale=1; $size/1048576" | bc)" "$name"
-
-  # No -C - here: resuming onto a stale or truncated file produces a corrupt
-  # result that only the checksum catches. Always fetch whole.
-  auth=()
-  [ -n "${ZENODO_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $ZENODO_TOKEN")
-
-  rm -f "$target"
-  if curl -sSL --retry 3 --retry-delay 5 "${auth[@]}" -o "$target" "$url" \
-     && [ "$(md5_of "$target")" = "$sum" ]; then
-    echo "ok"
-    fetched=$((fetched + 1))
-  else
-    echo "FAILED (checksum mismatch or transfer error)"
-    rm -f "$target"
-    failed=$((failed + 1))
-  fi
+  printf '%s\t%s\t%s\t%s\n' "$name" "$size" "$sum" "$url" >> "$todo"
 done < "$list"
+
+fetched=0
+n_todo=$(wc -l < "$todo" | tr -d ' ')
+
+if [ "$CHECK_ONLY" -eq 0 ] && [ "$n_todo" -gt 0 ]; then
+  echo
+  echo "  fetching $n_todo file(s), $JOBS at a time"
+
+  # Pass 2: transfer in parallel, in batches of $JOBS. Backgrounded subshells
+  # with a plain `wait` keep this portable -- `wait -n` needs bash 4.3 and
+  # macOS still ships 3.2.
+  #
+  # No -C -: resuming onto a stale or truncated file yields a corrupt result
+  # that only the checksum would catch.
+  fetch_one() {
+    local name="$1" url="$2" target="$DEST/$1"
+    rm -f "$target"
+    if [ -n "${ZENODO_TOKEN:-}" ]; then
+      curl -sSL --retry 3 --retry-delay 5 -H "Authorization: Bearer ${ZENODO_TOKEN}" -o "$target" "$url" 2>/dev/null
+    else
+      curl -sSL --retry 3 --retry-delay 5 -o "$target" "$url" 2>/dev/null
+    fi
+  }
+
+  batch=0
+  while IFS=$'\t' read -r name size sum url; do
+    fetch_one "$name" "$url" &
+    batch=$((batch + 1))
+    if [ "$batch" -ge "$JOBS" ]; then wait; batch=0; fi
+  done < "$todo"
+  wait
+
+  # Pass 3: verify every transfer against Zenodo's checksum.
+  while IFS=$'\t' read -r name size sum url; do
+    target="$DEST/$name"
+    if [ -f "$target" ] && [ "$(md5_of "$target")" = "$sum" ]; then
+      printf "  ok       %9.1f MB  %s\n" "$(echo "scale=1; $size/1048576" | bc)" "$name"
+      fetched=$((fetched + 1))
+    else
+      printf "  FAILED   %9.1f MB  %s (checksum mismatch or transfer error)\n" "$(echo "scale=1; $size/1048576" | bc)" "$name"
+      rm -f "$target"
+      failed=$((failed + 1))
+    fi
+  done < "$todo"
+fi
 
 echo
 if [ "$CHECK_ONLY" -eq 1 ]; then

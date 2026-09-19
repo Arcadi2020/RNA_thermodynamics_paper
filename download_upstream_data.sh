@@ -27,46 +27,28 @@
 #
 # Nothing here is verified against a checksum, because these sources do not
 # publish one. Sizes are checked against the server's Content-Length instead.
+#
+# The sources themselves live in upstream_sources.csv next to this script,
+# one row per file: group,subdir,filename,url,post. Add or change a source
+# by editing that file -- no shell changes needed. 'post' is no, yes
+# (gunzip after download) or untar.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="$ROOT/data/upstream"
 
-GEO=https://ftp.ncbi.nlm.nih.gov/geo
-GENCODE=https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_47
-UCSC=https://hgdownload.soe.ucsc.edu/goldenPath/hg19/database
-CLUE=https://s3.amazonaws.com/macchiato.clue.io/builds/LINCS2020
+MANIFEST_CSV="$ROOT/upstream_sources.csv"
 
-# group|subdir|filename|url|gunzip?
-MANIFEST=$(cat <<'EOF'
-annotation|gencode|gencode.v47.annotation.gtf.gz|GENCODE/gencode.v47.annotation.gtf.gz|yes
-annotation|gencode|gencode.v47.tRNAs.gtf.gz|GENCODE/gencode.v47.tRNAs.gtf.gz|no
-geo|GSE94479|GSM2476255_RNA_G0G1.bw|GEO/samples/GSM2476nnn/GSM2476255/suppl/GSM2476255_RNA_G0G1.bw|no
-geo|GSE94479|GSM2476256_RNA_S.bw|GEO/samples/GSM2476nnn/GSM2476256/suppl/GSM2476256_RNA_S.bw|no
-geo|GSE94479|GSM2476257_RNA_M.bw|GEO/samples/GSM2476nnn/GSM2476257/suppl/GSM2476257_RNA_M.bw|no
-geo|GSE94479|GSE94479_Deseq_G2MvsG0G1.txt.gz|GEO/series/GSE94nnn/GSE94479/suppl/GSE94479_Deseq_G2MvsG0G1.txt.gz|yes
-geo|GSE94479|GSE94479_Deseq_G2MvsS.txt.gz|GEO/series/GSE94nnn/GSE94479/suppl/GSE94479_Deseq_G2MvsS.txt.gz|yes
-geo|GSE94479|GSE94479_Deseq_SvsG0G1.txt.gz|GEO/series/GSE94nnn/GSE94479/suppl/GSE94479_Deseq_SvsG0G1.txt.gz|yes
-geo|GSE94479|GSE94479_GROCountNorm.txt.gz|GEO/series/GSE94nnn/GSE94479/suppl/GSE94479_GROCountNorm.txt.gz|yes
-geo|GSE104736|GSE104736_ReadCounts.csv.gz|GEO/series/GSE104nnn/GSE104736/suppl/GSE104736_ReadCounts.csv.gz|no
-geo|GSE104736|GSE104736_RPKM.csv.gz|GEO/series/GSE104nnn/GSE104736/suppl/GSE104736_RPKM.csv.gz|no
-geo|GSE224463/GEO_download|GSE224463_RAW.tar|GEO/series/GSE224nnn/GSE224463/suppl/GSE224463_RAW.tar|untar
-geo|GSE226643/GEO_download|GSE226643_X.csv.gz|GEO/series/GSE226nnn/GSE226643/suppl/GSE226643_X.csv.gz|no
-lincs|LINCS2020|cellinfo_beta.txt|CLUE/cellinfo_beta.txt|no
-lincs|LINCS2020|geneinfo_beta.txt|CLUE/geneinfo_beta.txt|no
-lincs|LINCS2020|siginfo_beta.txt|CLUE/siginfo_beta.txt|no
-lincs|LINCS2020|instinfo_beta.txt|CLUE/instinfo_beta.txt|no
-lincs-gctx|LINCS2020|level3_beta_all_n3026460x12328.gctx|CLUE/level3/level3_beta_all_n3026460x12328.gctx|no
-EOF
-)
+if [ ! -f "$MANIFEST_CSV" ]; then
+  echo "Source list not found: $MANIFEST_CSV"
+  echo "It ships alongside this script; fetch both from the repository."
+  exit 1
+fi
 
-expand_url() {
-  local u="$1"
-  u="${u/#GEO\//$GEO/}"; u="${u/#GENCODE\//$GENCODE/}"
-  u="${u/#UCSC\//$UCSC/}"; u="${u/#CLUE\//$CLUE/}"
-  echo "$u"
-}
+# group,subdir,filename,url,post  -- header row skipped.
+# Edit upstream_sources.csv to add or change a source; no shell changes needed.
+MANIFEST=$(tail -n +2 "$MANIFEST_CSV" | tr ',' '|')
 
 show_list() {
   cat <<'EOF'
@@ -219,7 +201,7 @@ while IFS='|' read -r group sub name url gz; do
   [ -z "${group:-}" ] && continue
   if ! wanted "$group"; then skipped=$((skipped + 1)); continue; fi
 
-  full_url="$(expand_url "$url")"
+  full_url="$url"
   outdir="$DEST/$sub"
   target="$outdir/$name"
   # a file that gets gunzipped is "present" under its decompressed name
