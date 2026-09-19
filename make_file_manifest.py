@@ -11,13 +11,14 @@ of date the way a hand-written table would.
     ./make_file_manifest.py --from FILE     # read a saved deposit JSON instead
 
 Outputs, both alongside this script:
-    file_manifest.csv   one row per file: filename,size_bytes,size_mb,figures,scripts
+    file_manifest.csv   one row per file: filename,size_bytes,md5,figures,scripts
     FILES.md            the same as a table, for the repo and the Zenodo description
 """
 import argparse, csv, json, os, re, sys, urllib.request
 
 RECORD_ID = 17363927
 ROOT = os.path.dirname(os.path.abspath(__file__))
+SELF_NAME = "file_manifest.csv"
 
 SECTION_FIGURE = {
     "Biological_functions_vs_structure": "Figure 1",
@@ -56,10 +57,14 @@ def load_deposit(path=None):
             return json.load(r)
 
 
-def file_sizes(dep):
+def file_meta(dep):
+    """name -> (size_bytes, md5). Both endpoints spell these differently."""
     out = {}
     for f in dep.get("files", []):
-        out[f.get("key") or f.get("filename")] = f.get("size") or f.get("filesize")
+        name = f.get("key") or f.get("filename")
+        size = f.get("size") or f.get("filesize")
+        csum = (f.get("checksum") or "").replace("md5:", "")
+        out[name] = (size, csum)
     return out
 
 
@@ -92,7 +97,11 @@ def main():
     ap.add_argument("--from", dest="src", help="saved deposit JSON")
     args = ap.parse_args()
 
-    sizes = file_sizes(load_deposit(args.src))
+    meta = file_meta(load_deposit(args.src))
+    # The manifest is itself deposited, so its checksum changes every time this
+    # runs. Listing it would publish a hash that is stale on arrival, so skip it.
+    meta.pop(SELF_NAME, None)
+    sizes = {k: v[0] for k, v in meta.items()}
     uses = scan_scripts(set(sizes))
 
     rows = []
@@ -110,7 +119,7 @@ def main():
         rows.append({
             "filename": name,
             "size_bytes": sizes[name],
-            "size_mb": f"{sizes[name]/1048576:.2f}",
+            "md5": meta[name][1],
             "figures": "; ".join(figures),
             "scripts": "; ".join(scripts),
             "note": note,
@@ -151,7 +160,8 @@ def main():
                "| File | Size | Read by |", "|---|---:|---|"]
         for r in by_fig[fig]:
             read_by = r["scripts"] or r["note"] or "--"
-            md.append(f"| `{r['filename']}` | {r['size_mb']} MB | {read_by} |")
+            mb = int(r["size_bytes"]) / 1048576
+            md.append(f"| `{r['filename']}` | {mb:,.2f} MB | {read_by} |")
         md.append("")
 
     open(os.path.join(ROOT, "FILES.md"), "w").write("\n".join(md))
