@@ -48,28 +48,22 @@ if (!file.exists(master_script_path)) {
   stop("Cross_validation_MFE.R was not found in scripts_dir.")
 }
 
-use_precomputed_workspace <- TRUE
-
-if (use_precomputed_workspace) {
-  if (!file.exists(analysis_results_file)) {
-    stop("The precomputed Figure 3 results file was not found in input_dir.")
-  }
-
-  figure3_objects <- readRDS(analysis_results_file)
-
-  if (!is.list(figure3_objects) || is.null(names(figure3_objects))) {
-    stop("The precomputed Figure 3 results file must contain a named list.")
-  }
-
-  invisible(
-    list2env(
-      figure3_objects,
-      envir = .GlobalEnv
-    )
-  )
-} else {
-  source(master_script_path)
+if (!file.exists(analysis_results_file)) {
+  stop("The precomputed Figure 3 results file was not found in input_dir.")
 }
+
+figure3_objects <- readRDS(analysis_results_file)
+
+if (!is.list(figure3_objects) || is.null(names(figure3_objects))) {
+  stop("The precomputed Figure 3 results file must contain a named list.")
+}
+
+invisible(
+  list2env(
+    figure3_objects,
+    envir = .GlobalEnv
+  )
+)
 
 gsea_output_dir <- file.path(figure_output_dir, "GSEA_KEGG_clusterProfiler")
 dir.create(gsea_output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -1862,7 +1856,30 @@ ggsave(
   path = figure_output_dir
 )
 
+format_P_value <- function(p) {
+
+  label <- rep(NA_character_, length(p))
+
+  below_threshold <- !is.na(p) & p < 0.0001
+  exact_value <- !is.na(p) & p >= 0.0001
+
+  label[below_threshold] <- "P < 0.0001"
+
+  label[exact_value] <- paste0(
+    "P = ",
+    trimws(
+      base::format.pval(
+        p[exact_value],
+        digits = 4
+      )
+    )
+  )
+
+  label
+}
+
 results <- data.frame(
+
   Dataset = c(
     "GSE103021_ARS_1620_LU65",
     "GSE121105_trastuzumab",
@@ -1875,25 +1892,73 @@ results <- data.frame(
   ),
 
   Mean_MFE_UP = c(
-    mean(MFE_res_GSE103021_ARS_1620_LU65_UP$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE121105_trastuzumab_UP$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE143462_UP$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE135514_Das_24h_UP$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE135514_Das_72h_UP$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE241735_Futibatinib_4h_UP$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE241735_Futibatinib_12h_UP$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE241735_Futibatinib_24h_UP$Normalized_MFE, na.rm = TRUE)
+    mean(
+      MFE_res_GSE103021_ARS_1620_LU65_UP$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE121105_trastuzumab_UP$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE143462_UP$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE135514_Das_24h_UP$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE135514_Das_72h_UP$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE241735_Futibatinib_4h_UP$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE241735_Futibatinib_12h_UP$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE241735_Futibatinib_24h_UP$Normalized_MFE,
+      na.rm = TRUE
+    )
   ),
 
   Mean_MFE_DOWN = c(
-    mean(MFE_res_GSE103021_ARS_1620_LU65_DOWN$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE121105_trastuzumab_DOWN$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE143462_DOWN$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE135514_Das_24h_DOWN$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE135514_Das_72h_DOWN$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE241735_Futibatinib_4h_DOWN$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE241735_Futibatinib_12h_DOWN$Normalized_MFE, na.rm = TRUE),
-    mean(MFE_res_GSE241735_Futibatinib_24h_DOWN$Normalized_MFE, na.rm = TRUE)
+    mean(
+      MFE_res_GSE103021_ARS_1620_LU65_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE121105_trastuzumab_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE143462_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE135514_Das_24h_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE135514_Das_72h_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE241735_Futibatinib_4h_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE241735_Futibatinib_12h_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    ),
+    mean(
+      MFE_res_GSE241735_Futibatinib_24h_DOWN$Normalized_MFE,
+      na.rm = TRUE
+    )
   ),
 
   KS_Test_p_value = c(
@@ -1908,56 +1973,56 @@ results <- data.frame(
   ),
 
   Wilcoxon_p_value = c(
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE103021_ARS_1620_LU65_DOWN$Normalized_MFE,
       MFE_res_GSE103021_ARS_1620_LU65_UP$Normalized_MFE,
       paired = FALSE,
       exact = FALSE
     )$p.value,
 
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE121105_trastuzumab_DOWN$Normalized_MFE,
       MFE_res_GSE121105_trastuzumab_UP$Normalized_MFE,
       paired = FALSE,
       exact = FALSE
     )$p.value,
 
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE143462_DOWN$Normalized_MFE,
       MFE_res_GSE143462_UP$Normalized_MFE,
       paired = FALSE,
       exact = FALSE
     )$p.value,
 
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE135514_Das_24h_DOWN$Normalized_MFE,
       MFE_res_GSE135514_Das_24h_UP$Normalized_MFE,
       paired = FALSE,
       exact = FALSE
     )$p.value,
 
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE135514_Das_72h_DOWN$Normalized_MFE,
       MFE_res_GSE135514_Das_72h_UP$Normalized_MFE,
       paired = FALSE,
       exact = FALSE
     )$p.value,
 
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE241735_Futibatinib_4h_DOWN$Normalized_MFE,
       MFE_res_GSE241735_Futibatinib_4h_UP$Normalized_MFE,
       paired = FALSE,
       exact = FALSE
     )$p.value,
 
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE241735_Futibatinib_12h_DOWN$Normalized_MFE,
       MFE_res_GSE241735_Futibatinib_12h_UP$Normalized_MFE,
       paired = FALSE,
       exact = FALSE
     )$p.value,
 
-    wilcox.test(
+    stats::wilcox.test(
       MFE_res_GSE241735_Futibatinib_24h_DOWN$Normalized_MFE,
       MFE_res_GSE241735_Futibatinib_24h_UP$Normalized_MFE,
       paired = FALSE,
@@ -1966,7 +2031,23 @@ results <- data.frame(
   )
 )
 
-print(results)
+results_report <- results %>%
+  dplyr::mutate(
+    KS_Test_P = format_P_value(KS_Test_p_value),
+    Wilcoxon_P = format_P_value(Wilcoxon_p_value)
+  ) %>%
+  dplyr::select(
+    Dataset,
+    Mean_MFE_UP,
+    Mean_MFE_DOWN,
+    KS_Test_P,
+    Wilcoxon_P
+  )
+
+print(results_report, row.names = FALSE)
+
+library(ggplot2)
+library(tidyr)
 
 sample_order <- c(
   "GSE103021",
@@ -2026,17 +2107,6 @@ Data_high_MFE_fraction_total_counts <- data.frame(
     GSE241735_Futibatinib_4h_Futibatinib_4h_high_MFE_TX_counts_fraction,
     GSE241735_Futibatinib_12h_Futibatinib_12h_high_MFE_TX_counts_fraction,
     GSE241735_Futibatinib_24h_Futibatinib_24h_high_MFE_TX_counts_fraction
-  ),
-
-  Z_test_result_75th = c(
-    GSE103021_ARS_1620_LU65_z_test_counts_75_p_value,
-    GSE121105_trastuzumab_z_test_counts_75_p_value,
-    GSE143462_z_test_counts_75_p_value,
-    GSE135514_Das_24h_z_test_counts_75_p_value,
-    GSE135514_Das_72h_z_test_counts_75_p_value,
-    GSE241735_Futibatinib_4h_z_test_counts_75_p_value,
-    GSE241735_Futibatinib_12h_z_test_counts_75_p_value,
-    GSE241735_Futibatinib_24h_z_test_counts_75_p_value
   )
 )
 
@@ -2157,17 +2227,6 @@ Data_low_MFE_fraction_total_counts <- data.frame(
     GSE241735_Futibatinib_4h_Futibatinib_4h_low_MFE_TX_counts_fraction,
     GSE241735_Futibatinib_12h_Futibatinib_12h_low_MFE_TX_counts_fraction,
     GSE241735_Futibatinib_24h_Futibatinib_24h_low_MFE_TX_counts_fraction
-  ),
-
-  Z_test_result_25th = c(
-    GSE103021_ARS_1620_LU65_z_test_counts_25_p_value,
-    GSE121105_trastuzumab_z_test_counts_25_p_value,
-    GSE143462_z_test_counts_25_p_value,
-    GSE135514_Das_24h_z_test_counts_25_p_value,
-    GSE135514_Das_72h_z_test_counts_25_p_value,
-    GSE241735_Futibatinib_4h_z_test_counts_25_p_value,
-    GSE241735_Futibatinib_12h_z_test_counts_25_p_value,
-    GSE241735_Futibatinib_24h_z_test_counts_25_p_value
   )
 )
 
@@ -2260,41 +2319,542 @@ Fig3D_complete_stats <- Data_high_MFE_fraction_total_counts %>%
   dplyr::select(
     Samples,
     High_MFE_control = High_MFE_of_total_control,
-    High_MFE_drug_treated = High_MFE_of_total_drug_treated,
-    High_MFE_Z_test_p_value = Z_test_result_75th
+    High_MFE_drug_treated = High_MFE_of_total_drug_treated
   ) %>%
   dplyr::left_join(
     Data_low_MFE_fraction_total_counts %>%
       dplyr::select(
         Samples,
         Low_MFE_control = low_MFE_of_total_control,
-        Low_MFE_drug_treated = low_MFE_of_total_drug_treated,
-        Low_MFE_Z_test_p_value = Z_test_result_25th
+        Low_MFE_drug_treated = low_MFE_of_total_drug_treated
       ),
     by = "Samples"
   ) %>%
   dplyr::mutate(
     High_MFE_drug_minus_control =
       High_MFE_drug_treated - High_MFE_control,
-
     Low_MFE_drug_minus_control =
-      Low_MFE_drug_treated - Low_MFE_control,
-
-    High_MFE_p_label = format.pval(
-      High_MFE_Z_test_p_value,
-      digits = 3,
-      eps = 2.2e-16
-    ),
-
-    Low_MFE_p_label = format.pval(
-      Low_MFE_Z_test_p_value,
-      digits = 3,
-      eps = 2.2e-16
-    )
+      Low_MFE_drug_treated - Low_MFE_control
   ) %>%
   dplyr::arrange(Samples)
 
 print(Fig3D_complete_stats)
+
+Fig3D_perm_B <- 10000L
+Fig3D_perm_seed <- 20260918L
+
+Fig3D_perm_spec <- data.frame(
+  Samples = c(
+    "GSE103021", "GSE121105", "GSE143462",
+    "GSE135514_24h", "GSE135514_72h",
+    "GSE241735_4h", "GSE241735_12h", "GSE241735_24h"
+  ),
+  Prefix = c(
+    "GSE103021_ARS_1620_LU65", "GSE121105_trastuzumab", "GSE143462",
+    "GSE135514_Das_24h", "GSE135514_Das_72h",
+    "GSE241735_Futibatinib_4h", "GSE241735_Futibatinib_12h",
+    "GSE241735_Futibatinib_24h"
+  ),
+  Treatment = c(
+    "ARS_1620_LU65", "trastuzumab", "Omipalisib",
+    "Das_24h", "Das_72h",
+    "Futibatinib_4h", "Futibatinib_12h", "Futibatinib_24h"
+  ),
+  Upper_suffix = c(
+    "_high_MFE_TX_total", "_high_MFE_TX_total", "_high_MFE_TX_total",
+    "_high_MFE_TX", "_high_MFE_TX",
+    "_high_MFE_TX_total", "_high_MFE_TX_total", "_high_MFE_TX_total"
+  ),
+  stringsAsFactors = FALSE
+)
+
+Fig3D_perm_required <- c(
+  "Fig3D_complete_stats",
+  paste0(Fig3D_perm_spec$Prefix, "_norm_TX_aggregated_data_avg_counts"),
+  paste0(Fig3D_perm_spec$Prefix, Fig3D_perm_spec$Upper_suffix),
+  paste0(Fig3D_perm_spec$Prefix, "_low_MFE_TX_total")
+)
+
+Fig3D_perm_missing <- Fig3D_perm_required[
+  !vapply(
+    Fig3D_perm_required, exists, logical(1),
+    envir = .GlobalEnv, inherits = FALSE
+  )
+]
+
+if (length(Fig3D_perm_missing)) {
+  stop(
+    "Missing Fig. 3D source objects: ",
+    paste(Fig3D_perm_missing, collapse = ", ")
+  )
+}
+
+Fig3D_prepare_permutation <- function(i) {
+
+  spec <- Fig3D_perm_spec[i, ]
+  fail <- function(msg) stop(spec$Samples, ": ", msg)
+
+  fetch <- function(suffix) {
+    get(
+      paste0(spec$Prefix, suffix),
+      envir = .GlobalEnv, inherits = FALSE
+    )
+  }
+
+  dat <- fetch("_norm_TX_aggregated_data_avg_counts")
+  id_col <- "ensembl_transcript_id_version"
+  required <- c(id_col, "condition", "Normalized_MFE", "avg_counts")
+
+  if (!all(required %in% names(dat))) {
+    fail("Missing source columns.")
+  }
+
+  if (
+    anyNA(dat[, required]) ||
+    any(!is.finite(dat$avg_counts)) ||
+    any(dat$avg_counts < 0) ||
+    any(!is.finite(dat$Normalized_MFE)) ||
+    !setequal(as.character(dat$condition), c("Control", spec$Treatment))
+  ) {
+    fail("Check source counts, folding values or condition names.")
+  }
+
+  ref <- dat[dat$condition == "Control", ]
+  cmp <- dat[dat$condition == spec$Treatment, ]
+
+  if (
+    anyDuplicated(ref[[id_col]]) ||
+    anyDuplicated(cmp[[id_col]]) ||
+    !setequal(ref[[id_col]], cmp[[id_col]])
+  ) {
+    fail("Transcript IDs are duplicated or differ between conditions.")
+  }
+
+  cmp <- cmp[match(ref[[id_col]], cmp[[id_col]]), ]
+
+  if (any(abs(ref$Normalized_MFE - cmp$Normalized_MFE) > 1e-12)) {
+    fail("Folding values differ between conditions.")
+  }
+
+  upper <- fetch(spec$Upper_suffix)
+  lower <- fetch("_low_MFE_TX_total")
+
+  if (!(id_col %in% names(upper)) || !(id_col %in% names(lower))) {
+    fail("Missing quartile transcript IDs.")
+  }
+
+  is_upper <- ref[[id_col]] %in% upper[[id_col]]
+  is_lower <- ref[[id_col]] %in% lower[[id_col]]
+
+  if (any(is_upper & is_lower) || !any(is_upper) || !any(is_lower)) {
+    fail("Invalid quartile memberships.")
+  }
+
+  category <- ifelse(is_upper, 1L, ifelse(is_lower, 2L, 0L))
+
+  counts <- cbind(ref$avg_counts, cmp$avg_counts)
+
+  if (any(!is.finite(colSums(counts))) || any(colSums(counts) <= 0)) {
+    fail("Invalid total counts.")
+  }
+
+  weights <- sweep(counts, 2, colSums(counts), "/")
+
+  fractions <- vapply(1:2, function(k) {
+    colSums(weights[category == k, , drop = FALSE])
+  }, numeric(2))
+
+  old <- Fig3D_complete_stats[
+    as.character(Fig3D_complete_stats$Samples) == spec$Samples, ]
+
+  if (nrow(old) != 1L) {
+    fail("Expected one existing summary row.")
+  }
+
+  expected <- c(
+    old$High_MFE_control, old$High_MFE_drug_treated,
+    old$Low_MFE_control, old$Low_MFE_drug_treated
+  )
+
+  if (
+    length(expected) != 4L ||
+    any(!is.finite(expected)) ||
+    max(abs(as.vector(fractions) - expected)) > 1e-10
+  ) {
+    fail("Recalculated fractions do not match the existing bars.")
+  }
+
+  list(
+    Samples = spec$Samples,
+    category = category,
+    fractions = fractions,
+    delta = weights[, 2] - weights[, 1]
+  )
+}
+
+Fig3D_perm_inputs <- lapply(
+  seq_len(nrow(Fig3D_perm_spec)),
+  Fig3D_prepare_permutation
+)
+
+message("All Fig. 3D fractions match the existing bars.")
+
+set.seed(Fig3D_perm_seed)
+
+Fig3D_perm_runs <- lapply(Fig3D_perm_inputs, function(x) {
+
+  message("Permutations: ", x$Samples)
+
+  observed <- x$fractions[2, ] - x$fractions[1, ]
+
+  null <- replicate(Fig3D_perm_B, {
+
+    shuffled <- x$category[sample.int(length(x$category))]
+    c(
+      sum(x$delta[shuffled == 1L]),
+      sum(x$delta[shuffled == 2L])
+    )
+  })
+
+  b <- rowSums(abs(null) >= abs(observed) - 1e-12)
+
+  list(
+    results = data.frame(
+      Samples = x$Samples,
+      Quartile = c("Upper / less negative", "Lower / more negative"),
+      Fraction_control = x$fractions[1, ],
+      Fraction_treated = x$fractions[2, ],
+      Delta_fraction = observed,
+      N_transcripts = length(x$category),
+      N_quartile = c(sum(x$category == 1L), sum(x$category == 2L)),
+      P_permutation = (b + 1) / (Fig3D_perm_B + 1),
+      stringsAsFactors = FALSE
+    ),
+    null_delta = null
+  )
+})
+
+Fig3D_quartile_permutation_results <- do.call(
+  rbind,
+  lapply(Fig3D_perm_runs, function(x) x$results)
+)
+
+stopifnot(nrow(Fig3D_quartile_permutation_results) == 16L)
+
+Fig3D_quartile_permutation_results$P_adj_BH <- p.adjust(
+  Fig3D_quartile_permutation_results$P_permutation,
+  method = "BH"
+)
+
+Fig3D_quartile_permutation_results$Figure_label <- ifelse(
+  Fig3D_quartile_permutation_results$P_adj_BH >= 0.05,
+  "NS",
+  sprintf("P = %.4f", Fig3D_quartile_permutation_results$P_adj_BH)
+)
+
+print(
+  Fig3D_quartile_permutation_results[, c(
+    "Samples", "Quartile", "Fraction_control", "Fraction_treated",
+    "Delta_fraction", "P_permutation", "P_adj_BH", "Figure_label"
+  )],
+  row.names = FALSE,
+  digits = 7
+)
+
+Fig3D_time_names <- c(
+  "GSE135514_24h", "GSE135514_72h",
+  "GSE241735_4h", "GSE241735_12h", "GSE241735_24h"
+)
+
+Fig3D_time_spec <- Fig3D_perm_spec[
+  match(Fig3D_time_names, Fig3D_perm_spec$Samples),
+  ,
+  drop = FALSE
+]
+
+stopifnot(!anyNA(Fig3D_time_spec))
+
+Fig3D_time_spec$Dataset <- c(
+  "GSE135514", "GSE135514",
+  "GSE241735", "GSE241735", "GSE241735"
+)
+
+Fig3D_time_spec$Time_h <- c(24, 72, 4, 12, 24)
+
+Fig3D_time_quartiles <- c(
+  "Upper / less negative",
+  "Lower / more negative"
+)
+
+Fig3D_time_fraction_data <- dplyr::bind_rows(lapply(
+  seq_len(nrow(Fig3D_time_spec)),
+  function(i) {
+
+    spec <- Fig3D_time_spec[i, ]
+
+    fetch <- function(suffix) {
+      object_name <- paste0(spec$Prefix, suffix)
+      if (!exists(object_name, envir = .GlobalEnv, inherits = FALSE)) {
+        stop("Missing source object: ", object_name)
+      }
+      get(object_name, envir = .GlobalEnv, inherits = FALSE)
+    }
+
+    dat <- as.data.frame(fetch("_long_data"))
+    upper <- fetch(spec$Upper_suffix)
+    lower <- fetch("_low_MFE_TX_total")
+    id_col <- "ensembl_transcript_id_version"
+
+    stopifnot(
+      all(c(id_col, "replicate", "condition", "counts") %in% names(dat)),
+      !anyNA(dat[, c(id_col, "replicate", "condition", "counts")]),
+      !anyDuplicated(dat[, c(id_col, "replicate")]),
+      all(is.finite(dat$counts)),
+      all(dat$counts >= 0),
+      setequal(unique(dat$condition), c("Control", spec$Treatment))
+    )
+
+    dat$is_upper <- dat[[id_col]] %in% upper[[id_col]]
+    dat$is_lower <- dat[[id_col]] %in% lower[[id_col]]
+
+    stopifnot(
+      any(dat$is_upper),
+      any(dat$is_lower),
+      !any(dat$is_upper & dat$is_lower)
+    )
+
+    sample_counts <- dat %>%
+      dplyr::group_by(replicate, condition) %>%
+      dplyr::summarise(
+        N_transcripts = dplyr::n(),
+        Total_counts = sum(counts),
+        Upper_counts = sum(counts[is_upper]),
+        Lower_counts = sum(counts[is_lower]),
+        .groups = "drop"
+      )
+
+    stopifnot(
+      nrow(sample_counts) == 6L,
+      !anyDuplicated(sample_counts$replicate),
+      all(table(sample_counts$condition) == 3L),
+      all(sample_counts$Total_counts > 0),
+      all(
+        sample_counts$N_transcripts ==
+          length(unique(dat[[id_col]]))
+      )
+    )
+
+    ref <- sample_counts$condition == "Control"
+
+    reconstructed <- c(
+      sum(sample_counts$Upper_counts[ref]) /
+        sum(sample_counts$Total_counts[ref]),
+      sum(sample_counts$Lower_counts[ref]) /
+        sum(sample_counts$Total_counts[ref]),
+      sum(sample_counts$Upper_counts[!ref]) /
+        sum(sample_counts$Total_counts[!ref]),
+      sum(sample_counts$Lower_counts[!ref]) /
+        sum(sample_counts$Total_counts[!ref])
+    )
+
+    old <- Fig3D_quartile_permutation_results[
+      Fig3D_quartile_permutation_results$Samples == spec$Samples,
+      ,
+      drop = FALSE
+    ]
+
+    stopifnot(nrow(old) == 2L)
+
+    old <- old[
+      match(Fig3D_time_quartiles, old$Quartile),
+      ,
+      drop = FALSE
+    ]
+
+    expected <- c(old$Fraction_control, old$Fraction_treated)
+
+    if (
+      any(!is.finite(expected)) ||
+      max(abs(reconstructed - expected)) > 1e-10
+    ) {
+      stop(spec$Samples, ": sample counts do not reproduce the plotted bars.")
+    }
+
+    data.frame(
+      Dataset = spec$Dataset,
+      Comparison = spec$Samples,
+      Time_h = spec$Time_h,
+      Sample = rep(as.character(sample_counts$replicate), 2),
+      Condition = rep(ifelse(ref, "Control", "Treated"), 2),
+      Quartile = rep(
+        Fig3D_time_quartiles,
+        each = nrow(sample_counts)
+      ),
+      Fraction = c(
+        sample_counts$Upper_counts / sample_counts$Total_counts,
+        sample_counts$Lower_counts / sample_counts$Total_counts
+      )
+    )
+  }
+))
+
+message("All original time-course bar fractions reproduced correctly.")
+
+Fig3D_time_fraction_summary <- Fig3D_time_fraction_data %>%
+  dplyr::group_by(Dataset, Time_h, Quartile, Condition) %>%
+  dplyr::summarise(
+    Mean_fraction = mean(Fraction),
+    .groups = "drop"
+  ) %>%
+  tidyr::pivot_wider(
+    names_from = Condition,
+    values_from = Mean_fraction
+  ) %>%
+  dplyr::mutate(Delta_fraction = Treated - Control) %>%
+  dplyr::arrange(Dataset, Quartile, Time_h)
+
+print(
+  as.data.frame(Fig3D_time_fraction_summary),
+  row.names = FALSE,
+  digits = 7
+)
+
+Fig3D_time_test <- function(dataset, quartile) {
+
+  dat <- Fig3D_time_fraction_data[
+    Fig3D_time_fraction_data$Dataset == dataset &
+      Fig3D_time_fraction_data$Quartile == quartile,
+    ,
+    drop = FALSE
+  ]
+
+  times <- sort(unique(dat$Time_h))
+  coefficients <- (times - mean(times)) /
+    sum((times - mean(times))^2)
+
+  dat$Time_coefficient <- coefficients[match(dat$Time_h, times)]
+
+  dat$Sampling_group <- paste(
+    dat$Condition, dat$Time_h, sep = "_"
+  )
+
+  if (dataset == "GSE241735") {
+
+    control_sets <- lapply(times, function(tm) {
+      dat$Sample[
+        dat$Condition == "Control" & dat$Time_h == tm
+      ]
+    })
+
+    stopifnot(all(vapply(
+      control_sets,
+      function(x) setequal(x, control_sets[[1]]),
+      logical(1)
+    )))
+
+    dat$Sampling_group[dat$Condition == "Control"] <- "Shared_control"
+  }
+
+  sample_groups <- unique(dat[, c("Sample", "Sampling_group")])
+  stopifnot(!anyDuplicated(sample_groups$Sample))
+
+  dat$Weighted_fraction <- dat$Time_coefficient *
+    ifelse(dat$Condition == "Treated", 1, -1) *
+    dat$Fraction
+
+  sample_scores <- stats::aggregate(
+    Weighted_fraction ~ Sampling_group + Sample,
+    data = dat,
+    FUN = sum
+  )
+
+  components <- do.call(rbind, lapply(
+    split(
+      sample_scores$Weighted_fraction,
+      sample_scores$Sampling_group
+    ),
+    function(x) {
+      stopifnot(length(x) >= 2L, all(is.finite(x)))
+      c(
+        Mean = mean(x),
+        Variance = stats::var(x) / length(x),
+        DF = length(x) - 1
+      )
+    }
+  ))
+
+  slope <- sum(components[, "Mean"])
+  variance <- sum(components[, "Variance"])
+
+  if (!is.finite(variance) || variance <= 0) {
+    stop(dataset, ": cannot estimate temporal-contrast uncertainty.")
+  }
+
+  se <- sqrt(variance)
+
+  df <- variance^2 / sum(
+    components[, "Variance"]^2 / components[, "DF"]
+  )
+
+  p_value <- 2 * stats::pt(-abs(slope / se), df = df)
+  ci <- slope + c(-1, 1) * stats::qt(0.975, df = df) * se
+
+  data.frame(
+    Dataset = dataset,
+    Quartile = quartile,
+    Temporal_test = if (length(times) == 2L) {
+      "24-72 h change"
+    } else {
+      "4-24 h linear trend"
+    },
+    Slope_delta_fraction_per_hour = slope,
+    SE_slope = se,
+    Degrees_freedom = df,
+    CI95_lower = ci[1],
+    CI95_upper = ci[2],
+    P_temporal = p_value
+  )
+}
+
+Fig3D_time_results <- dplyr::bind_rows(lapply(
+  c("GSE135514", "GSE241735"),
+  function(dataset) {
+    dplyr::bind_rows(lapply(
+      Fig3D_time_quartiles,
+      function(quartile) Fig3D_time_test(dataset, quartile)
+    ))
+  }
+))
+
+Fig3D_time_results$P_adj_BH <- stats::p.adjust(
+  Fig3D_time_results$P_temporal,
+  method = "BH"
+)
+
+Fig3D_time_results$Figure_label <- with(
+  Fig3D_time_results,
+  ifelse(
+    P_adj_BH >= 0.05,
+    "NS",
+    ifelse(
+      P_adj_BH < 0.0001,
+      "P < 0.0001",
+      sprintf("P = %.4f", P_adj_BH)
+    )
+  )
+)
+
+print(
+  as.data.frame(Fig3D_time_results),
+  row.names = FALSE,
+  digits = 7
+)
+
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(ggplot2)
+library(scales)
 
 Fig3E_B_perm <- 5000L
 Fig3E_n_cores <- 8L
@@ -3198,45 +3758,1864 @@ ggsave(
   bg = "white"
 )
 
-Fig3_GREIN_abundance_weighted_DGfold_delta_relative_stats <-
-  Fig3_GREIN_abundance_weighted_DGfold_delta_stats %>%
+Fig3_GREIN_abundance_weighted_DGfold_delta_stats <-
+  dplyr::bind_rows(
+    lapply(
+      Fig3E_TPM_results,
+      function(result) result$profile_stats
+    )
+  ) %>%
+  dplyr::mutate(
+
+    permutation_p_adj_BH = stats::p.adjust(
+      permutation_p_value,
+      method = "BH"
+    ),
+
+    permutation_p_adj_BH_label = dplyr::case_when(
+      is.na(permutation_p_adj_BH) ~ NA_character_,
+
+      permutation_p_adj_BH < 0.0001 ~
+        "P < 0.0001",
+
+      TRUE ~ paste0(
+        "P = ",
+        trimws(
+          base::format.pval(
+            permutation_p_adj_BH,
+            digits = 4
+          )
+        )
+      )
+    ),
+
+    delta_label = dplyr::case_when(
+      abs(delta_abundance_weighted_Normalized_MFE) < 0.001 ~
+        sprintf(
+          "%.5f",
+          delta_abundance_weighted_Normalized_MFE
+        ),
+
+      TRUE ~
+        sprintf(
+          "%.4f",
+          delta_abundance_weighted_Normalized_MFE
+        )
+    )
+  )
+
+print(Fig3_GREIN_abundance_weighted_DGfold_delta_stats)
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(ggpubr)
+library(scales)
+library(grid)
+
+Fig3F_I_output_dir <- figure_output_dir
+
+GSE97681_Fig3_environment <- .GlobalEnv
+
+GSE97681_Fig3_loaded_objects <- ls(
+  envir = .GlobalEnv,
+  all.names = TRUE
+)
+
+GSE97681_Fig3_required_objects <- c(
+  "GSE97681_sample_map",
+  "GSE97681_excluded_samples",
+  "GSE97681_acute_48h_growth_arrest_eligibility",
+  "GSE97681_Fig3_dot_plot_single_panel_data",
+  "MFE_res_GSE97681_WM989_acute_vs_untreated",
+  "MFE_res_GSE97681_WM989_resistant_vs_acute",
+  "MFE_res_GSE97681_WM983B_acute_vs_untreated",
+  "MFE_res_GSE97681_WM983B_resistant_vs_acute",
+  "GSE97681_WM989_acute_vs_untreated_permutation_p_value",
+  "GSE97681_WM989_resistant_vs_acute_permutation_p_value",
+  "GSE97681_WM983B_acute_vs_untreated_permutation_p_value",
+  "GSE97681_WM983B_resistant_vs_acute_permutation_p_value",
+  "GSE97681_Fig3D_complete_stats",
+  "GSE97681_primary_DGfold_contrast_stats",
+  "GSE97681_Fig3D_transcript_count_data",
+  "GSE97681_founder_balanced_trajectory_wide"
+)
+
+GSE97681_Fig3_missing_objects <- setdiff(
+  GSE97681_Fig3_required_objects,
+  GSE97681_Fig3_loaded_objects
+)
+
+if (length(GSE97681_Fig3_missing_objects) > 0) {
+  stop(
+    paste0(
+      "The GSE97681 environment is missing objects required for Fig. 3F-I:\n",
+      paste(
+        GSE97681_Fig3_missing_objects,
+        collapse = "\n"
+      )
+    )
+  )
+}
+
+Fig3F_GSE97681_GSEA_data <- get(
+  "GSE97681_Fig3_dot_plot_single_panel_data",
+  envir = GSE97681_Fig3_environment,
+  inherits = FALSE
+) %>%
+  tibble::as_tibble() %>%
+  dplyr::select(
+    cell_line,
+    comparison,
+    ID,
+    Description,
+    NES,
+    pvalue,
+    p.adjust,
+    significant_GSEA_result,
+    neg_log10_p_adjust
+  )
+
+Fig3G_GSE97681_violin_data <- dplyr::bind_rows(
+  get(
+    "MFE_res_GSE97681_WM989_acute_vs_untreated",
+    envir = GSE97681_Fig3_environment,
+    inherits = FALSE
+  ) %>%
+    tibble::as_tibble() %>%
+    dplyr::transmute(
+      cell_line = "WM989-A6",
+      comparison = "Acute_48h versus Untreated",
+      log2FoldChange,
+      Normalized_MFE
+    ),
+  get(
+    "MFE_res_GSE97681_WM989_resistant_vs_acute",
+    envir = GSE97681_Fig3_environment,
+    inherits = FALSE
+  ) %>%
+    tibble::as_tibble() %>%
+    dplyr::transmute(
+      cell_line = "WM989-A6",
+      comparison = "Resistant versus Acute_48h",
+      log2FoldChange,
+      Normalized_MFE
+    ),
+  get(
+    "MFE_res_GSE97681_WM983B_acute_vs_untreated",
+    envir = GSE97681_Fig3_environment,
+    inherits = FALSE
+  ) %>%
+    tibble::as_tibble() %>%
+    dplyr::transmute(
+      cell_line = "WM983B-E9",
+      comparison = "Acute_48h versus Untreated",
+      log2FoldChange,
+      Normalized_MFE
+    ),
+  get(
+    "MFE_res_GSE97681_WM983B_resistant_vs_acute",
+    envir = GSE97681_Fig3_environment,
+    inherits = FALSE
+  ) %>%
+    tibble::as_tibble() %>%
+    dplyr::transmute(
+      cell_line = "WM983B-E9",
+      comparison = "Resistant versus Acute_48h",
+      log2FoldChange,
+      Normalized_MFE
+    )
+)
+
+Fig3G_GSE97681_permutation_statistics <- tibble::tibble(
+  cell_line = c(
+    "WM989-A6",
+    "WM989-A6",
+    "WM983B-E9",
+    "WM983B-E9"
+  ),
+  comparison = c(
+    "Acute_48h versus Untreated",
+    "Resistant versus Acute_48h",
+    "Acute_48h versus Untreated",
+    "Resistant versus Acute_48h"
+  ),
+  permutation_p_value = c(
+    as.numeric(
+      get(
+        "GSE97681_WM989_acute_vs_untreated_permutation_p_value",
+        envir = GSE97681_Fig3_environment,
+        inherits = FALSE
+      )
+    ),
+    as.numeric(
+      get(
+        "GSE97681_WM989_resistant_vs_acute_permutation_p_value",
+        envir = GSE97681_Fig3_environment,
+        inherits = FALSE
+      )
+    ),
+    as.numeric(
+      get(
+        "GSE97681_WM983B_acute_vs_untreated_permutation_p_value",
+        envir = GSE97681_Fig3_environment,
+        inherits = FALSE
+      )
+    ),
+    as.numeric(
+      get(
+        "GSE97681_WM983B_resistant_vs_acute_permutation_p_value",
+        envir = GSE97681_Fig3_environment,
+        inherits = FALSE
+      )
+    )
+  )
+)
+
+Fig3H_GSE97681_quartile_statistics <- get(
+  "GSE97681_Fig3D_complete_stats",
+  envir = GSE97681_Fig3_environment,
+  inherits = FALSE
+) %>%
+  tibble::as_tibble() %>%
+  dplyr::select(
+    Samples,
+    reference_high_MFE_fraction,
+    comparison_high_MFE_fraction,
+    reference_low_MFE_fraction,
+    comparison_low_MFE_fraction
+  )
+
+Fig3I_GSE97681_DeltaDeltaGfold_statistics <- get(
+  "GSE97681_primary_DGfold_contrast_stats",
+  envir = GSE97681_Fig3_environment,
+  inherits = FALSE
+) %>%
+  tibble::as_tibble()
+
+Fig3F_I_GSE97681_sample_map <- get(
+  "GSE97681_sample_map",
+  envir = GSE97681_Fig3_environment,
+  inherits = FALSE
+) %>%
+  tibble::as_tibble() %>%
   dplyr::select(
     Sample,
-    Analysis_ID,
-    Dataset,
-    Treatment,
-    Analysis_label,
-    comparison,
-    abundance_measure,
-    transcript_universe,
-    n_control,
-    n_treatment,
-    n_transcripts_used,
-    n_transcripts_expressed_in_either_condition,
-    n_nonzero_contrast_weights,
-    control_value,
-    treatment_value,
-    delta_abundance_weighted_Normalized_MFE,
-    control_SE,
-    treatment_SE,
-    delta_SE,
-    errorbar_low,
-    errorbar_high,
-    percent_change_treatment_minus_control,
-    permutation_p_value,
-    permutation_p_adj_BH,
-    permutation_p_adj_BH_label,
-    permutation_test,
-    direction,
-    B_perm,
-    permutation_cores
+    cell_line,
+    condition,
+    primary_state
+  )
+
+Fig3F_I_GSE97681_excluded_samples <- get(
+  "GSE97681_excluded_samples",
+  envir = GSE97681_Fig3_environment,
+  inherits = FALSE
+)
+
+Fig3F_I_GSE97681_growth_arrest_eligibility <- get(
+  "GSE97681_acute_48h_growth_arrest_eligibility",
+  envir = GSE97681_Fig3_environment,
+  inherits = FALSE
+) %>%
+  tibble::as_tibble()
+
+rm(
+  GSE97681_Fig3_environment,
+  GSE97681_Fig3_loaded_objects,
+  GSE97681_Fig3_missing_objects
+)
+
+invisible(gc())
+
+Fig3F_I_excluded_samples <- c(
+  "GSM2575347",
+  "GSM2575397",
+  "GSM2575399"
+)
+
+if (
+  !setequal(
+    as.character(
+      Fig3F_I_GSE97681_excluded_samples
+    ),
+    Fig3F_I_excluded_samples
+  )
+) {
+  stop(
+    "The saved GSE97681 environment does not contain the expected three-sample exclusion set."
+  )
+}
+
+if (
+  length(
+    intersect(
+      Fig3F_I_excluded_samples,
+      Fig3F_I_GSE97681_sample_map$Sample
+    )
+  ) > 0
+) {
+  stop(
+    "At least one of the three excluded WM983B-E9 samples remains in the GSE97681 environment."
+  )
+}
+
+if (
+  any(
+    Fig3F_I_GSE97681_sample_map$primary_state &
+    grepl(
+      "^Withdrawal_",
+      as.character(
+        Fig3F_I_GSE97681_sample_map$condition
+      )
+    )
+  )
+) {
+  stop(
+    "A withdrawal sample is marked as a primary GSE97681 sample."
+  )
+}
+
+Fig3F_I_observed_sample_counts <-
+  Fig3F_I_GSE97681_sample_map %>%
+  dplyr::filter(primary_state) %>%
+  dplyr::mutate(
+    condition = as.character(condition)
   ) %>%
-  dplyr::arrange(Sample)
+  dplyr::count(
+    cell_line,
+    condition,
+    name = "observed_n"
+  )
+
+Fig3F_I_expected_sample_counts <- tibble::tribble(
+  ~cell_line, ~condition, ~expected_n,
+  "WM989-A6", "Untreated", 8L,
+  "WM989-A6", "Acute_48h", 8L,
+  "WM989-A6", "Resistant", 10L,
+  "WM983B-E9", "Untreated", 20L,
+  "WM983B-E9", "Acute_48h", 20L,
+  "WM983B-E9", "Resistant", 35L
+)
+
+Fig3F_I_sample_count_check <-
+  Fig3F_I_expected_sample_counts %>%
+  dplyr::full_join(
+    Fig3F_I_observed_sample_counts,
+    by = c(
+      "cell_line",
+      "condition"
+    )
+  ) %>%
+  dplyr::filter(
+    is.na(expected_n) |
+      is.na(observed_n) |
+      expected_n != observed_n
+  )
+
+if (nrow(Fig3F_I_sample_count_check) > 0) {
+  stop(
+    paste0(
+      "The GSE97681 primary sample groups do not contain the expected ",
+      "8/8/10 and 20/20/35 samples."
+    )
+  )
+}
+
+Fig3F_I_growth_arrest_eligibility_check <-
+  Fig3F_I_GSE97681_growth_arrest_eligibility %>%
+  dplyr::filter(
+    cell_line %in% c(
+      "WM989-A6",
+      "WM983B-E9"
+    )
+  )
+
+if (
+  nrow(Fig3F_I_growth_arrest_eligibility_check) != 2 ||
+  any(
+    is.na(
+      Fig3F_I_growth_arrest_eligibility_check[[
+        "mandatory_growth_arrest_eligible"
+      ]]
+    )
+  ) ||
+  any(
+    !Fig3F_I_growth_arrest_eligibility_check[[
+      "mandatory_growth_arrest_eligible"
+    ]]
+  )
+) {
+  stop(
+    paste0(
+      "Both GSE97681 Acute_48h groups must pass the prespecified ",
+      "growth-arrest GSEA screen before panels F-I are generated."
+    )
+  )
+}
+
+Fig3F_description_order <- c(
+  "Signt_1",
+  "Signt_2",
+  "Signt_3",
+  "Cell cycle",
+  "DNA replication",
+  "Homologous recombination",
+  "Mismatch repair",
+  "Fanconi anemia pathway",
+  "Base excision repair",
+  "Nucleotide excision repair",
+  "ATP-dependent chromatin remodeling",
+  "p53 pathway",
+  "PPAR pathway",
+  "Apelin pathway",
+  "C-type lectin receptor pathway",
+  "ErbB pathway",
+  "Hippo pathway",
+  "IL-17 pathway",
+  "Insulin pathway",
+  "JAK-STAT pathway",
+  "MAPK pathway",
+  "AMPK pathway",
+  "mTOR pathway",
+  "PI3K-Akt pathway",
+  "Ras pathway",
+  "Rap1 pathway",
+  "TGF-beta pathway",
+  "TNF pathway",
+  "Wnt pathway",
+  "Notch pathway"
+)
+
+Fig3F_required_columns <- c(
+  "cell_line",
+  "comparison",
+  "ID",
+  "Description",
+  "NES",
+  "pvalue",
+  "p.adjust",
+  "significant_GSEA_result"
+)
+
+Fig3F_missing_columns <- setdiff(
+  Fig3F_required_columns,
+  colnames(Fig3F_GSE97681_GSEA_data)
+)
+
+if (length(Fig3F_missing_columns) > 0) {
+  stop(
+    paste0(
+      "Panel F is missing the following columns:\n",
+      paste(Fig3F_missing_columns, collapse = "\n")
+    )
+  )
+}
+
+if (
+  nrow(Fig3F_GSE97681_GSEA_data) != 120 ||
+  anyDuplicated(
+    paste(
+      Fig3F_GSE97681_GSEA_data$cell_line,
+      Fig3F_GSE97681_GSEA_data$comparison,
+      Fig3F_GSE97681_GSEA_data$ID,
+      sep = "::"
+    )
+  ) > 0
+) {
+  stop(
+    paste0(
+      "Panel F must contain 120 unique rows: 2 cell lines x ",
+      "2 comparisons x 30 signatures/pathways."
+    )
+  )
+}
+
+if (
+  anyNA(
+    Fig3F_GSE97681_GSEA_data$significant_GSEA_result
+  ) ||
+  any(
+    Fig3F_GSE97681_GSEA_data$significant_GSEA_result &
+    (
+      !is.finite(
+        Fig3F_GSE97681_GSEA_data$NES
+      ) |
+      !is.finite(
+        Fig3F_GSE97681_GSEA_data$p.adjust
+      )
+    )
+  )
+) {
+  stop(
+    "Panel F contains an invalid significant GSEA result."
+  )
+}
+
+Fig3F_GSE97681_GSEA_data <-
+  Fig3F_GSE97681_GSEA_data %>%
+  dplyr::mutate(
+    neg_log10_p_adjust = dplyr::if_else(
+      significant_GSEA_result,
+      -log10(
+        pmax(
+          p.adjust,
+          .Machine$double.xmin
+        )
+      ),
+      NA_real_
+    ),
+    Description = factor(
+      as.character(Description),
+      levels = Fig3F_description_order
+    ),
+    cell_line = factor(
+      as.character(cell_line),
+      levels = c(
+        "WM989-A6",
+        "WM983B-E9"
+      )
+    ),
+    comparison = factor(
+      as.character(comparison),
+      levels = c(
+        "Acute_48h versus Untreated",
+        "Resistant versus Acute_48h"
+      ),
+      labels = c(
+        "Acute 48 h\nversus untreated",
+        "Stable resistant (drug on)\nversus acute 48 h"
+      )
+    )
+  )
+
+if (
+  anyNA(Fig3F_GSE97681_GSEA_data$Description) ||
+  anyNA(Fig3F_GSE97681_GSEA_data$cell_line) ||
+  anyNA(Fig3F_GSE97681_GSEA_data$comparison)
+) {
+  stop(
+    "Panel F contains an unrecognized pathway, cell line or comparison."
+  )
+}
+
+Plot_Fig3F_GSE97681_GSEA <- ggplot(
+  Fig3F_GSE97681_GSEA_data,
+  aes(
+    x = comparison,
+    y = Description,
+    fill = NES,
+    size = neg_log10_p_adjust
+  )
+) +
+  geom_blank(
+    data = Fig3F_GSE97681_GSEA_data,
+    aes(
+      x = comparison,
+      y = Description
+    ),
+    inherit.aes = FALSE
+  ) +
+  geom_point(
+    data = dplyr::filter(
+      Fig3F_GSE97681_GSEA_data,
+      significant_GSEA_result
+    ),
+    shape = 21,
+    color = "black",
+    stroke = 0.5
+  ) +
+  facet_grid(
+    cols = vars(cell_line),
+    scales = "free_x",
+    space = "free_x"
+  ) +
+  scale_fill_gradient2(
+    low = "dodgerblue4",
+    mid = "white",
+    high = "firebrick3",
+    midpoint = 0,
+    limits = c(-3, 3),
+    oob = scales::squish
+  ) +
+  scale_size_continuous(
+    range = c(2, 10)
+  ) +
+  scale_x_discrete(
+    drop = FALSE
+  ) +
+  scale_y_discrete(
+    drop = FALSE
+  ) +
+  theme_bw() +
+  labs(
+    title = "",
+    x = "",
+    y = "",
+    fill = "NES",
+    size = "-log10(p.adjust)"
+  ) +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      size = 12,
+      color = "black"
+    ),
+    axis.text.y = element_text(
+      size = 14,
+      color = "black"
+    ),
+    strip.background = element_blank(),
+    strip.text = element_text(
+      size = 14,
+      color = "black"
+    ),
+    panel.spacing.x = grid::unit(
+      0.8,
+      "lines"
+    )
+  )
+
+print(Plot_Fig3F_GSE97681_GSEA)
+
+ggsave(
+  filename = "Fig3F_GSE97681_GSEA.tiff",
+  plot = Plot_Fig3F_GSE97681_GSEA,
+  path = Fig3F_I_output_dir,
+  device = "tiff",
+  width = 8,
+  height = 12,
+  units = "in",
+  dpi = 600,
+  compression = "lzw",
+  bg = "white"
+)
+
+Fig3G_cell_line_levels <- c(
+  "WM989-A6",
+  "WM983B-E9"
+)
+
+Fig3G_comparison_keys <- c(
+  "Acute_48h versus Untreated",
+  "Resistant versus Acute_48h"
+)
+
+Fig3G_comparison_labels <- c(
+  "Acute 48 h versus untreated",
+  "Stable resistant (drug on) versus acute 48 h"
+)
+
+Fig3G_standardize_comparison <- function(x) {
+
+  x <- as.character(x)
+
+  dplyr::case_when(
+    x %in% c(
+      "Acute_48h versus Untreated",
+      "Acute 48 h versus untreated"
+    ) ~
+      "Acute_48h versus Untreated",
+
+    x %in% c(
+      "Resistant versus Acute_48h",
+      "Stable resistant (drug on) versus acute 48 h"
+    ) ~
+      "Resistant versus Acute_48h",
+
+    TRUE ~ NA_character_
+  )
+}
+
+Fig3G_GSE97681_violin_plot_data <-
+  Fig3G_GSE97681_violin_data %>%
+  dplyr::filter(
+    is.finite(log2FoldChange),
+    is.finite(Normalized_MFE),
+    log2FoldChange != 0
+  ) %>%
+  dplyr::mutate(
+
+    expression_group = factor(
+      dplyr::if_else(
+        log2FoldChange > 0,
+        "LFC > 0",
+        "LFC < 0"
+      ),
+      levels = c(
+        "LFC < 0",
+        "LFC > 0"
+      )
+    ),
+
+    cell_line = factor(
+      as.character(cell_line),
+      levels = Fig3G_cell_line_levels
+    ),
+
+    comparison_key =
+      Fig3G_standardize_comparison(comparison),
+
+    comparison_label = factor(
+      comparison_key,
+      levels = Fig3G_comparison_keys,
+      labels = Fig3G_comparison_labels
+    )
+  )
+
+if (
+  anyNA(Fig3G_GSE97681_violin_plot_data$cell_line) ||
+  anyNA(Fig3G_GSE97681_violin_plot_data$comparison_key) ||
+  anyNA(Fig3G_GSE97681_violin_plot_data$comparison_label) ||
+  anyNA(Fig3G_GSE97681_violin_plot_data$expression_group)
+) {
+  stop(
+    paste0(
+      "Panel G contains missing or unrecognized grouping labels. ",
+      "Rerun the preceding GSE97681 environment-loading and ",
+      "data-extraction section before running Panel G."
+    )
+  )
+}
+
+if (
+  any(
+    abs(
+      Fig3G_GSE97681_violin_plot_data$log2FoldChange
+    ) >= 10
+  )
+) {
+  stop(
+    paste0(
+      "Panel G contains a transcript outside the required ",
+      "-10 to +10 log2-fold-change display range."
+    )
+  )
+}
+
+Fig3G_GSE97681_group_counts <-
+  Fig3G_GSE97681_violin_plot_data %>%
+  dplyr::count(
+    cell_line,
+    comparison_key,
+    expression_group,
+    name = "n_transcripts"
+  )
+
+if (
+  nrow(Fig3G_GSE97681_group_counts) != 8 ||
+  any(Fig3G_GSE97681_group_counts$n_transcripts < 2)
+) {
+
+  print(
+    as.data.frame(Fig3G_GSE97681_group_counts),
+    row.names = FALSE
+  )
+
+  stop(
+    paste0(
+      "Panel G does not contain both expression directions ",
+      "for all four contrasts."
+    )
+  )
+}
+
+Fig3G_GSE97681_permutation_plot_statistics <-
+  Fig3G_GSE97681_permutation_statistics %>%
+  dplyr::transmute(
+
+    cell_line = factor(
+      as.character(cell_line),
+      levels = Fig3G_cell_line_levels
+    ),
+
+    comparison_key =
+      Fig3G_standardize_comparison(comparison),
+
+    permutation_p_value =
+      as.numeric(permutation_p_value)
+  )
+
+if (
+  nrow(Fig3G_GSE97681_permutation_plot_statistics) != 4 ||
+  nrow(
+    dplyr::distinct(
+      Fig3G_GSE97681_permutation_plot_statistics,
+      cell_line,
+      comparison_key
+    )
+  ) != 4 ||
+  anyNA(
+    Fig3G_GSE97681_permutation_plot_statistics$cell_line
+  ) ||
+  anyNA(
+    Fig3G_GSE97681_permutation_plot_statistics$comparison_key
+  ) ||
+  any(
+    !is.finite(
+      Fig3G_GSE97681_permutation_plot_statistics$
+      permutation_p_value
+    )
+  ) ||
+  any(
+    Fig3G_GSE97681_permutation_plot_statistics$
+    permutation_p_value < 0 |
+    Fig3G_GSE97681_permutation_plot_statistics$
+    permutation_p_value > 1
+  )
+) {
+  stop(
+    "Panel G does not contain four unique and valid permutation P values."
+  )
+}
+
+Fig3G_GSE97681_violin_statistics <-
+  Fig3G_GSE97681_violin_plot_data %>%
+  dplyr::group_by(
+    cell_line,
+    comparison_key
+  ) %>%
+  dplyr::summarise(
+
+    n_LFC_below_zero = sum(
+      expression_group == "LFC < 0"
+    ),
+
+    n_LFC_above_zero = sum(
+      expression_group == "LFC > 0"
+    ),
+
+    mean_MFE_LFC_below_zero = mean(
+      Normalized_MFE[
+        expression_group == "LFC < 0"
+      ]
+    ),
+
+    mean_MFE_LFC_above_zero = mean(
+      Normalized_MFE[
+        expression_group == "LFC > 0"
+      ]
+    ),
+
+    .groups = "drop"
+  ) %>%
+  dplyr::left_join(
+    Fig3G_GSE97681_permutation_plot_statistics,
+    by = c(
+      "cell_line",
+      "comparison_key"
+    )
+  ) %>%
+  dplyr::mutate(
+
+    comparison_label = factor(
+      comparison_key,
+      levels = Fig3G_comparison_keys,
+      labels = Fig3G_comparison_labels
+    ),
+
+    p_label = dplyr::case_when(
+      is.na(permutation_p_value) ~
+        NA_character_,
+
+      permutation_p_value < 0.0001 ~
+        "P < 0.0001",
+
+      TRUE ~
+        paste0(
+          "P = ",
+          trimws(
+            base::format.pval(
+              permutation_p_value,
+              digits = 4
+            )
+          )
+        )
+    )
+  )
+
+if (
+  nrow(Fig3G_GSE97681_violin_statistics) != 4 ||
+  anyNA(
+    Fig3G_GSE97681_violin_statistics$permutation_p_value
+  ) ||
+  anyNA(
+    Fig3G_GSE97681_violin_statistics$comparison_label
+  )
+) {
+  stop(
+    "Panel G statistics could not be matched to all four violin plots."
+  )
+}
+
+Fig3G_GSE97681_mean_labels <-
+  dplyr::bind_rows(
+
+    Fig3G_GSE97681_violin_statistics %>%
+      dplyr::transmute(
+        cell_line,
+        comparison_label,
+        x_position = 1,
+        mean_label = sprintf(
+          "%.3f",
+          mean_MFE_LFC_below_zero
+        )
+      ),
+
+    Fig3G_GSE97681_violin_statistics %>%
+      dplyr::transmute(
+        cell_line,
+        comparison_label,
+        x_position = 2,
+        mean_label = sprintf(
+          "%.3f",
+          mean_MFE_LFC_above_zero
+        )
+      )
+  )
+
+Plot_Fig3G_GSE97681_violin <- ggplot(
+  Fig3G_GSE97681_violin_plot_data,
+  aes(
+    x = as.numeric(expression_group),
+    y = Normalized_MFE,
+    group = expression_group
+  )
+) +
+  geom_violin(
+    aes(fill = comparison_label),
+    color = "black",
+    linewidth = 0.3,
+    scale = "width",
+    trim = TRUE
+  ) +
+  geom_boxplot(
+    width = 0.10,
+    fill = "white",
+    color = "black",
+    linewidth = 0.3,
+    outlier.shape = NA
+  ) +
+  geom_text(
+    data = Fig3G_GSE97681_violin_statistics,
+    aes(
+      x = 1.5,
+      y = 0.060,
+      label = p_label
+    ),
+    inherit.aes = FALSE,
+    size = 3.2,
+    color = "black"
+  ) +
+  geom_text(
+    data = Fig3G_GSE97681_mean_labels,
+    aes(
+      x = x_position,
+      y = 0.018,
+      label = mean_label
+    ),
+    inherit.aes = FALSE,
+    size = 3.0,
+    color = "black"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Acute 48 h versus untreated" = "lightgrey",
+      "Stable resistant (drug on) versus acute 48 h" =
+        "grey50"
+    )
+  ) +
+  facet_grid(
+    rows = vars(cell_line),
+    cols = vars(comparison_label),
+    drop = FALSE
+  ) +
+  scale_x_continuous(
+    breaks = c(1, 2),
+    labels = c(
+      "LFC < 0",
+      "LFC > 0"
+    ),
+    limits = c(0.5, 2.5)
+  ) +
+  scale_y_continuous(
+    breaks = seq(
+      -0.6,
+      0,
+      by = 0.2
+    ),
+    expand = expansion(
+      mult = c(0, 0)
+    )
+  ) +
+  coord_cartesian(
+    ylim = c(-0.6, 0.08),
+    clip = "on"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+
+    axis.text.x = element_text(
+      size = 11,
+      color = "black"
+    ),
+
+    axis.text.y = element_text(
+      size = 11,
+      color = "black"
+    ),
+
+    axis.title.y = element_text(
+      size = 14
+    ),
+
+    axis.title.x = element_blank(),
+
+    strip.background = element_blank(),
+
+    strip.text = element_text(
+      size = 11,
+      color = "black"
+    ),
+
+    panel.spacing = grid::unit(
+      0.8,
+      "lines"
+    ),
+
+    plot.margin = margin(
+      t = 8,
+      r = 8,
+      b = 8,
+      l = 8
+    )
+  ) +
+  labs(
+    title = "",
+    x = "",
+    y = expression(
+      Delta * G[fold] ~
+        (kcal %.% mol^{-1} %.% nt^{-1})
+    )
+  )
+
+print(Plot_Fig3G_GSE97681_violin)
 
 print(
   as.data.frame(
-    Fig3_GREIN_abundance_weighted_DGfold_delta_relative_stats
+    Fig3G_GSE97681_violin_statistics
   ),
+  row.names = FALSE,
+  digits = 10
+)
+
+ggsave(
+  filename = "Fig3G_GSE97681_violin_plots.tiff",
+  plot = Plot_Fig3G_GSE97681_violin,
+  path = Fig3F_I_output_dir,
+  device = "tiff",
+  width = 6,
+  height = 8,
+  units = "in",
+  dpi = 600,
+  compression = "lzw",
+  bg = "white"
+)
+
+Fig3H_expected_profiles <- c(
+  "WM989_Acute_vs_Untreated",
+  "WM989_Resistant_vs_Acute",
+  "WM983B_Acute_vs_Untreated",
+  "WM983B_Resistant_vs_Acute"
+)
+
+Fig3H_required_columns <- c(
+  "Samples",
+  "reference_high_MFE_fraction",
+  "comparison_high_MFE_fraction",
+  "reference_low_MFE_fraction",
+  "comparison_low_MFE_fraction"
+)
+
+Fig3H_missing_columns <- setdiff(
+  Fig3H_required_columns,
+  colnames(Fig3H_GSE97681_quartile_statistics)
+)
+
+if (length(Fig3H_missing_columns) > 0) {
+  stop(
+    paste0(
+      "Panel H is missing the following columns:\n",
+      paste(Fig3H_missing_columns, collapse = "\n")
+    )
+  )
+}
+
+if (
+  nrow(Fig3H_GSE97681_quartile_statistics) != 4 ||
+  !setequal(
+    Fig3H_GSE97681_quartile_statistics$Samples,
+    Fig3H_expected_profiles
+  )
+) {
+  stop(
+    "Panel H does not contain exactly the four required GSE97681 contrasts."
+  )
+}
+
+Fig3H_sample_labels <- c(
+  "WM989_Acute_vs_Untreated" =
+    "WM989-A6\nAcute 48 h versus untreated",
+  "WM989_Resistant_vs_Acute" =
+    "WM989-A6\nStable resistant (drug on) versus acute 48 h",
+  "WM983B_Acute_vs_Untreated" =
+    "WM983B-E9\nAcute 48 h versus untreated",
+  "WM983B_Resistant_vs_Acute" =
+    "WM983B-E9\nStable resistant (drug on) versus acute 48 h"
+)
+
+Fig3H_GSE97681_plot_data <- dplyr::bind_rows(
+  Fig3H_GSE97681_quartile_statistics %>%
+    dplyr::transmute(
+      Samples,
+      MFE_group = "Transcripts with less-negative DeltaGfold values",
+      Reference = reference_high_MFE_fraction,
+      Comparison = comparison_high_MFE_fraction
+    ) %>%
+    tidyr::pivot_longer(
+      cols = c(
+        Reference,
+        Comparison
+      ),
+      names_to = "Condition",
+      values_to = "Value"
+    ),
+  Fig3H_GSE97681_quartile_statistics %>%
+    dplyr::transmute(
+      Samples,
+      MFE_group = "Transcripts with more-negative DeltaGfold values",
+      Reference = reference_low_MFE_fraction,
+      Comparison = comparison_low_MFE_fraction
+    ) %>%
+    tidyr::pivot_longer(
+      cols = c(
+        Reference,
+        Comparison
+      ),
+      names_to = "Condition",
+      values_to = "Value"
+    )
+) %>%
+  dplyr::mutate(
+    Samples = factor(
+      Samples,
+      levels = Fig3H_expected_profiles
+    ),
+    MFE_group = factor(
+      MFE_group,
+      levels = c(
+        "Transcripts with less-negative DeltaGfold values",
+        "Transcripts with more-negative DeltaGfold values"
+      ),
+      labels = c(
+        paste0(
+          "Transcripts with less-negative ΔGfold values\n",
+          "(>75th percentile)"
+        ),
+        paste0(
+          "Transcripts with more-negative ΔGfold values\n",
+          "(<25th percentile)"
+        )
+      )
+    ),
+    Condition = factor(
+      Condition,
+      levels = c(
+        "Reference",
+        "Comparison"
+      ),
+      labels = c(
+        "Reference state",
+        "Comparison state"
+      )
+    )
+  )
+
+if (
+  any(!is.finite(Fig3H_GSE97681_plot_data$Value)) ||
+  any(Fig3H_GSE97681_plot_data$Value < 0) ||
+  any(Fig3H_GSE97681_plot_data$Value > 1)
+) {
+  stop("Panel H contains an invalid fraction.")
+}
+
+Fig3H_y_max <- max(
+  0.4,
+  ceiling(
+    20 *
+      1.35 *
+      max(
+        Fig3H_GSE97681_plot_data$Value,
+        na.rm = TRUE
+      )
+  ) / 20
+)
+
+Plot_Fig3H_GSE97681_quartiles <- ggplot(
+  Fig3H_GSE97681_plot_data,
+  aes(
+    x = Samples,
+    y = Value,
+    fill = Condition
+  )
+) +
+  geom_col(
+    position = position_dodge(width = 0.8),
+    width = 0.7
+  ) +
+  geom_text(
+    aes(
+      label = sprintf(
+        "%.3f",
+        Value
+      )
+    ),
+    position = position_dodge(width = 0.8),
+    hjust = -0.30,
+    vjust = 0.40,
+    angle = 90,
+    size = 3.3,
+    color = "black"
+  ) +
+  facet_grid(
+    cols = vars(MFE_group)
+  ) +
+  scale_x_discrete(
+    drop = FALSE,
+    labels = Fig3H_sample_labels
+  ) +
+  scale_y_continuous(
+    limits = c(
+      0,
+      Fig3H_y_max
+    ),
+    expand = expansion(
+      mult = c(0, 0)
+    )
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Reference state" = "#8cc5e3",
+      "Comparison state" = "#2066a8"
+    )
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      size = 10,
+      color = "black"
+    ),
+    axis.text.y = element_text(
+      size = 11,
+      color = "black"
+    ),
+    axis.title.y = element_text(
+      size = 14
+    ),
+    strip.background = element_blank(),
+    strip.text = element_text(
+      size = 12,
+      color = "black"
+    ),
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(
+      size = 10
+    ),
+    panel.spacing.x = grid::unit(
+      1,
+      "lines"
+    )
+  ) +
+  labs(
+    title = "",
+    x = "",
+    y = paste(
+      "Fraction of normalized counts",
+      "among significant transcripts",
+      sep = "\n"
+    ),
+    fill = ""
+  )
+
+print(Plot_Fig3H_GSE97681_quartiles)
+
+print(
+  as.data.frame(
+    Fig3H_GSE97681_quartile_statistics
+  ),
+  row.names = FALSE,
+  digits = 10
+)
+
+ggsave(
+  filename = "Fig3H_GSE97681_quartile_fractions.tiff",
+  plot = Plot_Fig3H_GSE97681_quartiles,
+  path = Fig3F_I_output_dir,
+  device = "tiff",
+  width = 5,
+  height = 6,
+  units = "in",
+  dpi = 600,
+  compression = "lzw",
+  bg = "white"
+)
+
+Fig3H_perm_B <- 10000L
+Fig3H_perm_seed <- 20260918L
+
+Fig3H_perm_source <- get(
+  "GSE97681_Fig3D_transcript_count_data",
+  envir = .GlobalEnv,
+  inherits = FALSE
+)
+
+Fig3H_perm_required <- c(
+  "Samples", "GREIN_transcript_id", "Normalized_MFE",
+  "mean_normalized_count_reference",
+  "mean_normalized_count_comparison",
+  "high_MFE_transcript", "low_MFE_transcript"
+)
+
+stopifnot(
+  all(Fig3H_perm_required %in% names(Fig3H_perm_source)),
+  length(Fig3H_expected_profiles) == 4L,
+  !anyDuplicated(Fig3H_expected_profiles),
+  !anyNA(Fig3H_perm_source$Samples),
+  setequal(Fig3H_perm_source$Samples, Fig3H_expected_profiles)
+)
+
+Fig3H_prepare_permutation <- function(profile) {
+
+  fail <- function(msg) stop(profile, ": ", msg)
+
+  dat <- Fig3H_perm_source[
+    as.character(Fig3H_perm_source$Samples) == profile, ]
+
+  if (
+    anyNA(dat[, Fig3H_perm_required]) ||
+    anyDuplicated(dat$GREIN_transcript_id) ||
+    any(!is.finite(dat$Normalized_MFE))
+  ) {
+    fail("Missing values, duplicated IDs or invalid folding predictions.")
+  }
+
+  upper <- dat$high_MFE_transcript
+  lower <- dat$low_MFE_transcript
+
+  if (
+    !is.logical(upper) || !is.logical(lower) ||
+    any(upper & lower) || !any(upper) || !any(lower)
+  ) {
+    fail("Invalid quartile memberships.")
+  }
+
+  category <- ifelse(upper, 1L, ifelse(lower, 2L, 0L))
+
+  counts <- cbind(
+    dat$mean_normalized_count_reference,
+    dat$mean_normalized_count_comparison
+  )
+
+  if (
+    any(!is.finite(counts)) || any(counts < 0) ||
+    any(!is.finite(colSums(counts))) || any(colSums(counts) <= 0)
+  ) {
+    fail("Invalid normalized counts.")
+  }
+
+  weights <- sweep(counts, 2, colSums(counts), "/")
+
+  fractions <- vapply(1:2, function(k) {
+    colSums(weights[category == k, , drop = FALSE])
+  }, numeric(2))
+
+  old <- Fig3H_GSE97681_quartile_statistics[
+    as.character(Fig3H_GSE97681_quartile_statistics$Samples) == profile, ]
+
+  if (nrow(old) != 1L) {
+    fail("Expected one existing summary row.")
+  }
+
+  expected <- c(
+    old$reference_high_MFE_fraction,
+    old$comparison_high_MFE_fraction,
+    old$reference_low_MFE_fraction,
+    old$comparison_low_MFE_fraction
+  )
+
+  if (
+    length(expected) != 4L ||
+    any(!is.finite(expected)) ||
+    max(abs(as.vector(fractions) - expected)) > 1e-10
+  ) {
+    fail("Recalculated fractions do not match the existing bars.")
+  }
+
+  list(
+    Samples = profile,
+    category = category,
+    fractions = fractions,
+    delta = weights[, 2] - weights[, 1]
+  )
+}
+
+Fig3H_perm_inputs <- lapply(
+  Fig3H_expected_profiles,
+  Fig3H_prepare_permutation
+)
+
+message("All Fig. 3H fractions match the existing bars.")
+
+set.seed(Fig3H_perm_seed)
+
+Fig3H_perm_runs <- lapply(Fig3H_perm_inputs, function(x) {
+
+  message("Permutations: ", x$Samples)
+
+  observed <- x$fractions[2, ] - x$fractions[1, ]
+
+  null <- replicate(Fig3H_perm_B, {
+
+    shuffled <- x$category[sample.int(length(x$category))]
+    c(
+      sum(x$delta[shuffled == 1L]),
+      sum(x$delta[shuffled == 2L])
+    )
+  })
+
+  b <- rowSums(abs(null) >= abs(observed) - 1e-12)
+
+  list(
+    results = data.frame(
+      Samples = x$Samples,
+      Quartile = c("Upper / less negative", "Lower / more negative"),
+      Fraction_reference = x$fractions[1, ],
+      Fraction_comparison = x$fractions[2, ],
+      Delta_fraction = observed,
+      N_transcripts = length(x$category),
+      N_quartile = c(sum(x$category == 1L), sum(x$category == 2L)),
+      P_permutation = (b + 1) / (Fig3H_perm_B + 1),
+      stringsAsFactors = FALSE
+    ),
+    null_delta = null
+  )
+})
+
+Fig3H_quartile_permutation_results <- do.call(
+  rbind,
+  lapply(Fig3H_perm_runs, function(x) x$results)
+)
+
+stopifnot(nrow(Fig3H_quartile_permutation_results) == 8L)
+
+Fig3H_quartile_permutation_results$P_adj_BH <- p.adjust(
+  Fig3H_quartile_permutation_results$P_permutation,
+  method = "BH"
+)
+
+Fig3H_quartile_permutation_results$Figure_label <- ifelse(
+  Fig3H_quartile_permutation_results$P_adj_BH >= 0.05,
+  "NS",
+  sprintf("P = %.4f", Fig3H_quartile_permutation_results$P_adj_BH)
+)
+
+print(
+  Fig3H_quartile_permutation_results[, c(
+    "Samples", "Quartile", "Fraction_reference", "Fraction_comparison",
+    "Delta_fraction", "P_permutation", "P_adj_BH", "Figure_label"
+  )],
+  row.names = FALSE,
+  digits = 7
+)
+
+Fig3I_required_contrasts <- c(
+  "WM989_Acute_minus_Untreated",
+  "WM989_Resistant_minus_Acute",
+  "WM983B_Acute_minus_Untreated",
+  "WM983B_Resistant_minus_Acute"
+)
+
+Fig3I_required_columns <- c(
+  "contrast_id",
+  "cell_line",
+  "delta_TPM_weighted_Normalized_MFE",
+  "propagated_sem",
+  "permutation_p_value",
+  "permutation_p_adj_BH"
+)
+
+Fig3I_missing_columns <- setdiff(
+  Fig3I_required_columns,
+  colnames(Fig3I_GSE97681_DeltaDeltaGfold_statistics)
+)
+
+if (length(Fig3I_missing_columns) > 0) {
+  stop(
+    paste0(
+      "Panel I is missing the following columns:\n",
+      paste(Fig3I_missing_columns, collapse = "\n")
+    )
+  )
+}
+
+Fig3I_GSE97681_DeltaDeltaGfold_statistics <-
+  Fig3I_GSE97681_DeltaDeltaGfold_statistics %>%
+  dplyr::filter(
+    contrast_id %in% Fig3I_required_contrasts
+  )
+
+if (
+  nrow(Fig3I_GSE97681_DeltaDeltaGfold_statistics) != 4 ||
+  !setequal(
+    Fig3I_GSE97681_DeltaDeltaGfold_statistics$contrast_id,
+    Fig3I_required_contrasts
+  ) ||
+  any(
+    grepl(
+      "Resistant_minus_Untreated",
+      Fig3I_GSE97681_DeltaDeltaGfold_statistics$contrast_id
+    )
+  )
+) {
+  stop(
+    "Panel I does not contain exactly the four required sequential contrasts."
+  )
+}
+
+Fig3I_GSE97681_DeltaDeltaGfold_statistics <-
+  Fig3I_GSE97681_DeltaDeltaGfold_statistics %>%
+  dplyr::mutate(
+    cell_line = factor(
+      cell_line,
+      levels = c(
+        "WM989-A6",
+        "WM983B-E9"
+      )
+    ),
+    comparison = dplyr::case_when(
+      contrast_id %in% c(
+        "WM989_Acute_minus_Untreated",
+        "WM983B_Acute_minus_Untreated"
+      ) ~
+        "Acute 48 h versus untreated",
+      contrast_id %in% c(
+        "WM989_Resistant_minus_Acute",
+        "WM983B_Resistant_minus_Acute"
+      ) ~
+        "Stable resistant (drug on) versus acute 48 h",
+      TRUE ~
+        NA_character_
+    ),
+    comparison = factor(
+      comparison,
+      levels = c(
+        "Acute 48 h versus untreated",
+        "Stable resistant (drug on) versus acute 48 h"
+      )
+    ),
+    errorbar_low =
+      delta_TPM_weighted_Normalized_MFE -
+      propagated_sem,
+    errorbar_high =
+      delta_TPM_weighted_Normalized_MFE +
+      propagated_sem,
+    plot_errorbar_low = dplyr::if_else(
+      delta_TPM_weighted_Normalized_MFE >= 0,
+      delta_TPM_weighted_Normalized_MFE,
+      errorbar_low
+    ),
+    plot_errorbar_high = dplyr::if_else(
+      delta_TPM_weighted_Normalized_MFE >= 0,
+      errorbar_high,
+      delta_TPM_weighted_Normalized_MFE
+    ),
+    delta_label = dplyr::case_when(
+      abs(
+        delta_TPM_weighted_Normalized_MFE
+      ) < 0.001 ~
+        sprintf(
+          "%.5f",
+          delta_TPM_weighted_Normalized_MFE
+        ),
+      TRUE ~
+        sprintf(
+          "%.4f",
+          delta_TPM_weighted_Normalized_MFE
+        )
+    ),
+    p_label = dplyr::case_when(
+      permutation_p_adj_BH < 0.001 ~
+        "BH-adjusted P < 0.001",
+      permutation_p_adj_BH >= 0.05 ~
+        "NS",
+      TRUE ~ paste0(
+        "BH-adjusted P = ",
+        format(
+          signif(
+            permutation_p_adj_BH,
+            2
+          ),
+          scientific = FALSE,
+          trim = TRUE
+        )
+      )
+    )
+  ) %>%
+  dplyr::arrange(
+    cell_line,
+    comparison
+  )
+
+if (
+  anyNA(Fig3I_GSE97681_DeltaDeltaGfold_statistics$cell_line) ||
+  anyNA(Fig3I_GSE97681_DeltaDeltaGfold_statistics$comparison) ||
+  any(
+    !is.finite(
+      as.matrix(
+        Fig3I_GSE97681_DeltaDeltaGfold_statistics[
+          c(
+            "delta_TPM_weighted_Normalized_MFE",
+            "propagated_sem",
+            "permutation_p_value",
+            "permutation_p_adj_BH"
+          )
+        ]
+      )
+    )
+  ) ||
+  any(
+    Fig3I_GSE97681_DeltaDeltaGfold_statistics[[
+      "propagated_sem"
+    ]] < 0
+  ) ||
+  any(
+    Fig3I_GSE97681_DeltaDeltaGfold_statistics[[
+      "permutation_p_value"
+    ]] < 0 |
+    Fig3I_GSE97681_DeltaDeltaGfold_statistics[[
+      "permutation_p_value"
+    ]] > 1 |
+    Fig3I_GSE97681_DeltaDeltaGfold_statistics[[
+      "permutation_p_adj_BH"
+    ]] < 0 |
+    Fig3I_GSE97681_DeltaDeltaGfold_statistics[[
+      "permutation_p_adj_BH"
+    ]] > 1
+  )
+) {
+  stop(
+    "Panel I contains an invalid cell line, comparison or statistic."
+  )
+}
+
+Fig3I_y_limit <- max(
+  0.02,
+  1.45 *
+    max(
+      abs(
+        c(
+          Fig3I_GSE97681_DeltaDeltaGfold_statistics$errorbar_low,
+          Fig3I_GSE97681_DeltaDeltaGfold_statistics$errorbar_high
+        )
+      ),
+      na.rm = TRUE
+    )
+)
+
+Fig3I_GSE97681_DeltaDeltaGfold_statistics <-
+  Fig3I_GSE97681_DeltaDeltaGfold_statistics %>%
+  dplyr::mutate(
+    delta_label_y = dplyr::if_else(
+      delta_TPM_weighted_Normalized_MFE >= 0,
+      errorbar_high + 0.025 * Fig3I_y_limit,
+      errorbar_low - 0.025 * Fig3I_y_limit
+    ),
+    p_label_y = dplyr::if_else(
+      delta_TPM_weighted_Normalized_MFE >= 0,
+      errorbar_high + 0.18 * Fig3I_y_limit,
+      errorbar_low - 0.18 * Fig3I_y_limit
+    ),
+    text_hjust = dplyr::if_else(
+      delta_TPM_weighted_Normalized_MFE >= 0,
+      0,
+      1
+    )
+  )
+
+Plot_Fig3I_GSE97681_DeltaDeltaGfold <- ggplot(
+  Fig3I_GSE97681_DeltaDeltaGfold_statistics,
+  aes(
+    x = comparison,
+    y = delta_TPM_weighted_Normalized_MFE,
+    fill = comparison
+  )
+) +
+  geom_hline(
+    yintercept = 0,
+    linewidth = 0.4,
+    linetype = "dashed",
+    color = "black"
+  ) +
+  geom_col(
+    width = 0.85,
+    color = "black",
+    linewidth = 0.3
+  ) +
+  geom_errorbar(
+    aes(
+      ymin = plot_errorbar_low,
+      ymax = plot_errorbar_high
+    ),
+    width = 0.15,
+    linewidth = 0.5,
+    color = "black"
+  ) +
+  geom_text(
+    aes(
+      y = delta_label_y,
+      label = delta_label,
+      hjust = text_hjust
+    ),
+    angle = 90,
+    size = 2.8,
+    color = "black"
+  ) +
+  facet_grid(
+    cols = vars(cell_line)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Acute 48 h versus untreated" = "#D55E00",
+      "Stable resistant (drug on) versus acute 48 h" = "#0072B2"
+    )
+  ) +
+  scale_x_discrete(
+    labels = c(
+      "Acute 48 h versus untreated" =
+        "Acute 48 h\nversus untreated",
+      "Stable resistant (drug on) versus acute 48 h" =
+        "Stable resistant (drug on)\nversus acute 48 h"
+    )
+  ) +
+  scale_y_continuous(
+    labels = scales::number_format(
+      accuracy = 0.001
+    ),
+    expand = expansion(
+      mult = c(0.02, 0.02)
+    )
+  ) +
+  coord_cartesian(
+    ylim = c(
+      -Fig3I_y_limit,
+      Fig3I_y_limit
+    ),
+    clip = "off"
+  ) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(
+      size = 10,
+      color = "black"
+    ),
+    axis.text.y = element_text(
+      size = 11,
+      color = "black"
+    ),
+    axis.title.y = element_text(
+      size = 14
+    ),
+    strip.background = element_blank(),
+    strip.text = element_text(
+      size = 12,
+      color = "black"
+    ),
+    plot.margin = margin(
+      t = 8,
+      r = 8,
+      b = 8,
+      l = 8
+    )
+  ) +
+  labs(
+    title = "",
+    x = "",
+    y = expression(
+      Delta * Delta * G[fold] ~
+        (kcal %.% mol^{-1} %.% nt^{-1})
+    )
+  )
+
+print(Plot_Fig3I_GSE97681_DeltaDeltaGfold)
+
+print(
+  as.data.frame(
+    Fig3I_GSE97681_DeltaDeltaGfold_statistics
+  ),
+  row.names = FALSE,
+  digits = 12
+)
+
+ggsave(
+  filename = "Fig3I_GSE97681_TPM_weighted_DeltaDeltaGfold.tiff",
+  plot = Plot_Fig3I_GSE97681_DeltaDeltaGfold,
+  path = Fig3F_I_output_dir,
+  device = "tiff",
+  width = 4,
+  height = 6,
+  units = "in",
+  dpi = 600,
+  compression = "lzw",
+  bg = "white"
+)
+
+Fig3I_GSE97681_paired_statistics <-
+  get(
+    "GSE97681_founder_balanced_trajectory_wide",
+    envir = .GlobalEnv,
+    inherits = FALSE
+  ) %>%
+  tibble::as_tibble() %>%
+  dplyr::filter(
+    is.finite(.data$Resistant_minus_Acute)
+  ) %>%
+  dplyr::group_by(.data$cell_line) %>%
+  dplyr::summarise(
+    N_founders = dplyr::n(),
+    mean_Resistant_minus_Acute =
+      mean(.data$Resistant_minus_Acute),
+    paired_one_sided_P = stats::t.test(
+      .data$Resistant_minus_Acute,
+      mu = 0,
+      alternative = "less"
+    )$p.value,
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    paired_BH_P = stats::p.adjust(
+      .data$paired_one_sided_P,
+      method = "BH"
+    )
+  )
+
+print(
+  as.data.frame(Fig3I_GSE97681_paired_statistics),
   row.names = FALSE,
   digits = 12
 )
