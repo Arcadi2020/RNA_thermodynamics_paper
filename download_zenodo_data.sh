@@ -4,7 +4,14 @@
 #
 #   ./download_zenodo_data.sh              # download everything, skip what is current
 #   ./download_zenodo_data.sh --check      # verify what is already there, download nothing
+#   ./download_zenodo_data.sh --figure 3   # only what Figure 3 needs
 #   ./download_zenodo_data.sh --jobs 8     # more parallel transfers (default 4)
+#
+# The whole record is about 2.4 GB, and two files are most of it:
+# GREIN_counts_for_Fig_3.rds (895 MB, the GREIN count tables behind Figure 3)
+# and ViennaRNA_transcript_level_pairs.tsv.gz (883 MB, Figure 1). If you only
+# want one figure, --figure reads file_manifest.csv and fetches just that
+# figure's files plus the ones no figure claims.
 #
 # On a healthy link --jobs makes no measurable difference: 6 files / 90 MB took
 # 5s serial and 6s at --jobs 6, because a single connection already saturates
@@ -53,14 +60,23 @@ DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data"
 
 CHECK_ONLY=0
 JOBS=4
+FIGURE=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --check) CHECK_ONLY=1 ;;
-    --jobs)  JOBS="${2:?--jobs needs a number}"; shift ;;
+    --check)  CHECK_ONLY=1 ;;
+    --jobs)   JOBS="${2:?--jobs needs a number}"; shift ;;
+    --figure) FIGURE="${2:?--figure needs a number, e.g. 3}"; shift ;;
     *) echo "Unknown option: $1"; exit 2 ;;
   esac
   shift
 done
+
+MANIFEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/file_manifest.csv"
+if [ -n "$FIGURE" ] && [ ! -f "$MANIFEST" ]; then
+  echo "--figure needs file_manifest.csv beside this script."
+  echo "Generate it with ./make_file_manifest.py, or omit --figure."
+  exit 2
+fi
 
 mkdir -p "$DEST"
 
@@ -114,8 +130,32 @@ for f in d.get("files", []):
     print("\t".join([name, str(size), csum, url]))
 PY
 
+if [ -n "$FIGURE" ]; then
+  # Keep the rows whose figure column mentions this figure, and the rows no
+  # figure claims -- the manifest, the supplementary tables and anything
+  # shared, which are small and wanted either way.
+  kept=$(mktemp); trap 'rm -f "$meta" "$list" "$kept"' EXIT
+  python3 - "$MANIFEST" "$FIGURE" "$list" > "$kept" <<'PYFILTER'
+import csv, sys
+manifest, figure, listing = sys.argv[1], sys.argv[2], sys.argv[3]
+wanted, unclaimed = set(), set()
+for row in csv.DictReader(open(manifest)):
+    figures = row["figures"]
+    if f"Figure {figure}" in figures:
+        wanted.add(row["filename"])
+    elif not figures or figures == "--":
+        unclaimed.add(row["filename"])
+keep = wanted | unclaimed
+for line in open(listing):
+    if line.split("\t")[0] in keep or line.split("\t")[0] == "file_manifest.csv":
+        sys.stdout.write(line)
+PYFILTER
+  mv "$kept" "$list"
+fi
+
 n_total=$(wc -l < "$list" | tr -d ' ')
 echo "Record $RECORD_ID -- $SOURCE"
+[ -n "$FIGURE" ] && echo "Restricted to Figure $FIGURE (per file_manifest.csv)"
 echo "Destination: $DEST"
 echo "$n_total files"
 echo

@@ -1,6 +1,6 @@
 # Zenodo file manifest
 
-Record [10.5281/zenodo.17363927](https://doi.org/10.5281/zenodo.17363927) -- 36 files, 1,545 MB.
+Record [10.5281/zenodo.17363927](https://doi.org/10.5281/zenodo.17363927) -- 38 files, 2,462 MB.
 
 Zenodo presents a record as a flat file list, so this table is how you tell which file belongs to which analysis. It is generated from the scripts by `make_file_manifest.py`, not maintained by hand.
 
@@ -33,7 +33,7 @@ Fetch everything with `./download_zenodo_data.sh`; files land in `data/` and eve
 
 | File | Size | Read by |
 |---|---:|---|
-| `cell_cycle_analysis_results_for_Fig_2.rds` | 31.96 MB | Analysis_cell_cycle_genes_MFE.R; R_script_Fig_2.R |
+| `cell_cycle_analysis_results_for_Fig_2.rds` | 36.80 MB | Analysis_cell_cycle_genes_MFE.R; R_script_Fig_2.R |
 | `GSE104736_GeneLevel_Raw_data.csv` | 3.56 MB | Analysis_cell_cycle_genes_MFE.R |
 | `GSE104736_TranscriptLevel_Raw_data.csv` | 35.93 MB | Analysis_cell_cycle_genes_MFE.R |
 | `GSE104736_TranscriptLevel_TPM_data.csv` | 21.29 MB | Analysis_cell_cycle_genes_MFE.R |
@@ -45,7 +45,8 @@ Fetch everything with `./download_zenodo_data.sh`; files land in `data/` and eve
 
 | File | Size | Read by |
 |---|---:|---|
-| `pharmacologic_inhibition_analysis_results_for_Fig_3.rds` | 57.34 MB | R_script_Fig_3.R |
+| `GREIN_counts_for_Fig_3.rds` | 894.58 MB | create_GREIN_counts_RDS.R |
+| `pharmacologic_inhibition_analysis_results_for_Fig_3.rds` | 71.26 MB | R_script_Fig_3.R |
 | `Pharmacologic_inhibition_of_cell_proliferation_part1.zip` | 38.56 MB | upstream GREIN inputs, read from the unpacked archive |
 | `Pharmacologic_inhibition_of_cell_proliferation_part2.zip` | 5.67 MB | upstream GREIN inputs, read from the unpacked archive |
 
@@ -60,7 +61,8 @@ Fetch everything with `./download_zenodo_data.sh`; files land in `data/` and eve
 
 | File | Size | Read by |
 |---|---:|---|
-| `GSE224463_analysis_results_for_Fig_5.rds` | 2.24 MB | Analysis_GSE224463_stationary_phase.R; R_script_Fig_5.R |
+| `GSE131992_analysis_results_for_Fig_5.rds` | 3.76 MB | R_script_Fig_5.R |
+| `GSE224463_analysis_results_for_Fig_5.rds` | 2.46 MB | Analysis_GSE224463_stationary_phase.R; R_script_Fig_5.R |
 | `GSE226643_analysis_results_for_Fig_5.rds` | 0.42 MB | Analysis_GSE226643_stationary_phase.R; R_script_Fig_5.R |
 | `MG1655_gene_info.csv` | 0.51 MB | Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R |
 | `Prediction_Ecoli_MFE_HC_df.csv` | 2.07 MB | Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R |
