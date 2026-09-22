@@ -7,11 +7,12 @@
 # results; use download_zenodo_data.sh for those.
 #
 #   ./download_upstream_data.sh --list        what each group covers, download nothing
-#   ./download_upstream_data.sh               annotation + GEO + LINCS metadata (~1.2 GB)
+#   ./download_upstream_data.sh               annotation + GEO + LINCS + signature (~1.2 GB)
 #   ./download_upstream_data.sh --annotation  GENCODE and UCSC only (~63 MB)
 #   ./download_upstream_data.sh --geo         GEO series only (~1 GB)
 #   ./download_upstream_data.sh --lincs       LINCS metadata only (~1.1 GB)
 #   ./download_upstream_data.sh --lincs-gctx  ALSO the 111 GB level 3 matrix
+#   ./download_upstream_data.sh --signature   the Carey 2021 proliferation signature only
 #   ./download_upstream_data.sh --check       report what is present
 #
 # IMPORTANT -- this script does not fetch everything the upstream scripts want,
@@ -73,6 +74,13 @@ GROUPS THIS SCRIPT CAN DOWNLOAD
 
   --lincs-gctx   LINCS 2020 level 3 expression matrix                   ~111 GB
                  needed by: lincs_maayanlab.py. Opt-in: it is enormous.
+
+  --signature    Carey 2021 proliferation signature, PLOS Comput Biol
+                 S4 Table (Jiang et al., doi:10.1371/journal.pcbi.1009582)  ~18 KB
+                 The .xlsx column proliferation_signature is 370 human
+                 Entrez IDs. Cross_validation_MFE.R reads a derived
+                 Proliferation_signature_carey_2021.csv (an entrezgene_id
+                 column); produce it from this table in the wrangling step.
 
 
 WHAT THIS SCRIPT CANNOT GET
@@ -164,10 +172,10 @@ WHAT THIS SCRIPT CANNOT GET
 EOF
 }
 
-WANT_ANNOTATION=0; WANT_GEO=0; WANT_LINCS=0; WANT_GCTX=0; CHECK_ONLY=0
+WANT_ANNOTATION=0; WANT_GEO=0; WANT_LINCS=0; WANT_GCTX=0; WANT_SIGNATURE=0; CHECK_ONLY=0
 
 if [ $# -eq 0 ]; then
-  WANT_ANNOTATION=1; WANT_GEO=1; WANT_LINCS=1
+  WANT_ANNOTATION=1; WANT_GEO=1; WANT_LINCS=1; WANT_SIGNATURE=1
 else
   for a in "$@"; do
     case "$a" in
@@ -175,8 +183,9 @@ else
       --annotation) WANT_ANNOTATION=1 ;;
       --geo)        WANT_GEO=1 ;;
       --lincs)      WANT_LINCS=1 ;;
+      --signature)  WANT_SIGNATURE=1 ;;
       --lincs-gctx) WANT_LINCS=1; WANT_GCTX=1 ;;
-      --check)      CHECK_ONLY=1; WANT_ANNOTATION=1; WANT_GEO=1; WANT_LINCS=1 ;;
+      --check)      CHECK_ONLY=1; WANT_ANNOTATION=1; WANT_GEO=1; WANT_LINCS=1; WANT_SIGNATURE=1 ;;
       *) echo "Unknown option: $a"; echo "Try --list"; exit 2 ;;
     esac
   done
@@ -187,6 +196,7 @@ wanted() {
     annotation) [ "$WANT_ANNOTATION" -eq 1 ] ;;
     geo)        [ "$WANT_GEO" -eq 1 ] ;;
     lincs)      [ "$WANT_LINCS" -eq 1 ] ;;
+    signature)  [ "$WANT_SIGNATURE" -eq 1 ] ;;
     lincs-gctx) [ "$WANT_GCTX" -eq 1 ] ;;
     *) false ;;
   esac
