@@ -28,14 +28,21 @@ SECTION_FIGURE = {
     "Escherichia_coli_stationary_phase": "Figure 5",
 }
 
-# Files no script names directly. Archives are referenced by their contents, and
+# Files no script names directly. The GREIN archives are read only after being
+# unpacked (unpack_GREIN_counts.R), so scripts never mention them by name, and
 # the supplementary tables accompany the manuscript rather than any one figure.
-MANUAL = {
-    "Pharmacologic_inhibition_of_cell_proliferation_part1.zip":
-        ("Figure 3", "upstream GREIN inputs, read from the unpacked archive"),
-    "Pharmacologic_inhibition_of_cell_proliferation_part2.zip":
-        ("Figure 3", "upstream GREIN inputs, read from the unpacked archive"),
-}
+def manual_figure(name):
+    """(figure, note) for files no script references by name, else None."""
+    if re.match(r"GSE\d+\.zip$", name):
+        return ("Figure 3",
+                "GREIN per-accession count tables; unpack with unpack_GREIN_counts.R")
+    if name == "GREIN_supporting_inputs.zip":
+        return ("Figure 3",
+                "GREIN per-series metadata (Data_GSE*.rds) and GSE192446 raw "
+                "counts; unpack with unpack_GREIN_counts.R")
+    if name in ("GREIN_manifest.csv", "GREIN_README.md"):
+        return ("Figure 3", "documents the GREIN deposit")
+    return None
 
 
 def load_deposit(path=None):
@@ -110,8 +117,9 @@ def main():
         figures = sorted({f for f, _ in pairs})
         scripts = sorted({s for _, s in pairs})
         note = ""
-        if not figures and name in MANUAL:
-            fig, note = MANUAL[name]
+        manual = None if figures else manual_figure(name)
+        if manual:
+            fig, note = manual
             figures = [fig]
         elif not figures and name.lower().startswith("supplementary"):
             figures = ["--"]

@@ -1,52 +1,87 @@
-# Expand GREIN_counts_for_Fig_3.rds back into the CSV files the analysis reads.
+# Expand the deposited GREIN archives into the flat directory the analysis reads.
 #
-# create_GREIN_counts_RDS.R bundles the 116 GREIN count tables into one object
-# for deposit. Nothing read it back: Cross_validation_MFE.R opens 57 of those
-# tables as individual CSVs from input_dir, so a reader who downloads the
-# bundle has the data but no way to feed it to the script. This is that step.
+# Figure 3's GREIN inputs are deposited on Zenodo as one zip per GEO accession
 #
-#   Rscript unpack_GREIN_counts.R <GREIN_counts_for_Fig_3.rds> <output_directory>
+#   GSE<accession>.zip -> GSE<accession>/GSE<accession>_{GeneLevel,TranscriptLevel}_*.csv
 #
-# Each table is written under the file name recorded in the bundle's manifest.
-# The first column header is empty in the originals, which is why the analysis
-# reads it back as "X"; write.csv reproduces that, so the round trip is exact.
+# plus GREIN_supporting_inputs.zip, which holds the per-series metadata objects
+# (Data_GSE*.rds and Expdata_GSE182018_raw_gene.rds) and the one accession whose
+# counts are a raw NCBI table (GSE192446_raw_counts_GRCh38.p13_NCBI.tsv).
+#
+# Cross_validation_MFE.R reads every one of these as a flat file from input_dir
+# -- file.path(input_dir, "GSE182018_TranscriptLevel_Raw_data.csv"),
+# file.path(input_dir, "Data_GSE182018.rds"), and so on. So this expands the
+# archives and flattens them: each member is written to the output directory
+# under its base name, dropping the per-accession folder and ignoring the
+# __MACOSX / .DS_Store entries some of the archives carry.
+#
+#   Rscript unpack_GREIN_counts.R <zip_directory> <output_directory>
+#
+# <zip_directory> is where download_zenodo_data.sh placed the archives (its
+# data/ directory). Files that already exist in the output directory are left
+# untouched, so re-running is cheap and never overwrites. The archives are read
+# only; nothing in <zip_directory> is changed.
 
 runtime_arguments <- commandArgs(trailingOnly = TRUE)
 
 if (length(runtime_arguments) != 2L) {
-  stop("Usage: Rscript unpack_GREIN_counts.R <bundle.rds> <output_directory>",
+  stop("Usage: Rscript unpack_GREIN_counts.R <zip_directory> <output_directory>",
        call. = FALSE)
 }
 
-bundle_file <- normalizePath(runtime_arguments[[1L]], mustWork = TRUE)
-output_dir  <- runtime_arguments[[2L]]
+zip_dir    <- normalizePath(runtime_arguments[[1L]], mustWork = TRUE)
+output_dir <- runtime_arguments[[2L]]
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+output_dir <- normalizePath(output_dir, mustWork = TRUE)
 
-bundle <- readRDS(bundle_file)
-if (!is.list(bundle) || is.null(bundle$tables) || is.null(bundle$manifest)) {
-  stop("That does not look like a GREIN count bundle.", call. = FALSE)
+archives <- list.files(zip_dir, pattern = "\\.zip$", full.names = TRUE)
+grein_pattern <- "^(GSE[0-9]+|GREIN_supporting_inputs)\\.zip$"
+archives <- archives[grepl(grein_pattern, basename(archives), perl = TRUE)]
+archives <- sort(archives)
+
+if (!length(archives)) {
+  stop("No GREIN archives (GSE*.zip or GREIN_supporting_inputs.zip) in ", zip_dir,
+       call. = FALSE)
 }
 
-manifest <- bundle$manifest
-cat("Tables in bundle: ", nrow(manifest), "\n", sep = "")
-cat("Writing to:       ", normalizePath(output_dir, mustWork = TRUE), "\n\n", sep = "")
+cat("GREIN archives found: ", length(archives), "\n", sep = "")
+cat("Writing to:           ", output_dir, "\n\n", sep = "")
+
+is_cruft <- function(paths) {
+  grepl("(^|/)__MACOSX(/|$)", paths) | grepl("(^|/)\\.DS_Store$", paths)
+}
 
 written <- 0L
-for (i in seq_len(nrow(manifest))) {
-  key <- manifest$key[[i]]
-  target <- file.path(output_dir, manifest$file_name[[i]])
-  if (file.exists(target)) {
-    cat("  exists, skipping  ", manifest$file_name[[i]], "\n", sep = "")
-    next
+skipped <- 0L
+for (archive in archives) {
+  members <- utils::unzip(archive, list = TRUE)$Name
+  members <- members[!grepl("/$", members)]     # drop directory entries
+  members <- members[!is_cruft(members)]        # drop macOS cruft
+
+  for (member in members) {
+    target <- file.path(output_dir, basename(member))
+    if (file.exists(target)) {
+      skipped <- skipped + 1L
+      next
+    }
+    tmp <- tempfile()
+    dir.create(tmp)
+    utils::unzip(archive, files = member, exdir = tmp, junkpaths = TRUE)
+    extracted <- file.path(tmp, basename(member))
+    if (!file.exists(extracted)) {
+      unlink(tmp, recursive = TRUE)
+      stop("Failed to extract ", member, " from ", basename(archive), call. = FALSE)
+    }
+    if (!file.copy(extracted, target)) {
+      unlink(tmp, recursive = TRUE)
+      stop("Failed to write ", target, call. = FALSE)
+    }
+    unlink(tmp, recursive = TRUE)
+    written <- written + 1L
+    if (written %% 20L == 0L) cat("  written ", written, " file(s)\n", sep = "")
   }
-  table_data <- bundle$tables[[key]]
-  if (is.null(table_data)) {
-    stop("Manifest names a table the bundle does not contain: ", key, call. = FALSE)
-  }
-  write.csv(table_data, target, row.names = FALSE, quote = TRUE, na = "")
-  written <- written + 1L
-  if (written %% 20L == 0L) cat("  written ", written, " of ", nrow(manifest), "\n", sep = "")
 }
 
-cat("\nWrote ", written, " file(s).\n", sep = "")
-cat("The bundle was read only; no source file was changed.\n")
+cat("\nWrote ", written, " file(s); ", skipped, " already present and left as-is.\n",
+    sep = "")
+cat("The archives were read only; nothing in the zip directory was changed.\n")

@@ -7,11 +7,16 @@
 #   ./download_zenodo_data.sh --figure 3   # only what Figure 3 needs
 #   ./download_zenodo_data.sh --jobs 8     # more parallel transfers (default 4)
 #
-# The whole record is about 2.4 GB, and two files are most of it:
-# GREIN_counts_for_Fig_3.rds (895 MB, the GREIN count tables behind Figure 3)
-# and ViennaRNA_transcript_level_pairs.tsv.gz (883 MB, Figure 1). If you only
-# want one figure, --figure reads file_manifest.csv and fetches just that
-# figure's files plus the ones no figure claims.
+# The largest single file is ViennaRNA_transcript_level_pairs.tsv.gz (883 MB,
+# Figure 1). Figure 3's GREIN counts are one zip per GEO accession (GSE*.zip,
+# ~713 MB together) plus GREIN_supporting_inputs.zip (the per-series metadata).
+# If you only want one figure, --figure reads file_manifest.csv and fetches
+# just that figure's files plus the ones no figure claims.
+#
+# Figure 3's GREIN archives land here as zips; expand them into the directory
+# Cross_validation_MFE.R reads with:
+#   Rscript sections/Pharmacologic_inhibition_of_cell_proliferation/unpack_GREIN_counts.R \
+#           ./data <input_dir>
 #
 # On a healthy link --jobs makes no measurable difference: 6 files / 90 MB took
 # 5s serial and 6s at --jobs 6, because a single connection already saturates
