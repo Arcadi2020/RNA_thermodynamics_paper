@@ -39,39 +39,6 @@ Table_ANNOTATED <- Gencode_TX_norm_MFE_HC_table
 
 source(file.path(supporting_scripts_dir, "All_gene_sets_AC.R"))
 
-mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host="https://www.ensembl.org")
-
-transcript_ids <- (Proliferation_Science_paper)
-
-res_gene_sets <- getBM(attributes = c('ensembl_transcript_id_version',
-                            'ensembl_gene_id',
-                            'ensembl_gene_id_version',
-                            'external_gene_name',
-                            'ensembl_transcript_id'),
-             filters = 'external_gene_name',
-             values = transcript_ids,
-             mart = mart)
-
-Cell_proliferation_set <- dplyr::select(res_gene_sets, ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id_version, ensembl_gene_id)
-
-Carey_2021 <- read.delim(file.path(input_dir, "Proliferation_signature_carey_2021.csv"), sep = ",", header = T, stringsAsFactors = F)
-mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", host="https://www.ensembl.org")
-transcript_ids <- (Carey_2021$entrezgene_id)
-
-res_Carey_2021 <- getBM(attributes = c('ensembl_transcript_id_version',
-                                      'ensembl_gene_id',
-                                      'ensembl_gene_id_version',
-                                      'external_gene_name',
-                                      'ensembl_transcript_id',
-                                      'entrezgene_id',
-                                      'transcript_is_canonical',
-                                      'external_gene_name'),
-                       filters = 'entrezgene_id',
-                       values = transcript_ids,
-                       mart = mart)
-
-Carey_2021 <- dplyr::select(res_Carey_2021, ensembl_transcript_id_version, ensembl_transcript_id, ensembl_gene_id_version, ensembl_gene_id, entrezgene_id)
-
 calculate_mode <- function(x) {
   unique_x <- unique(x)
   unique_x[which.max(tabulate(match(x, unique_x)))]
