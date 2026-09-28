@@ -77,7 +77,6 @@ calculate_mode <- function(x) {
   unique_x[which.max(tabulate(match(x, unique_x)))]
 }
 
-source(file.path(supporting_scripts_dir, "Proliferation_signature.R"))
 
 Counts_GSE182018_GREIN <- read.delim(file.path(input_dir, "GSE182018_TranscriptLevel_Raw_data .csv"), sep = ",", header = T, stringsAsFactors = F)
 Counts_GSE182018_GREIN <- Counts_GSE182018_GREIN %>% remove_rownames %>% column_to_rownames(var="X")
