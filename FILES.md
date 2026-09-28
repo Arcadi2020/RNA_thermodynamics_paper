@@ -1,6 +1,6 @@
 # Zenodo file manifest
 
-Record [10.5281/zenodo.17363927](https://doi.org/10.5281/zenodo.17363927) -- 38 files, 2,462 MB.
+Record [10.5281/zenodo.17363927](https://doi.org/10.5281/zenodo.17363927) -- 69 files, 2,236 MB.
 
 Zenodo presents a record as a flat file list, so this table is how you tell which file belongs to which analysis. It is generated from the scripts by `make_file_manifest.py`, not maintained by hand.
 
@@ -45,10 +45,41 @@ Fetch everything with `./download_zenodo_data.sh`; files land in `data/` and eve
 
 | File | Size | Read by |
 |---|---:|---|
-| `GREIN_counts_for_Fig_3.rds` | 894.58 MB | create_GREIN_counts_RDS.R |
+| `GREIN_manifest.csv` | 0.02 MB | documents the GREIN deposit |
+| `GREIN_README.md` | 0.00 MB | documents the GREIN deposit |
+| `GREIN_supporting_inputs.zip` | 0.70 MB | GREIN per-series metadata (Data_GSE*.rds) and GSE192446 raw counts; unpack with unpack_GREIN_counts.R |
+| `GSE100327.zip` | 48.00 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE103021.zip` | 30.25 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE104736.zip` | 27.34 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE105083.zip` | 119.83 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE115550.zip` | 24.66 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE118548.zip` | 13.37 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE121105.zip` | 22.55 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE126779.zip` | 46.48 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE129221.zip` | 18.13 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE129944.zip` | 13.16 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE130161.zip` | 11.64 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE135514.zip` | 52.70 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE137535.zip` | 15.69 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE143462.zip` | 9.01 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE143798.zip` | 9.51 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE148096.zip` | 8.35 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE163249.zip` | 10.03 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE165325.zip` | 25.64 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE177054.zip` | 11.33 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE178755.zip` | 8.86 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE182018.zip` | 12.96 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE184125.zip` | 8.95 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE185141.zip` | 7.94 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE241600.zip` | 13.52 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE241735.zip` | 33.00 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE62056.zip` | 10.76 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE63582.zip` | 29.84 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE73318.zip` | 44.13 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE93124.zip` | 8.50 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE94479.zip` | 5.75 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
+| `GSE99060.zip` | 10.38 MB | GREIN per-accession count tables; unpack with unpack_GREIN_counts.R |
 | `pharmacologic_inhibition_analysis_results_for_Fig_3.rds` | 71.26 MB | R_script_Fig_3.R |
-| `Pharmacologic_inhibition_of_cell_proliferation_part1.zip` | 38.56 MB | upstream GREIN inputs, read from the unpacked archive |
-| `Pharmacologic_inhibition_of_cell_proliferation_part2.zip` | 5.67 MB | upstream GREIN inputs, read from the unpacked archive |
 
 ## Figure 4
 
