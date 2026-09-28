@@ -78,7 +78,7 @@ calculate_mode <- function(x) {
 }
 
 
-Counts_GSE182018_GREIN <- read.delim(file.path(input_dir, "GSE182018_TranscriptLevel_Raw_data .csv"), sep = ",", header = T, stringsAsFactors = F)
+Counts_GSE182018_GREIN <- read.delim(file.path(input_dir, "GSE182018_TranscriptLevel_Raw_data.csv"), sep = ",", header = T, stringsAsFactors = F)
 Counts_GSE182018_GREIN <- Counts_GSE182018_GREIN %>% remove_rownames %>% column_to_rownames(var="X")
 
 Data_GSE182018 <- readRDS(file.path(input_dir, "Data_GSE182018.rds"))
