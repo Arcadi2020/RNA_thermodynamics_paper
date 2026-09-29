@@ -5,7 +5,7 @@ cell_cycle_analysis_results_for_Fig_2.rds,38588748,0e54455a668da84fa58e2e6239ffe
 Compare_ViennaRNA_vs_RNAstructure_MFE.RData,14489168,250bb9b3e5a976e4f6b3f368be3efc8f,Figure 1,Fig_1_R_script.R,
 GENCODE_filtered_transcripts.txt.gz,8005757,b27cd404d7f1c937aef299df093f410e,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
 GENCODE_filtered_transcripts_the_last_one.txt.gz,8265559,2b612eeae23be8261adbd9dc7d938403,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
-Gencode_TX_norm_MFE_HC_table.csv,27649452,42d7218027fe57a69889cac8d3139a4a,Figure 1; Figure 2; Figure 3,Analysis_cell_cycle_genes_MFE.R; Cross_validation_MFE.R; Fig_1_R_script.R,
+Gencode_TX_norm_MFE_HC_table.csv,40296296,94577ca1c9a8838ac48d396ad2d4e761,Figure 1; Figure 2; Figure 3,Analysis_cell_cycle_genes_MFE.R; Cross_validation_MFE.R; Fig_1_R_script.R,
 GREIN_manifest.csv,17762,51d30d40bad39d29c9302b34c13abb5f,Figure 3,,documents the GREIN deposit
 GREIN_README.md,2875,dce3879128b9aead9f6722ddece29cd4,Figure 3,,documents the GREIN deposit
 GREIN_supporting_inputs.zip,738255,579b77e4f68889cf92eaed7e9ec11745,Figure 3,,GREIN per-series metadata (Data_GSE*.rds) and GSE192446 raw counts; unpack with unpack_GREIN_counts.R

@@ -1,6 +1,6 @@
 # Zenodo file manifest
 
-Record [10.5281/zenodo.17363927](https://doi.org/10.5281/zenodo.17363927) -- 69 files, 2,236 MB.
+Record [10.5281/zenodo.17363927](https://doi.org/10.5281/zenodo.17363927) -- 69 files, 2,248 MB.
 
 Zenodo presents a record as a flat file list, so this table is how you tell which file belongs to which analysis. It is generated from the scripts by `make_file_manifest.py`, not maintained by hand.
 
@@ -27,7 +27,7 @@ Fetch everything with `./download_zenodo_data.sh`; files land in `data/` and eve
 
 | File | Size | Read by |
 |---|---:|---|
-| `Gencode_TX_norm_MFE_HC_table.csv` | 26.37 MB | Analysis_cell_cycle_genes_MFE.R; Cross_validation_MFE.R; Fig_1_R_script.R |
+| `Gencode_TX_norm_MFE_HC_table.csv` | 38.43 MB | Analysis_cell_cycle_genes_MFE.R; Cross_validation_MFE.R; Fig_1_R_script.R |
 
 ## Figure 2
 
