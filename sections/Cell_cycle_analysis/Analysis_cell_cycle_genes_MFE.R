@@ -1961,6 +1961,10 @@ figure2_results <- list(
   GSE94479_SvsG0G1 = GSE94479_SvsG0G1,
   MFE_GSE104736_G1_vs_G2 = MFE_GSE104736_G1_vs_G2,
   MFE_GSE104736_S_vs_G1 = MFE_GSE104736_S_vs_G1,
+  GSE94479_Fig2D_normalized_counts =
+    GSE94479_Fig2D_normalized_counts,
+  GSE104736_Fig2D_normalized_counts =
+    GSE104736_Fig2D_normalized_counts,
   Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction =
     Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction,
   GSE94479_MCF7_TPM_long = GSE94479_MCF7_TPM_long,

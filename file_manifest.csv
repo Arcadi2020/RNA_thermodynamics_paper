@@ -1,0 +1,70 @@
+filename,size_bytes,md5,figures,scripts,note
+02_analyse_full_shuffle_vs_native_master_tables.RData,6879244,c8184a40fc7357f71fa6c8a9e8c8e87d,Figure 1,Fig_1_R_script.R,
+02_analyse_full_shuffle_vs_native_selected_objects.rds,2186704,92af9d687896bcdf8aa19d969a2a82ee,Figure 1,Fig_1_R_script.R,
+cell_cycle_analysis_results_for_Fig_2.rds,38588748,0e54455a668da84fa58e2e6239ffee73,Figure 2,Analysis_cell_cycle_genes_MFE.R; R_script_Fig_2.R,
+Compare_ViennaRNA_vs_RNAstructure_MFE.RData,14489168,250bb9b3e5a976e4f6b3f368be3efc8f,Figure 1,Fig_1_R_script.R,
+GENCODE_filtered_transcripts.txt.gz,8005757,b27cd404d7f1c937aef299df093f410e,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
+GENCODE_filtered_transcripts_the_last_one.txt.gz,8265559,2b612eeae23be8261adbd9dc7d938403,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
+Gencode_TX_norm_MFE_HC_table.csv,40296296,94577ca1c9a8838ac48d396ad2d4e761,Figure 1; Figure 2; Figure 3,Analysis_cell_cycle_genes_MFE.R; Cross_validation_MFE.R; Fig_1_R_script.R,
+GREIN_manifest.csv,17762,51d30d40bad39d29c9302b34c13abb5f,Figure 3,,documents the GREIN deposit
+GREIN_README.md,2875,dce3879128b9aead9f6722ddece29cd4,Figure 3,,documents the GREIN deposit
+GREIN_supporting_inputs.zip,738255,579b77e4f68889cf92eaed7e9ec11745,Figure 3,,GREIN per-series metadata (Data_GSE*.rds) and GSE192446 raw counts; unpack with unpack_GREIN_counts.R
+GSE100327.zip,50328711,34606148102555e48c21dbd451ae123a,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE103021.zip,31722625,aacc9907ebc8cbe7909385874bbd6ce6,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE104736.zip,28664418,49ca40ac0f4aa1ae87ac51fac33a98b2,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE104736_GeneLevel_Raw_data.csv,3737736,165c406f0e8641d3d7ae6ee82315e0c3,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE104736_TranscriptLevel_Raw_data.csv,37676378,78dd9cdb212d3756ca550697059fd9fe,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE104736_TranscriptLevel_TPM_data.csv,22329236,d4bcc414d78de21cf6bd030ea7faee39,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE105083.zip,125647673,96194163f7a3f1a1331ec175533ec4f6,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE115550.zip,25853356,2fa0246939f6f34199accd845a41246d,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE118548.zip,14021196,d44f42c8bd5626fa03f28fe496ea0993,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE121105.zip,23650192,7a1757d8669a5331efb7ebde44fd8731,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE126779.zip,48741741,d4849add0cb415c518b646f471b47a33,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE129221.zip,19011250,aa559f6aa3950d5207bc57c0688d8043,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE129944.zip,13803378,7629c0e66f461483d7cd7d582498e527,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE130161.zip,12206887,1a4659a4fb8ea815439128772158a48a,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE131992_analysis_results_for_Fig_5.rds,3940212,d02ec97ba1711d234256c146c6934fdf,Figure 5,R_script_Fig_5.R,
+GSE135514.zip,55256515,c3ed723b722016ef018dea3547356b22,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE137535.zip,16451265,d4595d8ed1187226264d45fb07f9ab05,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE143462.zip,9448189,8752aed2bc74f506dcbd8c59dc9c0f15,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE143798.zip,9976009,8c995d60ce1ca1a5bd2d353b0295278b,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE148096.zip,8752511,6af7536c4c62c6e55432f26cbbfa0878,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE163249.zip,10515365,eddde4fb684365f0e5e88499634050f3,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE165325.zip,26884582,52778a890afec5e1efb8d3ffa8f125f4,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE177054.zip,11875573,e6da2fbc153ead825c27e24c1a2b5547,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE178755.zip,9286351,2ac4b9025cd86aaa259a5ff0a179cb21,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE182018.zip,13587925,cffe73931a76790dd66ba405fc0cf562,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE184125.zip,9386384,2676b9a76c7500245ea80786b95b7784,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE185141.zip,8323183,7f2006067751f27f3b1acedf8a9c0316,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE224463_analysis_results_for_Fig_5.rds,2582240,ea4b405043c4befa0f6a693b21ab1c0f,Figure 5,Analysis_GSE224463_stationary_phase.R; R_script_Fig_5.R,
+GSE226643_analysis_results_for_Fig_5.rds,445272,a156be9cbadb1f1c42a9329b85e92041,Figure 5,Analysis_GSE226643_stationary_phase.R; R_script_Fig_5.R,
+GSE241600.zip,14178134,80daa3bc0876f06e35887349fb376c68,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE241735.zip,34600327,422efb5c33240b8ad20c9d813a402bac,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE62056.zip,11286834,49bc9b070ea715aaeef7964cccf820f7,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE63582.zip,31286469,ecf274a4d85183e4a6f5c76f55e04ea7,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE73318.zip,46274489,fd026b555c283ddba2ce8715a58fd101,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE93124.zip,8910566,7846f59fa7acd92eda2ac0c3e79cb22b,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE94479.zip,6031636,07a831afcd8ae495fd9ca37dc87d58ab,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+GSE94479_TranscriptLevel_Raw_data.csv,6866106,1ec78ec5ed1dc6ce0d345860de9b69bd,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE94479_TranscriptLevel_TPM_data.csv,7438390,b3794721954be9514ebb67b2af4f613d,Figure 2,Analysis_cell_cycle_genes_MFE.R,
+GSE99060.zip,10886213,facce8c8560ea849119aedbc3e45a5f8,Figure 3,,GREIN per-accession count tables; unpack with unpack_GREIN_counts.R
+HEK293T_Amo_mRNA_enriched_CRSSANT_combined_128shards_dg.bedpe,2814187,cb085c20caa38bf6ede8cfe189ae61e3,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_BEDPE_enriched_mRNA_to_transcriptome_ViennaRNA_pairset_preprocessor.R,
+iLINCS_analysis_results_for_Fig_4.rds,72424,8ae1fd18be011d2200fdfceeaff510ab,Figure 4,R_script_Fig_4.R,
+MG1655_gene_info.csv,538519,e3d46935226b1e4e7726bd98c61d61fe,Figure 5,Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R,
+PARIS2_enriched_mRNA_ViennaRNA_pair_overlap_analysis_final_environment.rds,890440,f84d89e04e35be97b23e868faa363c35,Figure 1,Fig_1_R_script.R,
+pharmacologic_inhibition_analysis_results_for_Fig_3.rds,74719928,2f7892f9feaef80cd66660798881602b,Figure 3,R_script_Fig_3.R,
+plot2_transcript_level_shift_summary.csv,1048,4c933a8b2a5e07dd230b90c34f156e96,Figure 1,Analysis_icSHAPE_ViennaRNA_across_five_cell_lines.R; Fig_1_R_script.R,
+Prediction_Ecoli_MFE_HC_df.csv,2173610,38a598c3bed0dcbcecc8ed616345e40c,Figure 5,Analysis_GSE224463_stationary_phase.R; Analysis_GSE226643_stationary_phase.R,
+Prediction_MFE_Gencode_37C.txt.gz,108965901,7237bede8d6adff9b651832be93a935c,Figure 1,03_prepare_ViennaRNA_position_table_for_icSHAPE.R,
+refFlat_hg19_gtf.gz,9648078,8fc2c2e8c24fe78889920582dbf6801a,Figure 2,Analysis_RNAseq_PNAS_2017.R,
+Supplementary_table_1.csv,61490191,b3b94a344db83609912a42df4048771d,--,,"manuscript supplementary table, not read by any script"
+Supplementary_table_2.csv,16610170,d6dbbba8cc995845ba93ffc1547dcf08,--,,"manuscript supplementary table, not read by any script"
+Supplementary_Table_3.xlsx,29272,a3b8fa65aa71f44f64959444eba43c75,--,,"manuscript supplementary table, not read by any script"
+Supplementary_Table_4.csv,10280,3c354431dfedee88999165f6e33cb477,--,,"manuscript supplementary table, not read by any script"
+Supplementary_table_5.csv,3583,45952ef94156bf7c73e6a2bb2ba562f6,--,,"manuscript supplementary table, not read by any script"
+Supplementary_table_6.csv,120472,f3c6377a8df3bdb2a9f6876cfb890b1e,--,,"manuscript supplementary table, not read by any script"
+Supplementary_Table_7.csv,1293103,9c0e85b3e61c00d35c422c59ddee592e,--,,"manuscript supplementary table, not read by any script"
+Table_ANNOTATED_iLINCs.csv,2881559,0e6cf9795842d1be126223e1c122f442,Figure 4,Analysis_MFE_iLINCS_all_datasets_10uM_cancer_lines.R; Analysis_MFE_iLINCS_all_datasets_3.33uM_cancer_lines.R,
+transcript_summary_filtered_all_cell_lines.tsv.gz,16359726,1e4e0256d6a8d1e6ca8a40be23e0dec1,Figure 1,Analysis_icSHAPE_ViennaRNA_across_five_cell_lines.R; Fig_1_R_script.R,
+ViennaRNA_structures_recovered.tsv.gz,181169217,163eae62a90c0d5f415b5ec2f1c24379,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_ViennaRNA_enriched_mRNA_transcript_pair_overlap_quantification.R,
+ViennaRNA_transcript_level_pairs.tsv.gz,926308899,1e0417b9aa3497ac761d560b5f740c5b,Figure 1,HEK293T_Amo_PARIS2_CRSSANT_BEDPE_enriched_mRNA_to_transcriptome_ViennaRNA_pairset_preprocessor.R; HEK293T_Amo_PARIS2_CRSSANT_ViennaRNA_enriched_mRNA_transcript_pair_overlap_quantification.R,

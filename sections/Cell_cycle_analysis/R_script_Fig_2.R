@@ -40,6 +40,8 @@ figure2_required_objects <- c(
   "GSE94479_SvsG0G1",
   "MFE_GSE104736_G1_vs_G2",
   "MFE_GSE104736_S_vs_G1",
+  "GSE94479_Fig2D_normalized_counts",
+  "GSE104736_Fig2D_normalized_counts",
   "Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction",
   "GSE94479_MCF7_TPM_long",
   "GSE94479_MCF7_TPM_weight_validation",
@@ -63,6 +65,10 @@ MFE_GSE104736_G1_vs_G2 <-
   figure2_objects[["MFE_GSE104736_G1_vs_G2"]]
 MFE_GSE104736_S_vs_G1 <-
   figure2_objects[["MFE_GSE104736_S_vs_G1"]]
+GSE94479_Fig2D_normalized_counts <-
+  figure2_objects[["GSE94479_Fig2D_normalized_counts"]]
+GSE104736_Fig2D_normalized_counts <-
+  figure2_objects[["GSE104736_Fig2D_normalized_counts"]]
 Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction <-
   figure2_objects[["Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction"]]
 GSE94479_MCF7_TPM_long <-
@@ -1011,137 +1017,255 @@ ggsave(
   bg = "white"
 )
 
-stopifnot(
-  all(
+Fig2D_perm_B <- 10000L
+Fig2D_perm_seed <- 20260918L
+
+Fig2D_run_quartile_permutation <- function(
+    phase_counts, de_df, dataset, transition, phase_1, phase_2,
+    B = Fig2D_perm_B
+) {
+  de <- de_df %>%
+    dplyr::transmute(
+      ensembl_transcript_id = sub(
+        "\\..*$", "", as.character(ensembl_transcript_id)
+      ),
+      padj = as.numeric(padj),
+      Normalized_MFE = as.numeric(Normalized_MFE)
+    ) %>%
+    dplyr::filter(
+      !is.na(padj),
+      padj < 0.05,
+      is.finite(Normalized_MFE)
+    ) %>%
+    dplyr::distinct(ensembl_transcript_id, .keep_all = TRUE)
+
+  stopifnot(nrow(de) > 0L, B >= 1L, B == as.integer(B))
+
+  cutoffs <- stats::quantile(
+    de$Normalized_MFE,
+    c(0.25, 0.75),
+    names = FALSE
+  )
+
+  stopifnot(cutoffs[1] < cutoffs[2])
+
+  counts <- phase_counts %>%
+    dplyr::filter(Phase %in% c(phase_1, phase_2)) %>%
+    dplyr::transmute(
+      ensembl_transcript_id = as.character(ensembl_transcript_id),
+      Phase = as.character(Phase),
+      normalized_counts = as.numeric(normalized_counts)
+    ) %>%
+    dplyr::inner_join(de, by = "ensembl_transcript_id")
+
+  stopifnot(
+    nrow(counts) > 0L,
+    !anyDuplicated(counts[c("ensembl_transcript_id", "Phase")]),
+    all(is.finite(counts$normalized_counts)),
+    all(counts$normalized_counts >= 0)
+  )
+
+  wide <- counts %>%
+    dplyr::select(
+      ensembl_transcript_id,
+      Normalized_MFE,
+      Phase,
+      normalized_counts
+    ) %>%
+    tidyr::pivot_wider(
+      names_from = Phase,
+      values_from = normalized_counts
+    ) %>%
+    dplyr::arrange(ensembl_transcript_id)
+
+  stopifnot(all(c(phase_1, phase_2) %in% names(wide)))
+
+  abundance <- as.matrix(wide[, c(phase_1, phase_2)])
+
+  if (anyNA(abundance)) {
+    stop(
+      dataset, " / ", transition,
+      ": a transcript is missing from one phase.",
+      call. = FALSE
+    )
+  }
+
+  stopifnot(all(colSums(abundance) > 0))
+
+  weights <- sweep(abundance, 2, colSums(abundance), "/")
+
+  category <- ifelse(
+    wide$Normalized_MFE >= cutoffs[2],
+    1L,
+    ifelse(wide$Normalized_MFE <= cutoffs[1], 2L, 0L)
+  )
+
+  stopifnot(any(category == 1L), any(category == 2L))
+
+  quartile_names <- c(
+    "Least stable\nupper DGfold quartile",
+    "Most stable\nlower DGfold quartile"
+  )
+
+  fractions <- vapply(
+    1:2,
+    function(k) {
+      colSums(weights[category == k, , drop = FALSE])
+    },
+    numeric(2)
+  )
+
+  reference <- Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction %>%
+    dplyr::filter(
+      as.character(Dataset) == dataset,
+      as.character(Transition) == transition
+    ) %>%
+    dplyr::transmute(
+      Phase = as.character(Phase),
+      DGfold_quartile = as.character(DGfold_quartile),
+      Existing_fraction = normalized_count_fraction
+    )
+
+  check <- tibble::tibble(
+    Phase = rep(c(phase_1, phase_2), 2),
+    DGfold_quartile = rep(quartile_names, each = 2),
+    Recalculated_fraction = as.vector(fractions)
+  ) %>%
+    dplyr::left_join(
+      reference,
+      by = c("Phase", "DGfold_quartile")
+    )
+
+  if (
+    nrow(check) != 4L ||
+    any(!is.finite(check$Existing_fraction)) ||
+    max(abs(
+      check$Recalculated_fraction - check$Existing_fraction
+    )) > 1e-10
+  ) {
+    stop(
+      dataset, " / ", transition,
+      ": fractions do not match the existing panel.",
+      call. = FALSE
+    )
+  }
+
+  transcript_delta <- weights[, 2] - weights[, 1]
+  observed_delta <- fractions[2, ] - fractions[1, ]
+
+  message("Fig. 2D permutations: ", dataset, " / ", transition)
+
+  null_delta <- replicate(B, {
+    shuffled_category <- category[sample.int(length(category))]
+
     c(
-      "Dataset",
-      "Transition",
-      "Phase",
-      "DGfold_quartile",
-      "normalized_count_fraction",
-      "normalized_counts_in_quartile",
-      "total_normalized_counts_DE_universe",
-      "phase_1",
-      "phase_2"
-    ) %in%
-      colnames(Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction)
+      sum(transcript_delta[shuffled_category == 1L]),
+      sum(transcript_delta[shuffled_category == 2L])
+    )
+  })
+
+  rownames(null_delta) <- c("Upper", "Lower")
+
+  exceedances <- vapply(
+    1:2,
+    function(k) {
+      sum(
+        abs(null_delta[k, ]) >=
+          abs(observed_delta[k]) - 1e-12
+      )
+    },
+    integer(1)
+  )
+
+  result <- tibble::tibble(
+    Dataset = dataset,
+    Transition = transition,
+    Quartile = c(
+      "Upper / less negative",
+      "Lower / more negative"
+    ),
+    Phase_1 = phase_1,
+    Phase_2 = phase_2,
+    Fraction_phase_1 = fractions[1, ],
+    Fraction_phase_2 = fractions[2, ],
+    Delta_fraction = observed_delta,
+    N_measured_DE_transcripts = nrow(wide),
+    N_quartile_transcripts = c(
+      sum(category == 1L),
+      sum(category == 2L)
+    ),
+    N_permutations = B,
+    Exceedances = exceedances,
+    P_permutation = (exceedances + 1) / (B + 1)
+  )
+
+  list(
+    results = result,
+    fraction_check = check,
+    null_delta = null_delta
+  )
+}
+
+set.seed(Fig2D_perm_seed)
+
+Fig2D_permutation_runs <- list(
+  MCF7_G1_vs_G2M = Fig2D_run_quartile_permutation(
+    GSE94479_Fig2D_normalized_counts$phase_level,
+    GSE94479_G0G1vsG2M,
+    "MCF7", "G1 vs G2/M", "G2/M", "G1"
+  ),
+  MCF7_S_vs_G1 = Fig2D_run_quartile_permutation(
+    GSE94479_Fig2D_normalized_counts$phase_level,
+    GSE94479_SvsG0G1,
+    "MCF7", "S vs G1", "G1", "S"
+  ),
+  HeLa_G1_vs_G2M = Fig2D_run_quartile_permutation(
+    GSE104736_Fig2D_normalized_counts$phase_level,
+    MFE_GSE104736_G1_vs_G2,
+    "HeLa", "G1 vs G2/M", "G2/M", "G1"
+  ),
+  HeLa_S_vs_G1 = Fig2D_run_quartile_permutation(
+    GSE104736_Fig2D_normalized_counts$phase_level,
+    MFE_GSE104736_S_vs_G1,
+    "HeLa", "S vs G1", "G1", "S"
   )
 )
 
-Fig2D_DGfold_quartile_DE_z_tests <-
-  Cell_cycle_MCF7_HeLa_DGfold_quartile_DE_fraction %>%
+Fig2D_quartile_permutation_results <- dplyr::bind_rows(
+  lapply(Fig2D_permutation_runs, function(x) x$results)
+) %>%
   dplyr::mutate(
-    Dataset = as.character(Dataset),
-    Transition = as.character(Transition),
-    Phase = as.character(Phase),
-    DGfold_quartile = as.character(DGfold_quartile)
-  ) %>%
-  dplyr::group_by(
-    Dataset,
-    Transition,
-    DGfold_quartile
-  ) %>%
-  dplyr::group_modify(~ {
-
-    phase_1 <- unique(.x$phase_1)
-    phase_2 <- unique(.x$phase_2)
-
-    stopifnot(length(phase_1) == 1)
-    stopifnot(length(phase_2) == 1)
-
-    row_1 <- .x %>%
-      dplyr::filter(Phase == phase_1)
-
-    row_2 <- .x %>%
-      dplyr::filter(Phase == phase_2)
-
-    stopifnot(nrow(row_1) == 1)
-    stopifnot(nrow(row_2) == 1)
-
-    x1 <- row_1$normalized_counts_in_quartile
-    n1 <- row_1$total_normalized_counts_DE_universe
-
-    x2 <- row_2$normalized_counts_in_quartile
-    n2 <- row_2$total_normalized_counts_DE_universe
-
-    p1 <- x1 / n1
-    p2 <- x2 / n2
-
-    p_pool <- (x1 + x2) / (n1 + n2)
-
-    se <- sqrt(
-      p_pool *
-        (1 - p_pool) *
-        ((1 / n1) + (1 / n2))
+    P_adj_BH = stats::p.adjust(P_permutation, method = "BH"),
+    P_adj_label = ifelse(
+      P_adj_BH < 0.0001,
+      "BH-adjusted P < 0.0001",
+      paste0(
+        "BH-adjusted P = ",
+        format.pval(P_adj_BH, digits = 3, eps = 0)
+      )
     )
-
-    z_value <- (p2 - p1) / se
-
-    p_value <- 2 * (1 - pnorm(abs(z_value)))
-
-    tibble::tibble(
-      phase_1 = phase_1,
-      phase_2 = phase_2,
-      comparison = paste(phase_2, "vs", phase_1),
-      fraction_phase_1 = p1,
-      fraction_phase_2 = p2,
-      delta_phase2_minus_phase1 = p2 - p1,
-      counts_phase_1 = x1,
-      counts_phase_2 = x2,
-      total_counts_phase_1 = n1,
-      total_counts_phase_2 = n2,
-      z_value = z_value,
-      p_value = p_value
-    )
-  }) %>%
-  dplyr::ungroup() %>%
-  dplyr::mutate(
-    p_adj_BH = p.adjust(p_value, method = "BH"),
-    DGfold_quartile_plot = dplyr::case_when(
-      DGfold_quartile == "Least stable\nupper DGfold quartile" ~
-        "Upper DGfold quartile / less negative DGfold",
-      DGfold_quartile == "Most stable\nlower DGfold quartile" ~
-        "Lower DGfold quartile / more negative DGfold",
-      TRUE ~ DGfold_quartile
-    ),
-    p_label = dplyr::case_when(
-      is.na(p_value) ~ NA_character_,
-      p_value < 0.001 ~ "p < 0.001",
-      TRUE ~ paste0("p = ", signif(p_value, 2))
-    ),
-    p_adj_label = dplyr::case_when(
-      is.na(p_adj_BH) ~ NA_character_,
-      p_adj_BH < 0.001 ~ "BH-adjusted p < 0.001",
-      TRUE ~ paste0("BH-adjusted p = ", signif(p_adj_BH, 2))
-    )
-  ) %>%
-  dplyr::select(
-    Dataset,
-    Transition,
-    DGfold_quartile_plot,
-    phase_1,
-    phase_2,
-    comparison,
-    fraction_phase_1,
-    fraction_phase_2,
-    delta_phase2_minus_phase1,
-    counts_phase_1,
-    counts_phase_2,
-    total_counts_phase_1,
-    total_counts_phase_2,
-    z_value,
-    p_value,
-    p_adj_BH,
-    p_label,
-    p_adj_label
-  ) %>%
-  dplyr::arrange(
-    Dataset,
-    Transition,
-    DGfold_quartile_plot
   )
 
-print(Fig2D_DGfold_quartile_DE_z_tests)
+stopifnot(nrow(Fig2D_quartile_permutation_results) == 8L)
+
+print(
+  as.data.frame(
+    Fig2D_quartile_permutation_results %>%
+      dplyr::select(
+        Dataset,
+        Transition,
+        Quartile,
+        Fraction_phase_1,
+        Fraction_phase_2,
+        Delta_fraction,
+        P_permutation,
+        P_adj_BH,
+        P_adj_label
+      )
+  ),
+  row.names = FALSE,
+  digits = 6
+)
 
 Fig2E_B_perm <- 5000L
 Fig2E_requested_cores <- 8L
@@ -1930,40 +2054,23 @@ Fig2E_TPM_delta_stats <- dplyr::bind_rows(
 
     permutation_p_label =
       dplyr::case_when(
-        permutation_p_value < 0.001 ~
-          "P < 0.001",
-
-        TRUE ~
-          paste0(
-            "P = ",
-            format(
-              signif(
-                permutation_p_value,
-                2
-              ),
-              scientific = FALSE,
-              trim = TRUE
-            )
-          )
+        is.na(permutation_p_value) ~ NA_character_,
+        permutation_p_value < 0.0001 ~ "P < 0.0001",
+        TRUE ~ paste0(
+          "P = ",
+          format.pval(permutation_p_value, digits = 4)
+        )
       ),
 
     permutation_p_adj_BH_label =
       dplyr::case_when(
-        permutation_p_adj_BH < 0.001 ~
-          "BH-adjusted P < 0.001",
-
-        TRUE ~
-          paste0(
-            "BH-adjusted P = ",
-            format(
-              signif(
-                permutation_p_adj_BH,
-                2
-              ),
-              scientific = FALSE,
-              trim = TRUE
-            )
-          )
+        is.na(permutation_p_adj_BH) ~ NA_character_,
+        permutation_p_adj_BH < 0.0001 ~
+          "BH-adjusted P < 0.0001",
+        TRUE ~ paste0(
+          "BH-adjusted P = ",
+          format.pval(permutation_p_adj_BH, digits = 4)
+        )
       ),
 
     Dataset = factor(
